@@ -22,3 +22,26 @@
   sequence_steps:
     - vuln_id: "GS-005"
     - vuln_id: "GS-002"
+
+# === ICS/OT 섹터 킬체인 시퀀스 규칙 ===
+- id: ICS-REFINERY-KILLCHAIN-SEQ-001
+  title: "정유 킬체인 - OPC UA 정찰 후 SIS 우회"
+  severity: 4
+  mitre: [T0886, T0858]
+  kind: sequence
+  sequence_group_by: "src.ip"
+  sequence_within_sec: 300
+  sequence_steps:
+    - vuln_id: "REF-001"
+    - vuln_id: "REF-002"
+
+- id: ICS-HOSPITAL-KILLCHAIN-SEQ-001
+  title: "병원 킬체인 - PACS 정찰 후 주입펌프 조작"
+  severity: 4
+  mitre: [T1213, T0855]
+  kind: sequence
+  sequence_group_by: "src.ip"
+  sequence_within_sec: 300
+  sequence_steps:
+    - vuln_id: "HSP-001"
+    - vuln_id: "HSP-003"

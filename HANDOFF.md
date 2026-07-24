@@ -706,6 +706,28 @@ SIEM 규칙 4종/웹 취약점 3종/AI 보안 인시던트 5종).
 > - **다음 착수 후보**: 섹터별 킬체인 시나리오(scenario-as-code), 섹터 CTF 챌린지, 신규 섹터
 >   Suricata/Zeek 센서 사이드카, ICS 규칙에 threshold/sequence 종류 확대.
 
+---
+
+## 📌 세션 연속성 메모 (2026-07-24 — 섹터 킬체인 시나리오 + ICS seq/threshold 규칙)
+
+> 후속 과제 계속: 신규 ICS 섹터를 **시나리오·SIEM 규칙**으로 플레이 가능하게 배선.
+>
+> - **섹터 킬체인 시나리오 2종**(`scenarios/single/`): REFINERY-SABOTAGE-01(REF-001 정찰→REF-003
+>   HART위조→REF-002 SIS우회, hard) / HOSPITAL-PHI-EXFIL-01(HSP-001 PACS→HSP-002 HIS SQLi→HSP-003
+>   주입펌프, hard). 시나리오 엔진이 `scenarios/` 자동 로드(총 5→7). **E2E 실증**: 둘 다 stage_completed
+>   ×3 순서 완료 + **chain_bonus=50** 수여. (주의: `/scenario/<id>/progress`는 M3에서 기록된 표시 quirk로
+>   completed_stages=[]로 보이나, event_collector엔 stage_completed 정상 발화 — 트윈 emit이 scenario_id
+>   "default"라 _route_event가 target_asset으로 라우팅하기 때문. 검증은 replay/events로.)
+>   스테이지 objective_event는 트윈 핸들러의 emit event_type과 일치시켜야 함(REF-002=red_objective_success,
+>   HSP-001/002=flag_exfiltrated 등).
+> - **ICS SIEM seq/threshold 규칙 3종**(match 16종에 추가 → 총 37규칙): ICS-REFINERY-KILLCHAIN-SEQ-001
+>   (REF-001→REF-002 sequence), ICS-HOSPITAL-KILLCHAIN-SEQ-001(HSP-001→HSP-003), ICS-OT-MULTIVULN-
+>   PROBE-001(threshold distinct(vuln_id)>=3/120s). **E2E 실증**: 정유 시퀀스 발사 → SEQ 규칙 + 다중취약점
+>   threshold 규칙 발화 확인.
+> - **회귀**: 유닛 66 pass, 스모크 35/35.
+> - **다음 착수 후보**: 나머지 섹터 킬체인 시나리오(수도/LNG/철도/공항/데이터센터/스마트팩토리),
+>   섹터 CTF 챌린지, 신규 섹터 Suricata/Zeek 센서 사이드카.
+
 ## 5. 상태 요약 한 줄
 
 M0 병합 / M1 **Docker 재검증** / **M2(EDR)** / **M3(시나리오)** / **M4(EDR 콘솔)** / **M5(SIEM 인제스천+탐지4종+LiveFire)** / **M6(대시보드/AAR)** 라이브 검증 완료 → **M0~M6 전 마일스톤 Docker 실검증 완료** / **P1-1 복구판정+MTTR 배선 완료(noc_monitor 배포, MTTR 실측)** / **P1-3 트윈 네트워크 격리 완료(per-twin nginx 게이트웨이, lateral·egress 차단 실측)** / **P1-2 유닛테스트 43개+GitHub Actions CI 완료** / **P2 C-QA docker 게이트 실검증(배포형 6종 full docker QA PASS, run_all 포트자동추출+아티팩트 감지 수정)** / **P3 RBAC(역할별 토큰, edr isolate 무검증 갭 차단)** / **P2b 아티팩트 exploit 계약 통일(artifact_solve, NET/FOR/REV 6종 solve+grade 실검증)** / **유닛 테스트 58 pass** / **통합 스모크 테스트 `scripts/smoke_test.sh` 35/35 PASS(+복구=38/38)** / **전체 48개 챌린지 C-QA PASS**(서비스형 9 docker + 아티팩트형 31 artifact_solve + 탐지형 8 detection_solve) / **insane 티어 6종 신규 완료·전부 C-QA PASS**(REV-009 핸들러테이블VM / FOR-009 안티포렌식3단 / NET-009 OT사보타주 Modbus / AI-009 전이회피 로그분석 / DET-009 APT low-and-slow 헌팅 / WEB-009 WAF우회+블라인드SQLi full-docker) → **6개 전 분야 easy~insane 곡선 완성(각 8문제)** / 버그 14건 수정(QA2 + 시나리오 라우팅1 + 콘솔 vite-env/CORS2 + SIEM timestamp/가드/죽은규칙3 + AAR 히트맵/상관키2 + 대시보드 vite-env/백엔드 CORS2 + 복구 scenario전파/AAR MTTR metadata2) / USAGE.md / **다음: 옵저버 read 엔드포인트 세분화, AI 분야 확충(실 ML/docker), 빈 medium/hard 칸 채우기(REV/FOR/NET medium 등).**

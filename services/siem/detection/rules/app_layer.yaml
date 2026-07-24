@@ -221,3 +221,14 @@
   source_type: twin
   kind: match
   match: { vuln_id: "HSP-001" }
+
+# === ICS/OT 다중 취약점 급속 탐침 (threshold) ===
+- id: ICS-OT-MULTIVULN-PROBE-001
+  title: "OT 다중 취약점 급속 탐침 - 동일 출발지에서 3종 이상"
+  severity: 3
+  mitre: [T0842, T0846]
+  source_type: twin
+  kind: threshold
+  threshold_group_by: "src.ip"
+  threshold_condition: "distinct(vuln_id) >= 3"
+  threshold_window_sec: 120

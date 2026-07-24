@@ -1,0 +1,56 @@
+# 단일 시나리오: 병원 OT — PHI 유출 및 의료기기 조작
+# =====================================================
+# PACS 미인증 열람 → HIS SQL 인젝션 → 주입펌프 투여율 무단 변경(최종 환자안전 임팩트).
+# challenge_schema.Scenario 준수. 신규 ICS 섹터 트윈(hospital_ot) 대상.
+
+scenario:
+  id: "HOSPITAL-PHI-EXFIL-01"
+  name: "병원 PHI 유출 및 의료기기 조작 작전"
+  description: "PACS 정찰부터 주입펌프 투여율 변조까지의 의료 OT 킬체인"
+  target_asset: "hospital_ot"
+  difficulty: "hard"
+  time_limit_sec: 1800
+
+  initial_vuln_state:
+    HSP-001: vulnerable
+    HSP-002: vulnerable
+    HSP-003: vulnerable
+
+  stages:
+    - stage: 1
+      name: "정찰 - PACS 미인증 영상 열람(PHI)"
+      objective_event: flag_exfiltrated
+      match: { vuln_id: "HSP-001" }
+      points: 25
+      mitre: [T1213]
+    - stage: 2
+      name: "정보 수집 - HIS 환자정보 SQL 인젝션"
+      objective_event: flag_exfiltrated
+      match: { vuln_id: "HSP-002" }
+      points: 35
+      requires_stage: 1
+      mitre: [T1190]
+    - stage: 3
+      name: "목표 달성 - 주입펌프 투여율 무단 변경"
+      objective_event: red_objective_success
+      match: { vuln_id: "HSP-003" }
+      points: 60
+      requires_stage: 2
+      mitre: [T0855]
+      is_final: true
+
+  chain_bonus:
+    all_stages_in_order: 50
+    within_sec: 600
+
+  blue_objectives:
+    - name: "주입펌프 조작 탐지"
+      match_alert: "ICS-HSP-INFUSION-001"
+      points: 40
+    - name: "HIS SQLi 탐지"
+      match_alert: "ICS-HSP-HIS-SQLI-001"
+      points: 30
+
+  noise:
+    enabled: true
+    normal_traffic_eps: 5
