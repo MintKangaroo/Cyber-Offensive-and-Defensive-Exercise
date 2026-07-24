@@ -39,7 +39,12 @@ DB_PATH = os.environ.get("SIEM_DB_PATH", str(APP_DIR / "siem.db"))
 ALERT_DB_PATH = os.environ.get("SIEM_ALERT_DB_PATH", str(APP_DIR / "siem_alerts.db"))
 LOG_DIR = Path(os.environ.get("SIEM_LOG_DIR", "/var/log/siem"))
 RULES_DIR = Path(os.environ.get("SIEM_RULES_DIR", str(Path(__file__).parent.parent / "detection" / "rules")))
-TWIN_ASSETS = ["ground_station", "power_plant", "defense_network"]
+TWIN_ASSETS = [
+    "ground_station", "power_plant", "defense_network",
+    # ICS/OT 확장 섹터 트윈(정유/스마트팩토리/수도/LNG/철도/공항/데이터센터/병원)
+    "refinery_plant", "smart_factory", "water_utility", "lng_terminal",
+    "railway_signaling", "airport_ot", "datacenter_bms", "hospital_ot",
+]
 SYSLOG_UDP_PORT = int(os.environ.get("SYSLOG_UDP_PORT", "1514"))  # 514는 root 권한 필요, 기본은 비특권 포트
 EVENT_COLLECTOR_URL = os.environ.get("EVENT_COLLECTOR_URL", "http://event_collector:8010")
 PUSH_TO_LIVEFIRE = os.environ.get("PUSH_TO_LIVEFIRE", "true").lower() == "true"

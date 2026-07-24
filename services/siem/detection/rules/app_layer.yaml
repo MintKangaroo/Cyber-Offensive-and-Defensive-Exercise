@@ -92,3 +92,132 @@
   kind: match
   match:
     vuln_id: "DN-004"
+
+# === ICS/OT 확장 섹터 탐지 규칙 (정유/스마트팩토리/수도/LNG/철도/공항/데이터센터/병원) ===
+- id: ICS-REF-SIS-BYPASS-001
+  title: "SIS 안전계장 무단 우회 - 정유/석유화학"
+  severity: 4
+  mitre: [T0858, T0800]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "REF-002" }
+
+- id: ICS-REF-OPCUA-ANON-001
+  title: "OPC UA 미인증 태그 열람 - 정유/석유화학"
+  severity: 2
+  mitre: [T0886]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "REF-001" }
+
+- id: ICS-FAC-ROBOT-CMDI-001
+  title: "로봇 컨트롤러 명령 주입 - 스마트팩토리"
+  severity: 4
+  mitre: [T0807]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "FAC-002" }
+
+- id: ICS-FAC-MES-SQLI-001
+  title: "MES 작업지시 SQL 인젝션 - 스마트팩토리"
+  severity: 3
+  mitre: [T1190]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "FAC-003" }
+
+- id: ICS-WTR-DOSING-001
+  title: "염소 투입량 무단 변경 - 수도 시설"
+  severity: 4
+  mitre: [T0836]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "WTR-001" }
+
+- id: ICS-LNG-ESD-001
+  title: "비상정지(ESD) 무단 조작 - LNG 터미널"
+  severity: 4
+  mitre: [T0858]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "LNG-001" }
+
+- id: ICS-LNG-FIREGAS-001
+  title: "화재/가스 알람 억제 - LNG 터미널"
+  severity: 4
+  mitre: [T0878]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "LNG-003" }
+
+- id: ICS-RWY-SIGNAL-001
+  title: "신호기 현시 무단 변경 - 철도"
+  severity: 4
+  mitre: [T0855]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "RWY-001" }
+
+- id: ICS-RWY-INTERLOCK-001
+  title: "연동장치 무단 우회 - 철도"
+  severity: 4
+  mitre: [T0858]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "RWY-002" }
+
+- id: ICS-AIR-RUNWAY-001
+  title: "활주로 조명 무단 제어 - 공항"
+  severity: 4
+  mitre: [T0855]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "AIR-001" }
+
+- id: ICS-AIR-BHS-SQLI-001
+  title: "수하물 경로 SQL 인젝션 - 공항"
+  severity: 3
+  mitre: [T1190]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "AIR-002" }
+
+- id: ICS-DCX-UPS-001
+  title: "UPS 무단 셧다운 명령 - 데이터센터"
+  severity: 3
+  mitre: [T0816]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "DCX-002" }
+
+- id: ICS-DCX-SSRF-001
+  title: "DCIM SSRF - 데이터센터"
+  severity: 3
+  mitre: [T1090]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "DCX-003" }
+
+- id: ICS-HSP-HIS-SQLI-001
+  title: "HIS 환자정보 SQL 인젝션 - 병원"
+  severity: 3
+  mitre: [T1190]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "HSP-002" }
+
+- id: ICS-HSP-INFUSION-001
+  title: "주입펌프 투여율 무단 변경 - 병원"
+  severity: 4
+  mitre: [T0855]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "HSP-003" }
+
+- id: ICS-HSP-PACS-IDOR-001
+  title: "PACS 영상 미인증 열람(PHI) - 병원"
+  severity: 3
+  mitre: [T1213]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "HSP-001" }

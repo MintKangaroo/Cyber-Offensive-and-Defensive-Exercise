@@ -17,11 +17,21 @@ const ASSET_LABEL: Record<string, string> = {
 };
 
 const ASSET_POS: Record<string, { x: number; y: number }> = {
-  ground_station: { x: 120, y: 80 },
-  power_plant: { x: 340, y: 80 },
-  defense_network: { x: 230, y: 220 },
+  // Row 1
+  ground_station: { x: 100, y: 150 },
+  power_plant: { x: 288, y: 150 },
+  defense_network: { x: 476, y: 150 },
+  refinery_plant: { x: 664, y: 150 },
+  smart_factory: { x: 852, y: 150 },
+  water_utility: { x: 1000, y: 150 },
+  // Row 2
+  lng_terminal: { x: 194, y: 330 },
+  railway_signaling: { x: 382, y: 330 },
+  airport_ot: { x: 570, y: 330 },
+  datacenter_bms: { x: 758, y: 330 },
+  hospital_ot: { x: 946, y: 330 },
 };
-const DMZ_POS = { x: 230, y: 20 };
+const DMZ_POS = { x: 520, y: 30 };
 
 const STATE_COLOR: Record<AssetState, string> = {
   secure: "#22D3EE",
@@ -78,7 +88,7 @@ export function AssetMap({ onSelectAsset }: { onSelectAsset: (asset: string) => 
   const assetStates = useRangeStore((s) => s.assetStates);
 
   return (
-    <svg viewBox="0 0 460 280" className="w-full h-full">
+    <svg viewBox="0 0 1040 420" className="w-full h-full">
       {/* DMZ -> 각 자산 연결선 */}
       {ASSETS.map((asset) => {
         const pos = ASSET_POS[asset];

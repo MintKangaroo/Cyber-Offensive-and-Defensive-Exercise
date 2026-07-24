@@ -680,6 +680,32 @@ SIEM 규칙 4종/웹 취약점 3종/AI 보안 인시던트 5종).
 > - **다음 착수 후보**: 신규 섹터 per-twin 게이트웨이 격리 패리티, 섹터별 킬체인 시나리오/SIEM 규칙,
 >   LiveFire 토폴로지에 신규 섹터 배치(ASSET_POS), 섹터 CTF 챌린지.
 
+---
+
+## 📌 세션 연속성 메모 (2026-07-24 — ICS 확장 후속 과제 완료)
+
+> **사용자 요청**: ICS 8섹터 확장의 후속 과제 진행 + README 스크린샷 갱신.
+>
+> 1. **신규 8섹터 네트워크 격리 패리티 완료**: 각 섹터를 `internal:true` 네트워크 + per-twin nginx
+>    게이트웨이(포트 8201~8208)로 격리. 코어 3서비스(event/config/edr)를 8개 twin_* 네트워크에 연결.
+>    게이트웨이 설정 `infra/twin_gateway/{ref,fac,wtr,lng,rwy,air,dcx,hsp}.conf`.
+>    **⚠ 수술 함정 2건**(둘 다 실측으로 잡음): (a) 여러 코어 서비스도 `networks: [range_control]`을
+>    공유 → 전역 replace가 코어를 clobber. ICS 섹션 substring으로 범위 한정해 해결. (b) ports 제거
+>    루프가 트윈보다 먼저 삽입된 게이트웨이 ports를 지움 + internal 네트워크는 published port 미동작 →
+>    트윈 ports 제거 + 게이트웨이 ports 복구로 해결. **실측 격리 검증**: refinery twin 내부에서
+>    sibling(smart_factory) lateral 차단(gaierror) / egress(8.8.8.8) 차단 / 코어(event/config) 도달 OK.
+> 2. **LiveFire 토폴로지 11노드 배치**: `api/types.ts`의 ASSETS 3→11, AssetMap ASSET_POS 11개 좌표 +
+>    viewBox 1040×420(DMZ 중심, 2행 배치). 히어로 스크린샷 재캡처(11섹터).
+> 3. **신규 섹터 SIEM 탐지 규칙 16종**: `services/siem/detection/rules/app_layer.yaml`에 ICS-*(SIS/ESD/
+>    신호/주입펌프/SQLi 등) match 규칙 추가(18→**34 규칙**). **⚠ `services/siem/api/main.py`의
+>    `TWIN_ASSETS`가 하드코딩 3종**이라 신규 트윈 로그를 tail 안 함 → 11종으로 확장. **E2E 실증**:
+>    REF-002/LNG-001/RWY-001/HSP-002/HSP-003 공격 → SIEM ICS 규칙 5종 발화, 신규 트윈 소스 인식.
+> - **스크린샷 갱신**: `livefire-overview.png`(11노드 토폴로지+신규섹터 이벤트피드), `edr-console-overview.png`
+>   (11호스트 한글 라벨). 사용자 지적("아직 3개만 보임") 반영.
+> - **회귀**: 유닛 66 pass, 스모크 35/35, safe_probe 44 VULNERABLE. 대시보드 2종 빌드 OK.
+> - **다음 착수 후보**: 섹터별 킬체인 시나리오(scenario-as-code), 섹터 CTF 챌린지, 신규 섹터
+>   Suricata/Zeek 센서 사이드카, ICS 규칙에 threshold/sequence 종류 확대.
+
 ## 5. 상태 요약 한 줄
 
 M0 병합 / M1 **Docker 재검증** / **M2(EDR)** / **M3(시나리오)** / **M4(EDR 콘솔)** / **M5(SIEM 인제스천+탐지4종+LiveFire)** / **M6(대시보드/AAR)** 라이브 검증 완료 → **M0~M6 전 마일스톤 Docker 실검증 완료** / **P1-1 복구판정+MTTR 배선 완료(noc_monitor 배포, MTTR 실측)** / **P1-3 트윈 네트워크 격리 완료(per-twin nginx 게이트웨이, lateral·egress 차단 실측)** / **P1-2 유닛테스트 43개+GitHub Actions CI 완료** / **P2 C-QA docker 게이트 실검증(배포형 6종 full docker QA PASS, run_all 포트자동추출+아티팩트 감지 수정)** / **P3 RBAC(역할별 토큰, edr isolate 무검증 갭 차단)** / **P2b 아티팩트 exploit 계약 통일(artifact_solve, NET/FOR/REV 6종 solve+grade 실검증)** / **유닛 테스트 58 pass** / **통합 스모크 테스트 `scripts/smoke_test.sh` 35/35 PASS(+복구=38/38)** / **전체 48개 챌린지 C-QA PASS**(서비스형 9 docker + 아티팩트형 31 artifact_solve + 탐지형 8 detection_solve) / **insane 티어 6종 신규 완료·전부 C-QA PASS**(REV-009 핸들러테이블VM / FOR-009 안티포렌식3단 / NET-009 OT사보타주 Modbus / AI-009 전이회피 로그분석 / DET-009 APT low-and-slow 헌팅 / WEB-009 WAF우회+블라인드SQLi full-docker) → **6개 전 분야 easy~insane 곡선 완성(각 8문제)** / 버그 14건 수정(QA2 + 시나리오 라우팅1 + 콘솔 vite-env/CORS2 + SIEM timestamp/가드/죽은규칙3 + AAR 히트맵/상관키2 + 대시보드 vite-env/백엔드 CORS2 + 복구 scenario전파/AAR MTTR metadata2) / USAGE.md / **다음: 옵저버 read 엔드포인트 세분화, AI 분야 확충(실 ML/docker), 빈 medium/hard 칸 채우기(REV/FOR/NET medium 등).**

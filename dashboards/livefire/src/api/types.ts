@@ -24,7 +24,11 @@ export interface RangeEvent {
 }
 
 export type AssetState = "secure" | "under_attack" | "compromised" | "recovered";
-export const ASSETS = ["ground_station", "power_plant", "defense_network"] as const;
+export const ASSETS = [
+  "ground_station", "power_plant", "defense_network",
+  "refinery_plant", "smart_factory", "water_utility", "lng_terminal",
+  "railway_signaling", "airport_ot", "datacenter_bms", "hospital_ot",
+] as const;
 export type Asset = (typeof ASSETS)[number];
 
 export interface TeamScore {
