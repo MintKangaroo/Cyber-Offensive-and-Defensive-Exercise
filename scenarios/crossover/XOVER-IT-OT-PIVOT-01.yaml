@@ -1,0 +1,91 @@
+# 크로스오버 시나리오: IT에서 OT로 — 정유 플랜트 침해 (Purdue 경계 돌파)
+# =====================================================================
+# 하나의 APT 사건을 IT 침투 → OT 사보타주 → 포렌식 재구성으로 연속 학습한다.
+# Phase 1(Red): 사내망(IT) 발판 확보 → 정유 플랜트(OT)로 피벗해 안전계장 우회.
+# Phase 2(Blue/Forensics): IT→OT 피벗 경로를 증거로 재구성.
+# scenario_engine이 로드하며, crossover 트래커는 자산과 무관하게 모든 이벤트를 받으므로
+# 사내망(DN-*)과 정유(REF-*)를 아우르는 멀티에셋 킬체인이 성립한다.
+
+crossover_scenario:
+  id: "XOVER-IT-OT-PIVOT-01"
+  name: "IT에서 OT로 - 정유 플랜트 안전계장 침해"
+  description: |
+    공격자가 사내망(IT)에 발판을 마련하고 자격증명을 훔쳐 OT망(정유 플랜트)으로 피벗한 뒤
+    안전계장(SIS)을 무력화한다. IT/OT 경계를 넘는 실제 ICS 공격 패턴을 Red 수행과 Blue
+    포렌식 재구성으로 학습하는 연계 시나리오.
+  target_asset: "refinery_plant"
+  difficulty: "insane"
+  time_limit_sec: 5400
+  category_chain: ["network", "ics", "forensics"]
+
+  initial_vuln_state:
+    DN-001: vulnerable          # SMB 익명 접근(IT 발판)
+    DN-003: vulnerable          # 백업 설정 평문 자격증명(피벗용)
+    REF-001: vulnerable         # OPC UA 익명 열람(OT 정찰)
+    REF-002: vulnerable         # SIS 안전계장 우회(OT 사보타주)
+
+  # ── Phase 1: RED (IT 침투 → OT 피벗 → 사보타주) ──
+  phase_1_network:
+    actor: "red"
+    stages:
+      - stage: 1
+        name: "IT 발판 - 사내망 SMB 익명 공유 접근"
+        objective_event: red_attack_started
+        match: { vuln_id: "DN-001" }
+        points: 25
+      - stage: 2
+        name: "자격증명 탈취 - 백업 설정 평문 자격증명 유출"
+        objective_event: flag_exfiltrated
+        match: { vuln_id: "DN-003" }
+        points: 40
+        requires_stage: 1
+      - stage: 3
+        name: "OT 피벗 정찰 - 정유 OPC UA 미인증 열람"
+        objective_event: red_attack_started
+        match: { vuln_id: "REF-001" }
+        points: 45
+        requires_stage: 2
+      - stage: 4
+        name: "OT 사보타주 - SIS 안전계장 트립 우회"
+        objective_event: red_objective_success
+        match: { vuln_id: "REF-002" }
+        points: 70
+        requires_stage: 3
+        is_final: true
+    completion_unlocks: "phase_2_forensics"
+    emits_evidence: true
+
+  # ── Phase 2: FORENSICS (Blue 재구성) ──
+  phase_2_forensics:
+    actor: "blue"
+    locked_until: "phase_1_network.completed"
+    evidence_source: "trace_id_from_phase_1"
+    objectives:
+      - name: "IT 진입점 특정"
+        submit: "entry_vuln_id"        # 정답: DN-001
+        points: 40
+      - name: "피벗 자격증명 출처 특정"
+        submit: "pivot_source"         # 정답: DN-003 backup-config
+        points: 50
+      - name: "OT 사보타주 대상 특정"
+        submit: "ot_target"            # 정답: REF-002 SIS
+        points: 60
+    scoring: "field_match(부분점수)"
+
+  full_chain_bonus:
+    all_phases_completed: 100
+    description: "IT→OT 경계를 넘는 전체 킬체인 재구성 마스터 보너스"
+
+  scoring_summary:
+    phase_1_red: 180
+    phase_2_forensics_blue: 150
+    full_chain_bonus: 100
+    total_possible: 430
+
+  noise:
+    enabled: true
+    normal_traffic_eps: 8
+
+  safety:
+    profile: "standard"
+    notes: "모든 데이터 더미. Phase 2 증거는 Phase 1 실제 이벤트에서 자동 생성."

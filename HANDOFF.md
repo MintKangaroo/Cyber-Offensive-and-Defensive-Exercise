@@ -736,8 +736,15 @@ SIEM 규칙 4종/웹 취약점 3종/AI 보안 인시던트 5종).
 >   익명 읽기). **둘 다 full docker C-QA PASS**(deploy_up→intended_solve→blank→flag_determinism→teardown).
 >   → 총 챌린지 51→**53**(7분야). AI-007/WEB 패턴과 동일(deploy/main.py FastAPI + exploit.solve(base,team)
 >   + grade_red 동적 HMAC 플래그).
-> - **다음 착수 후보**: 섹터 CTF 챌린지 확충(각 섹터별), 신규 섹터 Suricata/Zeek 센서 사이드카,
->   섹터 크로스오버 시나리오, ICS 아티팩트형 챌린지(Modbus PCAP 분석 등).
+> - **ICS 트래픽분석 챌린지 3종 완료**: challenges/ics/ICS-002(Modbus)/ICS-003(DNP3)/ICS-004(IEC104).
+>   합성 프로토콜 로그에서 안전계통 무단 제어를 상관분석으로 탐지→공격자 식별+토큰 XOR 복호.
+>   전부 artifact_solve C-QA PASS. → ics 분야 5종, 총 챌린지 **56**.
+> - **IT→OT 피벗 크로스오버 완료**: scenarios/crossover/XOVER-IT-OT-PIVOT-01(사내망 DN-001→DN-003→
+>   정유 REF-001→REF-002, insane). **멀티에셋 크로스오버 E2E 실증**(phase_1 stage_completed×4 순서).
+>   crossover 트래커는 `_route_event`가 자산 무관하게 모든 이벤트를 전달 → IT/OT 경계 넘는 킬체인 성립.
+>   총 시나리오 **14**(단일 11 + 크로스오버 3). phase_2(포렌식)는 submit_objective API 기반(기존 XOVER 패턴).
+> - **다음 착수 후보**: 섹터 CTF 챌린지 추가 확충, 신규 섹터 Suricata/Zeek 센서 사이드카,
+>   Profinet/IEC61850/HART 프로토콜 챌린지, AAR에 ICS 섹터 리포트 뷰.
 
 ## 5. 상태 요약 한 줄
 
