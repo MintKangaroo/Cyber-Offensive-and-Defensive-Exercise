@@ -755,8 +755,15 @@ SIEM 규칙 4종/웹 취약점 3종/AI 보안 인시던트 5종).
 > - **HART 챌린지 완료**: ICS-007(HART 명령 주입, 안전 트랜스미터 무단 write 탐지). artifact_solve PASS.
 >   → ics 분야 **8종**, 총 챌린지 **59**. **7대 OT 프로토콜 커버**(Modbus/DNP3/IEC104/Profinet/IEC61850/
 >   HART 트래픽분석 + OPC UA 서비스).
+> - **ICS 트윈 팩토리 유닛테스트 + 챌린지 CI 잡 완료**: tests/unit/test_ics_twin.py(팩토리 계약 6종,
+>   emit/edr no-op) → 유닛 66→**72 pass**. scripts/validate_challenges.sh(docker 불필요 전체 챌린지:
+>   schema 59 + artifact 37 + detection 8 실채점) + ci.yml에 'challenges' 잡 추가.
+> - **⭐ CI 정정(중요)**: 이전 인계의 "CI 러너 없어 GitHub Actions 못 돌림" 가정은 틀렸음 — 저장소가
+>   PUBLIC이라 **GitHub 무료 러너에서 CI가 실제로 돌고 3개 잡(unit/challenges/integration) 전부
+>   success**. integration 잡은 **전체 docker 스택 build+up + SMOKE_RECOVERY=1 스모크**를 GitHub에서
+>   실행해 통과함(로컬뿐 아니라 클린 러너에서도 재현됨). `gh run list`로 상태 확인 가능.
 > - **다음 착수 후보**: 신규 섹터 Suricata/Zeek 센서 사이드카(격리 후 netns 공유 재설계 필요),
->   Foundation Fieldbus/BACnet 챌린지, 섹터별 blue 자동 패치검증(safe_probe 확장).
+>   Foundation Fieldbus/BACnet 챌린지, LiveFire 대시보드에 ICS 사보타주 임팩트 시각화.
 
 ## 5. 상태 요약 한 줄
 
