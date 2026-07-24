@@ -431,14 +431,17 @@ python3 infra/challenge_qa/run_all.py --challenge NET-007
 
 이 프로젝트의 원칙은 **"코드가 아니라 실제로 통과한 결과를 보여준다"** 입니다.
 
-- **유닛 테스트 66개** (`python -m pytest tests/`) — 계약 검증 + 지금까지 잡은 버그의 회귀 테스트.
+- **유닛 테스트 72개** (`python -m pytest tests/`) — 계약 검증 + 지금까지 잡은 버그의 회귀 테스트.
 - **통합 스모크 35/35** (`scripts/smoke_test.sh`) — 헬스 → 트윈공격 → SIEM 인제스천 → 점수 →
   시나리오 → EDR 탐지 → AAR/PDF → 네트워크 격리까지 E2E.
 - **C-QA 파이프라인** (`infra/challenge_qa/run_all.py`) — 챌린지 타입별 올바른 게이트로 59종 전부 검증:
   - **서비스형(docker)**: `deploy_up → intended_solve → blank_submit → flag_determinism → teardown`
   - **아티팩트형**: `artifact_solve` (생성 → 시그니처 분기 solve → 채점 + 빈제출 거부)
   - **탐지형(DET)**: `detection_solve` (데이터셋 생성 → **진짜 SIEM DetectionEngine** 채점 + no-op 규칙 거부)
-- **GitHub Actions CI** (`.github/workflows/ci.yml`) — unit job + integration(docker 스택+스모크) job.
+- **GitHub Actions CI** (`.github/workflows/ci.yml`) — 3개 job:
+  - `unit`: 유닛/계약 테스트(**72개**).
+  - `challenges`: 전체 챌린지 schema + 아티팩트/탐지 게이트 실채점(docker 불필요, `scripts/validate_challenges.sh`).
+  - `integration`: 전체 docker 스택 build+up → `SMOKE_RECOVERY=1` 스모크 → teardown.
 
 ---
 
