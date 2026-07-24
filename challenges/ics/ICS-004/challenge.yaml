@@ -1,0 +1,22 @@
+challenge:
+  id: "ICS-004"
+  title: "IEC 104 ASDU 조작 추적 - Command Injection"
+  category: "ics"
+  difficulty: "medium"
+  points: { red: 120, blue: 0 }
+  mitre: [T0855]
+  description: |
+    iec104_log.jsonl은 변전소 원격제어망의 합성 IEC 60870-5-104 트래픽 로그다. 정상 SCADA
+    마스터의 감시 방향 ASDU(M_SP_NA_1=1, 자발 COT=3) 사이에, 무단 제어국이 보호 IOA(차단기, ioa=7)에
+    단일명령 C_SC_NA_1(type 45, 활성화 COT=6)을 내린 사보타주가 숨어 있다. 보호 IOA에 대한
+    제어 ASDU를 정상 마스터가 아닌 출발지에서 찾아 공격자 IP를 식별하고, note(base64) 토큰을
+    공격자 IP로 XOR 복호해 flag를 도출하라.
+  red_task:
+    goal: "보호 IOA 무단 제어 ASDU의 공격자 IP 식별 → note 토큰 XOR 복호 → flag"
+    submit_fields: ["attacker_ip", "flag"]
+  scoring:
+    red_verify: "flag_match"
+  artifacts: ["iec104_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 IEC 104 로그(실트래픽/실장비 무관). IP/토큰/플래그는 팀별 더미값."

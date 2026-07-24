@@ -4,7 +4,7 @@
 > 데이터센터 · 병원** 등 **11개 ICS/OT 섹터**를 모사한 디지털 트윈 위에서
 > Red(공격) · Blue(방어) · 관전자 · 교관이 함께 훈련하는 **풀스택 사이버 레인지**입니다.
 > 취약 서비스 트윈(**44종**), EDR, SIEM, 시나리오 엔진, 실시간 대시보드, 자동 채점(AAR),
-> 그리고 7개 분야 **53개 CTF 챌린지**를 하나의 `docker compose`로 기동합니다.
+> 그리고 7개 분야 **56개 CTF 챌린지**를 하나의 `docker compose`로 기동합니다.
 
 <p align="center">
   <img src="docs/images/livefire-overview.png" alt="Live Fire Range 대시보드" width="900"/>
@@ -20,7 +20,7 @@
 - [주요 화면 (스크린샷)](#주요-화면-스크린샷)
 - [핵심 기능](#핵심-기능)
 - [트윈 취약 서비스 (44종)](#트윈-취약-서비스-44종)
-- [챌린지 카탈로그 (53종)](#챌린지-카탈로그-53종)
+- [챌린지 카탈로그 (56종)](#챌린지-카탈로그-56종)
 - [빠른 시작](#빠른-시작)
 - [검증 · 품질 게이트](#검증--품질-게이트)
 - [RBAC (역할 기반 접근제어)](#rbac-역할-기반-접근제어)
@@ -130,7 +130,7 @@ SIEM 8040 · Scenario 8045 · Instructor 8050 · NOC 8070 · EDR 8080 · AAR 809
 | **점수/AAR** | 이벤트 → 자동 채점(Red 목표 / Blue 탐지·복구). MTTD/MTTR·탐지율·오탐률·ATT&CK 히트맵·**PDF 리포트** 자동 생성. |
 | **복구 판정** | NOC Monitor가 트윈 헬스를 폴링, 침해→패치→복구를 판정해 MTTR 산출·Blue 가점. |
 | **RBAC** | instructor/red/blue/observer 역할별 토큰. 방어 액션은 instructor·blue, 조작은 instructor, **관전자는 읽기 전용**. |
-| **53 챌린지** | 7개 분야 × easy~insane. 팀별 동적 플래그(HMAC)로 답 공유 방지. 전부 자동 QA 통과. |
+| **56 챌린지** | 7개 분야 × easy~insane. 팀별 동적 플래그(HMAC)로 답 공유 방지. 전부 자동 QA 통과. |
 
 ---
 
@@ -264,7 +264,7 @@ patched/vulnerable 상태를 한 번에 판정합니다.
 
 ---
 
-## 챌린지 카탈로그 (53종)
+## 챌린지 카탈로그 (56종)
 
 web·forensics·network·reversing·detection·ai 6개 분야가 모두 **easy → medium → hard → insane** 난이도 곡선을 갖추고 있습니다.
 표기: `점수(Red/Blue)`. 팀마다 플래그·정답이 HMAC으로 달라 답 공유가 불가능합니다.
@@ -366,15 +366,19 @@ web·forensics·network·reversing·detection·ai 6개 분야가 모두 **easy �
 > 로 L∞ 예산 안에서 오분류를 유도하는 실제 ML 보안 챌린지입니다.
 
 <details>
-<summary><b>🏭 ICS/OT (2) — OT 프로토콜 기반, full docker</b></summary>
+<summary><b>🏭 ICS/OT (5) — OT 프로토콜 기반 (서비스형 2 + 트래픽분석형 3)</b></summary>
 
-| ID | 제목 | 난이도 | ATT&CK | 점수 |
-|---|---|---|---|---|
-| ICS-001 | OPC UA 익명 태그 열람 — Anonymous Read | easy | T0886 | 70/40 |
-| ICS-000 | 안전 인터록 우회 — Modbus Safety Interlock | medium | T0836,T0858 | 120/60 |
+| ID | 제목 | 난이도 | ATT&CK | 게이트 | 점수 |
+|---|---|---|---|---|---|
+| ICS-001 | OPC UA 익명 태그 열람 | easy | T0886 | full docker | 70/40 |
+| ICS-000 | 안전 인터록 우회 — Modbus Safety Interlock | medium | T0836,T0858 | full docker | 120/60 |
+| ICS-002 | Modbus 사보타주 분석 — 안전 레지스터 무단 쓰기 | medium | T0836,T0855 | artifact | 120/0 |
+| ICS-003 | DNP3 무단 제어 명령 탐지 | medium | T0855 | artifact | 120/0 |
+| ICS-004 | IEC 104 ASDU 조작 추적 | medium | T0855 | artifact | 120/0 |
 
-> Modbus/OPC UA를 흉내낸 서비스를 docker로 배포하고, 실제 익스플로잇(정보노출→인터록 우회 /
-> 익명 브라우즈→읽기)으로 팀별 동적 플래그를 획득하는 full-docker C-QA 챌린지입니다.
+> **서비스형**(ICS-000/001): Modbus/OPC UA를 흉내낸 서비스를 docker로 배포하고 실제 익스플로잇으로
+> 플래그 획득. **트래픽분석형**(ICS-002/003/004): 합성 Modbus/DNP3/IEC 104 로그에서 안전계통에 대한
+> 무단 제어(사보타주)를 상관 분석으로 찾아 공격자 식별 + 은닉 토큰 복호. 전부 팀별 HMAC 동적 플래그.
 </details>
 
 ---
@@ -426,7 +430,7 @@ python3 infra/challenge_qa/run_all.py --challenge NET-007
 - **유닛 테스트 66개** (`python -m pytest tests/`) — 계약 검증 + 지금까지 잡은 버그의 회귀 테스트.
 - **통합 스모크 35/35** (`scripts/smoke_test.sh`) — 헬스 → 트윈공격 → SIEM 인제스천 → 점수 →
   시나리오 → EDR 탐지 → AAR/PDF → 네트워크 격리까지 E2E.
-- **C-QA 파이프라인** (`infra/challenge_qa/run_all.py`) — 챌린지 타입별 올바른 게이트로 53종 전부 검증:
+- **C-QA 파이프라인** (`infra/challenge_qa/run_all.py`) — 챌린지 타입별 올바른 게이트로 56종 전부 검증:
   - **서비스형(docker)**: `deploy_up → intended_solve → blank_submit → flag_determinism → teardown`
   - **아티팩트형**: `artifact_solve` (생성 → 시그니처 분기 solve → 채점 + 빈제출 거부)
   - **탐지형(DET)**: `detection_solve` (데이터셋 생성 → **진짜 SIEM DetectionEngine** 채점 + no-op 규칙 거부)
@@ -462,7 +466,7 @@ cyber-range-platform/
 │   ├── event_collector/ config_service/ instructor_api/ noc_monitor/ aar_report/
 │   └── core/            # 복구 판정(recovery_watcher) 등 공용 코어
 ├── dashboards/          # livefire/ · siem/ (Vite+React)
-├── challenges/          # web/ forensics/ network/ reversing/ detection/ ai/ ics/ (53종)
+├── challenges/          # web/ forensics/ network/ reversing/ detection/ ai/ ics/ (56종)
 ├── infra/challenge_qa/  # C-QA 파이프라인(run_all + 게이트들)
 ├── scenarios/           # 코드로 정의된 킬체인 시나리오
 ├── scripts/smoke_test.sh

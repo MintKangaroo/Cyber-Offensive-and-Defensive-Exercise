@@ -1,0 +1,21 @@
+challenge:
+  id: "ICS-003"
+  title: "DNP3 무단 제어 명령 탐지 - Unsolicited Control"
+  category: "ics"
+  difficulty: "medium"
+  points: { red: 120, blue: 0 }
+  mitre: [T0855]
+  description: |
+    dnp3_log.jsonl은 변전소 제어망의 합성 DNP3 트래픽 로그다. 정상 마스터의 Class 0 폴링(READ)
+    사이에, 무단 마스터가 보호 제어점(차단기 CB, point 7)에 DIRECT_OPERATE(func 5, LATCH_ON) 제어를
+    내린 사보타주가 숨어 있다. 보호 제어점에 대한 OPERATE를 정상 마스터가 아닌 출발지에서 찾아
+    공격자 IP를 식별하고, note(base64) 토큰을 공격자 IP로 XOR 복호해 flag를 도출하라.
+  red_task:
+    goal: "보호 제어점 무단 OPERATE의 공격자 IP 식별 → note 토큰 XOR 복호 → flag"
+    submit_fields: ["attacker_ip", "flag"]
+  scoring:
+    red_verify: "flag_match"
+  artifacts: ["dnp3_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 DNP3 로그(실트래픽/실장비 무관). IP/토큰/플래그는 팀별 더미값."

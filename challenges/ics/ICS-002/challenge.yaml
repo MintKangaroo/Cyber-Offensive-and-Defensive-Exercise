@@ -1,0 +1,21 @@
+challenge:
+  id: "ICS-002"
+  title: "Modbus 사보타주 분석 - 안전 레지스터 무단 쓰기"
+  category: "ics"
+  difficulty: "medium"
+  points: { red: 120, blue: 0 }
+  mitre: [T0836, T0855]
+  description: |
+    modbus_traffic.jsonl은 발전 설비 제어망의 합성 Modbus/TCP 트래픽 로그다. 정상 HMI의
+    읽기 트래픽 사이에, 무단 마스터가 안전 레지스터(40001)에 쓰기(func 6)를 수행한 사보타주가
+    숨어 있다. 안전 레지스터에 대한 write를 정상 HMI가 아닌 출발지에서 찾아 공격자 IP를 식별하고,
+    해당 레코드 note(base64) 토큰을 공격자 IP로 XOR 복호해 flag를 도출하라.
+  red_task:
+    goal: "안전 레지스터 무단 write의 공격자 IP 식별 → note 토큰 XOR 복호 → flag"
+    submit_fields: ["attacker_ip", "flag"]
+  scoring:
+    red_verify: "flag_match"
+  artifacts: ["modbus_traffic.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 Modbus 로그(실트래픽/실장비 무관). IP/토큰/플래그는 팀별 더미값."
