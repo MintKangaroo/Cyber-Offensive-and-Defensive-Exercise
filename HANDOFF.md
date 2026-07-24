@@ -604,6 +604,41 @@ SIEM 규칙 4종/웹 취약점 3종/AI 보안 인시던트 5종).
 
 ---
 
+---
+
+## 📌 세션 연속성 메모 (2026-07-24 — 후속 3작업 + GitHub 관리 시작)
+
+> **이번 세션 성과**: 이전 인계의 "다음 착수 후보" 3건을 전부 구현·실검증하고 **GitHub 저장소로
+> 관리 시작 + 상세 한글 README(스크린샷 6종) 작성**.
+>
+> 1. **옵저버 read 엔드포인트 세분화**: `shared/rbac.py`에 `require_read()`/`read_enforced()` 추가.
+>    scoring(`/scores`,`/scores/history`) + edr(`/edr/hosts`,`processes`,`timeline`,`alerts`,`audit`)에 배선.
+>    **`OBSERVER_READ_ENFORCE` 옵트인**(기본 off=공개 → 대시보드/스모크/CI 무영향; on → read에 유효토큰
+>    요구, 무토큰 401 / 관전자 이상 200). docker 역할 매트릭스 실증(read: obs 200 / 무토큰 401 / red 200,
+>    write: obs 403 / 무토큰 401, isolate 유효body 403/401). compose(scoring/edr)에 플래그 pass-through.
+> 2. **AI-007**(hard, 실 ML/docker): numpy 2층 MLP 직접 학습(seed 고정, weight decay) → docker 서빙
+>    (`/model` 화이트박스, `/source`, `/classify` 예산·박스 검사). 화이트박스 **PGD**로 L∞ 예산(0.12) 안
+>    오분류 유도 시 팀별 HMAC 플래그. **full docker C-QA PASS**. 포트 8107.
+> 3. **FOR-007**(hard, artifact): 프로세스 할로잉 — private+RX 이상영역 탐지→은닉 스테이저(base64)→XOR 복호.
+>    **NET-007**(hard, artifact): 다중 홉 피벗 체인 — netflow 시간·바이트 상관으로 체인 복원→토큰 XOR 복호.
+>    둘 다 **artifact_solve C-QA PASS** + 팀별 유니크 실측.
+>    → **ai/forensics/network hard 티어 0→1 해소**. 6개 전 분야 easy~insane 완성. **총 51 챌린지**.
+>
+> - **회귀**: 유닛 테스트 58→**66 pass**(RBAC read 게이트 테스트 +8), 통합 스모크 **35/35 PASS**(변경 무영향).
+> - **GitHub**: `https://github.com/MintKangaroo/Cyber-Offensive-and-Defensive-Exercise` (PUBLIC, 기본 main).
+>   `gh auth setup-git`로 HTTPS 자격증명 설정, 원격 초기 README를 상세 README로 대체(unrelated histories
+>   merge -X ours). **588파일 커밋 → main 푸시 완료**. .env/node_modules/dist는 .gitignore로 제외(시크릿
+>   스캔 clean). 기존 계약문서(구 README)는 **CONTRACTS.md**로 보존.
+> - **README**: 상세 한글(아키텍처 mermaid + 챌린지 카탈로그 51 + 빠른시작 + 검증 + RBAC 매트릭스) +
+>   **실제 UI 스크린샷 6종**(`docs/images/`: EDR 콘솔 개요·호스트, Live Fire, SIEM discover·alerts·coverage).
+>   스크린샷은 dev서버 3종(5173/5174/5175) 기동 + 킬체인/EDR/SIEM 데이터 시딩 후 **playwright(docker
+>   mcr playwright 이미지 --network host)** 로 캡처(호스트에 chromium 시스템 라이브러리 없어 컨테이너 사용).
+> - **환경 특이(신규)**: 로컬 18080을 **별도 프로젝트 patchtower-nginx가 점유** → `docker-compose.override.yml`
+>   의 edr 호스트포트를 **18080→18090**으로 변경. `scripts/smoke_test.sh` 포트 자동감지에 18090 추가,
+>   `services/edr/console/.env.local`도 18090으로. (patchtower/triphelper 등 무관 컨테이너가 상시 떠 있음.)
+> - **다음 착수 후보**: 관전자 read 게이트를 siem/scenario/event_collector/aar까지 확장(현재 scoring/edr만),
+>   AI 분야 실 docker/ML 추가 확충, 빈 hard 이상 슬롯 보강(현재 각 분야 hard≥1이나 ai/for/net은 1개뿐).
+
 ## 5. 상태 요약 한 줄
 
 M0 병합 / M1 **Docker 재검증** / **M2(EDR)** / **M3(시나리오)** / **M4(EDR 콘솔)** / **M5(SIEM 인제스천+탐지4종+LiveFire)** / **M6(대시보드/AAR)** 라이브 검증 완료 → **M0~M6 전 마일스톤 Docker 실검증 완료** / **P1-1 복구판정+MTTR 배선 완료(noc_monitor 배포, MTTR 실측)** / **P1-3 트윈 네트워크 격리 완료(per-twin nginx 게이트웨이, lateral·egress 차단 실측)** / **P1-2 유닛테스트 43개+GitHub Actions CI 완료** / **P2 C-QA docker 게이트 실검증(배포형 6종 full docker QA PASS, run_all 포트자동추출+아티팩트 감지 수정)** / **P3 RBAC(역할별 토큰, edr isolate 무검증 갭 차단)** / **P2b 아티팩트 exploit 계약 통일(artifact_solve, NET/FOR/REV 6종 solve+grade 실검증)** / **유닛 테스트 58 pass** / **통합 스모크 테스트 `scripts/smoke_test.sh` 35/35 PASS(+복구=38/38)** / **전체 48개 챌린지 C-QA PASS**(서비스형 9 docker + 아티팩트형 31 artifact_solve + 탐지형 8 detection_solve) / **insane 티어 6종 신규 완료·전부 C-QA PASS**(REV-009 핸들러테이블VM / FOR-009 안티포렌식3단 / NET-009 OT사보타주 Modbus / AI-009 전이회피 로그분석 / DET-009 APT low-and-slow 헌팅 / WEB-009 WAF우회+블라인드SQLi full-docker) → **6개 전 분야 easy~insane 곡선 완성(각 8문제)** / 버그 14건 수정(QA2 + 시나리오 라우팅1 + 콘솔 vite-env/CORS2 + SIEM timestamp/가드/죽은규칙3 + AAR 히트맵/상관키2 + 대시보드 vite-env/백엔드 CORS2 + 복구 scenario전파/AAR MTTR metadata2) / USAGE.md / **다음: 옵저버 read 엔드포인트 세분화, AI 분야 확충(실 ML/docker), 빈 medium/hard 칸 채우기(REV/FOR/NET medium 등).**
