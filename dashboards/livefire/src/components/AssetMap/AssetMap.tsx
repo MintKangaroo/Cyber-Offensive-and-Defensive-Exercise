@@ -5,7 +5,7 @@ import { ASSETS } from "../../api/types";
 const ASSET_LABEL: Record<string, string> = {
   ground_station: "위성 지상국",
   power_plant: "발전소 · SCADA",
-  defense_network: "국방망",
+  defense_network: "사내망",
 };
 
 const ASSET_POS: Record<string, { x: number; y: number }> = {

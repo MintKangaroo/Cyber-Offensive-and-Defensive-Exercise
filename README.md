@@ -1,6 +1,6 @@
 # 🛡️ Cyber Range Platform — 공방(攻防) 통합 훈련 플랫폼
 
-> **위성 지상국 · 발전소(SCADA) · 국방망**을 모사한 디지털 트윈 위에서
+> **위성 지상국 · 발전소(SCADA) · 사내망**을 모사한 디지털 트윈 위에서
 > Red(공격) · Blue(방어) · 관전자 · 교관이 함께 훈련하는 **풀스택 사이버 레인지**입니다.
 > 취약 서비스 트윈, EDR, SIEM, 시나리오 엔진, 실시간 대시보드, 자동 채점(AAR),
 > 그리고 6개 분야 **51개 CTF 챌린지**를 하나의 `docker compose`로 기동합니다.
@@ -18,6 +18,7 @@
 - [아키텍처](#아키텍처)
 - [주요 화면 (스크린샷)](#주요-화면-스크린샷)
 - [핵심 기능](#핵심-기능)
+- [트윈 취약 서비스 (20종)](#트윈-취약-서비스-20종)
 - [챌린지 카탈로그 (51종)](#챌린지-카탈로그-51종)
 - [빠른 시작](#빠른-시작)
 - [검증 · 품질 게이트](#검증--품질-게이트)
@@ -54,7 +55,7 @@ flowchart TB
     end
 
     subgraph Twins["🎯 디지털 트윈 (취약 자산, 네트워크 격리)"]
-        GS["위성 지상국 :8001"]; PP["발전소 SCADA :8002"]; DN["국방망 :8003"]
+        GS["위성 지상국 :8001"]; PP["발전소 SCADA :8002"]; DN["사내망 :8003"]
     end
 
     subgraph Core["⚙️ 컨트롤 플레인"]
@@ -121,7 +122,7 @@ SIEM 8040 · Scenario 8045 · Instructor 8050 · NOC 8070 · EDR 8080 · AAR 809
 
 | 영역 | 내용 |
 |---|---|
-| **디지털 트윈** | 위성 지상국·발전소(SCADA)·국방망 3종. 실제 취약점(SQLi/IDOR/RCE/명령주입 등)을 내장하고 텔레메트리·access log를 발생. **네트워크 격리**(per-twin nginx 게이트웨이)로 lateral·egress 원천 차단. |
+| **디지털 트윈** | 위성 지상국·발전소(SCADA)·사내망 3종에 **취약 서비스 20종**(SQLi/IDOR/RCE/명령주입/SSRF/XXE/LDAP인젝션/Modbus·펌웨어 ICS 등)을 내장하고 텔레메트리·access log를 발생. **네트워크 격리**(per-twin nginx 게이트웨이)로 lateral·egress 원천 차단. |
 | **EDR** | 프로세스 스냅샷 수집 → 리버스쉘·웹서버발 셸 생성 등 행위 탐지 → 호스트 격리/프로세스 kill(감사 로그). |
 | **SIEM** | 인제스천(트윈 로그·Suricata·Zeek·pfSense syslog) → 정규화 → 4종 규칙(match/threshold/sequence/periodicity) 탐지 → Live Fire 점수 연동. ATT&CK 커버리지 매핑. |
 | **시나리오 엔진** | 코드로 정의된 킬체인 시나리오(순서 강제, chain bonus). 단일·크로스오버 시나리오 로드. |
@@ -129,6 +130,48 @@ SIEM 8040 · Scenario 8045 · Instructor 8050 · NOC 8070 · EDR 8080 · AAR 809
 | **복구 판정** | NOC Monitor가 트윈 헬스를 폴링, 침해→패치→복구를 판정해 MTTR 산출·Blue 가점. |
 | **RBAC** | instructor/red/blue/observer 역할별 토큰. 방어 액션은 instructor·blue, 조작은 instructor, **관전자는 읽기 전용**. |
 | **51 챌린지** | 6개 분야 × easy~insane. 팀별 동적 플래그(HMAC)로 답 공유 방지. 전부 자동 QA 통과. |
+
+---
+
+## 트윈 취약 서비스 (20종)
+
+세 디지털 트윈에 내장된 취약 서비스 목록입니다. 각 취약점은 `PATCH_<ID>=true` 환경변수 또는
+교관 콘솔의 무중단 패치 토글로 개별 비활성화되며, Safe Probe가 patched/vulnerable 상태를 판정합니다.
+
+#### 🛰️ 위성 지상국 (`ground_station`) — 7종
+| ID | 취약점 | CWE | ATT&CK | 엔드포인트 |
+|---|---|---|---|---|
+| GS-001 | Telemetry API SQL Injection | CWE-89 | T1190 | `GET /api/telemetry?sensor_id=` |
+| GS-002 | Hardcoded Admin Credentials / Weak JWT | CWE-798 | T1078,T1552.001 | `POST /api/login` |
+| GS-003 | Mission Plan IDOR | CWE-639 | T1213 | `GET /api/mission-plan/{id}` |
+| GS-004 | File Download Path Traversal | CWE-22 | T1005 | `GET /api/download?file=` |
+| GS-005 | Debug Endpoint Config Exposure | CWE-215 | T1592 | `GET /api/debug/config` |
+| **GS-006** | **TLE Import SSRF** | CWE-918 | T1090 | `POST /api/tle/import` |
+| **GS-007** | **Config XML XXE** | CWE-611 | T1005 | `POST /api/config/xml-import` |
+
+#### ⚡ 발전소 · SCADA (`power_plant`) — 7종
+| ID | 취약점 | CWE | ATT&CK | 엔드포인트 |
+|---|---|---|---|---|
+| PP-001 | Unauthenticated PLC Register Write | CWE-306 | T0836 | `POST /api/plc/write` |
+| PP-002 | Default HMI Credentials | CWE-521 | T1078.001 | `POST /api/hmi/login` |
+| PP-003 | Diagnostics Command Injection | CWE-78 | T1059 | `POST /api/diagnostics/ping` |
+| PP-004 | Historian Insecure Deserialization | CWE-502 | T1059.006 | `POST /api/historian/export` |
+| PP-005 | Safety Monitor Bypass | CWE-284 | T0800 | `POST /api/safety/override` |
+| **PP-006** | **Unauthorized Modbus Register Write (ICS)** | CWE-306 | T0836,T0855 | `POST /api/modbus/write-register` |
+| **PP-007** | **Unsigned Firmware Update (ICS)** | CWE-345 | T0857 | `POST /api/plc/firmware-update` |
+
+#### 🏢 사내망 (`defense_network`) — 6종
+| ID | 취약점 | CWE | ATT&CK | 엔드포인트 |
+|---|---|---|---|---|
+| DN-001 | SMB Anonymous Share Access | CWE-284 | T1039 | `GET /api/smb/shares` |
+| DN-002 | Kerberoastable Service Account | CWE-521 | T1558.003 | `GET /api/ad/service-accounts` |
+| DN-003 | Exposed Backup Config (Plaintext Creds) | CWE-256 | T1552.001 | `GET /api/fileserver/backup-config` |
+| DN-004 | Open Mail Relay | CWE-284 | T1583.007 | `POST /api/mail/relay` |
+| **DN-005** | **Directory LDAP Injection** | CWE-90 | T1087 | `GET /api/directory/search` |
+| **DN-006** | **URL Preview SSRF** | CWE-918 | T1090 | `POST /api/webhook/preview` |
+
+> **굵게** 표시된 6종(GS-006/007, PP-006/007, DN-005/006)이 이번에 추가된 서비스입니다.
+> `python3 shared/safe_probe.py` 로 20종 전부의 patched/vulnerable 상태를 한 번에 점검할 수 있습니다.
 
 ---
 

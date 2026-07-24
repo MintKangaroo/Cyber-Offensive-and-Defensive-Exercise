@@ -73,7 +73,7 @@ export function EventTimeline() {
           <option value="all">전체 자산</option>
           <option value="ground_station">위성 지상국</option>
           <option value="power_plant">발전소</option>
-          <option value="defense_network">국방망</option>
+          <option value="defense_network">사내망</option>
         </select>
         <select
           value={teamFilter}

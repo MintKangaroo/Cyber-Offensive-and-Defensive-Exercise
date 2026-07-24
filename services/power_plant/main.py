@@ -11,6 +11,8 @@ Live Fire Cyber Range 훈련용 모의 서비스. 실제 SCADA/PLC 시스템이 
   PP-003 Diagnostics Command Injection (/api/diagnostics/ping)
   PP-004 Insecure Deserialization      (/api/historian/export)
   PP-005 Safety Override Bypass        (/api/safety/override)
+  PP-006 Unauthorized Modbus Write     (/api/modbus/write-register) — 보호 레지스터 미인가 쓰기(ICS)
+  PP-007 Unsigned Firmware Update       (/api/plc/firmware-update)   — 서명 검증 없는 펌웨어 설치
 """
 
 import os
@@ -39,6 +41,8 @@ PP_ROUTE_VULN_MAP = {
     "/api/diagnostics/ping": "PP-003",
     "/api/historian/export": "PP-004",
     "/api/safety/override": "PP-005",
+    "/api/modbus/write-register": "PP-006",
+    "/api/plc/firmware-update": "PP-007",
 }
 
 ASSET_NAME = "power_plant"
@@ -247,6 +251,72 @@ def safety_override(req: SafetyOverride, x_team_id: str = Header(default="defaul
     safety_override_state["approved_by"] = req.approver_token
     plc_registers["SAFETY_INTERLOCK"] = not req.override
     return {"patched": patched("PATCH_PP_005"), "state": safety_override_state}
+
+
+# ---------------------------------------------------------------------------
+# PP-006: Unauthorized Modbus Register Write (보호 레지스터 미인가 쓰기, ICS)
+# ---------------------------------------------------------------------------
+# 실제 Modbus 장비와 무관한 시뮬레이션. 안전 관련 보호 레지스터.
+modbus_registers = {"EMERGENCY_SHUTDOWN": False, "FEEDWATER_VALVE": 50, "RELAY_TRIP": False}
+PROTECTED_REGISTERS = {"EMERGENCY_SHUTDOWN", "RELAY_TRIP"}
+
+
+class ModbusWrite(BaseModel):
+    register: str
+    value: object
+    unit_id: int = 1
+
+
+@app.post("/api/modbus/write-register")
+def modbus_write(req: ModbusWrite, authorization: str = Header(default=""), x_team_id: str = Header(default="default")):
+    if req.register not in modbus_registers:
+        raise HTTPException(400, "unknown modbus register")
+    if patched("PATCH_PP_006"):
+        # 패치 후: 엔지니어링 워크스테이션 인증 + 보호 레지스터는 별도 승인 없이는 쓰기 금지
+        if authorization != "Bearer engineering-station-token":
+            raise HTTPException(401, "unauthorized: engineering workstation token required")
+        if req.register in PROTECTED_REGISTERS:
+            raise HTTPException(403, "protected safety register: change control approval required")
+    else:
+        # 취약 지점: 인증 없이 Modbus write function code로 보호 레지스터까지 조작 가능
+        if req.register in PROTECTED_REGISTERS:
+            emit_event(
+                event_id=Event.make_id(x_team_id, ASSET_NAME, "PP-006", req.register, str(time.time())),
+                event_type=EventType.red_objective_success, actor="red", target_asset=ASSET_NAME,
+                vuln_id="PP-006", phase=RedPhase.objective, team_id=x_team_id,
+                trace_id=Event.session_trace_id(x_team_id, ASSET_NAME),
+                metadata={"register": req.register, "value": req.value, "note": "protected safety register written without auth"},
+            )
+    modbus_registers[req.register] = req.value
+    return {"patched": patched("PATCH_PP_006"), "registers": modbus_registers}
+
+
+# ---------------------------------------------------------------------------
+# PP-007: Unsigned Firmware Update (서명 검증 없는 펌웨어 설치)
+# ---------------------------------------------------------------------------
+class FirmwareUpdate(BaseModel):
+    version: str
+    firmware_b64: str
+    signature: str | None = None
+
+
+@app.post("/api/plc/firmware-update")
+def firmware_update(req: FirmwareUpdate, x_team_id: str = Header(default="default")):
+    blob = base64.b64decode(req.firmware_b64) if req.firmware_b64 else b""
+    if patched("PATCH_PP_007"):
+        # 패치 후: 벤더 서명 검증(간이) — 유효 서명 없으면 거부
+        if req.signature != "vendor-signed-" + req.version:
+            raise HTTPException(403, "firmware signature verification failed")
+        return {"patched": True, "status": "firmware verified & staged", "version": req.version}
+    # 취약 지점: 서명 검증 없이 임의 펌웨어 설치 -> 악성 펌웨어 주입 가능(ICS T0857)
+    emit_event(
+        event_id=Event.make_id(x_team_id, ASSET_NAME, "PP-007", req.version, str(time.time())),
+        event_type=EventType.red_attack_started, actor="red", target_asset=ASSET_NAME,
+        vuln_id="PP-007", phase=RedPhase.objective, team_id=x_team_id,
+        trace_id=Event.session_trace_id(x_team_id, ASSET_NAME),
+        metadata={"version": req.version, "firmware_size": len(blob)},
+    )
+    return {"patched": False, "status": "firmware flashed (no signature check)", "version": req.version}
 
 
 if __name__ == "__main__":

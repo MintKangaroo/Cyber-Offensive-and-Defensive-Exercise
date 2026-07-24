@@ -1,5 +1,5 @@
 """
-Defense Network Digital Twin (국방망 디지털 트윈)
+Defense Network Digital Twin (사내망 디지털 트윈)
 --------------------------------------------------
 Live Fire Cyber Range 훈련용 모의 서비스. 실제 AD/파일서버/메일서버가 아니며
 SMB/Kerberos/SMTP 프로토콜을 흉내낸 REST API 시뮬레이션입니다. 모든 계정/
@@ -10,6 +10,8 @@ SMB/Kerberos/SMTP 프로토콜을 흉내낸 REST API 시뮬레이션입니다. �
   DN-002 Kerberoastable Service Account       (/api/ad/service-accounts)
   DN-003 Exposed Backup Config w/ Plaintext   (/api/fileserver/backup-config)
   DN-004 Open Mail Relay                      (/api/mail/relay)
+  DN-005 LDAP Injection                       (/api/directory/search) — 직원 디렉터리 검색
+  DN-006 SSRF (URL 미리보기)                  (/api/webhook/preview)  — 파일서버 링크 미리보기
 """
 
 import os
@@ -32,6 +34,8 @@ DN_ROUTE_VULN_MAP = {
     "/api/ad/service-accounts": "DN-002",
     "/api/fileserver/backup-config": "DN-003",
     "/api/mail/relay": "DN-004",
+    "/api/directory/search": "DN-005",
+    "/api/webhook/preview": "DN-006",
 }
 
 ASSET_NAME = "defense_network"
@@ -185,6 +189,82 @@ def mail_relay(req: MailRelayRequest, x_team_id: str = Header(default="default")
         "to": req.mail_to,
         "subject": req.subject,
     }
+
+
+# ---------------------------------------------------------------------------
+# DN-005: LDAP Injection (직원 디렉터리 검색)
+# ---------------------------------------------------------------------------
+DIRECTORY = [
+    {"uid": "jkim", "name": "Kim Jiwoo", "dept": "Ops", "title": "Operator"},
+    {"uid": "shan", "name": "Han Seo", "dept": "IT", "title": "Sysadmin"},
+    {"uid": "admin", "name": "Domain Admin", "dept": "IT", "title": "Administrator",
+     "secret_note": "temp_pw=Winter2026! (교체 예정)"},  # 인젝션으로 유출되면 안 되는 더미 민감정보
+]
+_LDAP_META = ["*", "(", ")", "|", "&", "\\", "\x00"]
+
+
+@app.get("/api/directory/search")
+def directory_search(q: str, x_team_id: str = Header(default="default")):
+    injection = any(m in q for m in _LDAP_META)
+    if patched("PATCH_DN_005"):
+        # 패치 후: LDAP 메타문자 이스케이프/거부 -> 인젝션 불가
+        if injection:
+            raise HTTPException(400, "invalid characters in search query")
+        results = [{k: v for k, v in e.items() if k != "secret_note"}
+                   for e in DIRECTORY if q.lower() in e["name"].lower() or q.lower() == e["uid"]]
+        return {"patched": True, "results": results}
+    # 취약 지점: q를 LDAP 필터 문자열에 그대로 결합 -> '*' / ')(' 로 전체·관리자 레코드 덤프
+    if injection:
+        emit_event(
+            event_id=Event.make_id(x_team_id, ASSET_NAME, "DN-005", q, str(time.time())),
+            event_type=EventType.flag_exfiltrated, actor="red", target_asset=ASSET_NAME,
+            vuln_id="DN-005", phase=RedPhase.data_exfiltration, team_id=x_team_id,
+            trace_id=Event.session_trace_id(x_team_id, ASSET_NAME),
+            metadata={"query": q, "note": "LDAP filter injection dumped full directory"},
+        )
+        return {"patched": False, "filter": f"(|(uid={q})(cn={q}))", "results": DIRECTORY}
+    results = [e for e in DIRECTORY if q.lower() in e["name"].lower() or q.lower() == e["uid"]]
+    return {"patched": False, "filter": f"(|(uid={q})(cn={q}))", "results": results}
+
+
+# ---------------------------------------------------------------------------
+# DN-006: SSRF (파일서버 URL 미리보기)
+# ---------------------------------------------------------------------------
+class PreviewRequest(BaseModel):
+    url: str
+
+
+def _is_internal_target(url: str) -> bool:
+    u = url.lower()
+    if u.startswith("file://") or u.startswith("gopher://") or u.startswith("dict://"):
+        return True
+    for needle in ("169.254.169.254", "localhost", "127.0.0.1", "0.0.0.0",
+                   "10.", "192.168.", "internal", "metadata"):
+        if needle in u:
+            return True
+    return False
+
+
+@app.post("/api/webhook/preview")
+def webhook_preview(req: PreviewRequest, x_team_id: str = Header(default="default")):
+    internal = _is_internal_target(req.url)
+    if patched("PATCH_DN_006"):
+        # 패치 후: 내부/사설/파일 스킴 차단(SSRF 방지), 외부 http(s)만 미리보기
+        if internal or not (req.url.startswith("http://") or req.url.startswith("https://")):
+            raise HTTPException(400, "target not allowed")
+        return {"patched": True, "url": req.url, "title": "External document preview"}
+    # 취약 지점: 사용자 URL을 서버가 그대로 요청 -> 내부 자원/메타데이터 미리보기(SSRF)
+    if internal:
+        emit_event(
+            event_id=Event.make_id(x_team_id, ASSET_NAME, "DN-006", req.url, str(time.time())),
+            event_type=EventType.red_attack_started, actor="red", target_asset=ASSET_NAME,
+            vuln_id="DN-006", phase=RedPhase.lateral_movement, team_id=x_team_id,
+            trace_id=Event.session_trace_id(x_team_id, ASSET_NAME),
+            metadata={"requested_url": req.url},
+        )
+        return {"patched": False, "url": req.url,
+                "internal_response": {"service_account": "DUMMY\\svc_backup", "note": "SSRF reached internal resource"}}
+    return {"patched": False, "url": req.url, "title": "External document preview"}
 
 
 if __name__ == "__main__":

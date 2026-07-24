@@ -12,7 +12,7 @@ interface Props {
 const ASSET_LABEL: Record<string, string> = {
   ground_station: "위성 지상국",
   power_plant: "발전소 / SCADA",
-  defense_network: "국방망",
+  defense_network: "사내망",
 };
 
 function StatusDot({ status, isolated }: { status: Host["status"]; isolated?: boolean }) {

@@ -60,10 +60,10 @@ scenario:
     normal_traffic_eps: 6
 
 ---
-# 단일 시나리오: 국방망 데이터 유출
+# 단일 시나리오: 사내망 데이터 유출
 scenario:
   id: "DEFENSE-EXFIL-01"
-  name: "국방망 기밀 반출 작전"
+  name: "사내망 기밀 반출 작전"
   description: "SMB 익명접근에서 오픈릴레이 데이터 반출까지"
   target_asset: "defense_network"
   difficulty: "hard"

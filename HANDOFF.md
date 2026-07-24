@@ -636,8 +636,22 @@ SIEM 규칙 4종/웹 취약점 3종/AI 보안 인시던트 5종).
 > - **환경 특이(신규)**: 로컬 18080을 **별도 프로젝트 patchtower-nginx가 점유** → `docker-compose.override.yml`
 >   의 edr 호스트포트를 **18080→18090**으로 변경. `scripts/smoke_test.sh` 포트 자동감지에 18090 추가,
 >   `services/edr/console/.env.local`도 18090으로. (patchtower/triphelper 등 무관 컨테이너가 상시 떠 있음.)
+>
+> **추가 작업(같은 세션 후반, 사용자 요청):**
+> - **자산명 변경**: `국방망` → `사내망`(defense_network의 표시 라벨). UI 4곳(edr console HostList,
+>   livefire AssetMap/EventTimeline/PatchMatrix) + README + 트윈 docstring + 시나리오명. 식별자
+>   `defense_network`는 불변. 영향받은 스크린샷(EDR 콘솔 2장 + LiveFire) 재캡처.
+> - **트윈 취약 서비스 6종 신규**(각 트윈 +2 → 총 14→**20종**):
+>   - GS-006 SSRF(`/api/tle/import`), GS-007 XXE(`/api/config/xml-import`)
+>   - PP-006 미인가 Modbus 쓰기(`/api/modbus/write-register`, ICS), PP-007 서명없는 펌웨어(`/api/plc/firmware-update`, ICS)
+>   - DN-005 LDAP 인젝션(`/api/directory/search`), DN-006 SSRF(`/api/webhook/preview`)
+>   - 기존 패턴 그대로: ROUTE_VULN_MAP + `patched("PATCH_XX_00N")` + emit_event. `vuln_catalog.json`·
+>     `safe_probe.py`(14→**20 프로브**)에도 반영. **⚠ RedPhase는 initial_access/privilege_escalation/
+>     lateral_movement/data_exfiltration/objective 5개뿐**(discovery·persistence 없음 — 처음에 이걸로 500 나서 수정).
+>   - **실검증**: 트윈 재빌드 → 20종 전부 safe_probe VULNERABLE, 6종 취약 동작 직접 확인,
+>     GS-006 config 토글 패치 경로(patched→400→PATCHED→원복)까지 실증. 유닛 66 pass, 스모크 35/35.
 > - **다음 착수 후보**: 관전자 read 게이트를 siem/scenario/event_collector/aar까지 확장(현재 scoring/edr만),
->   AI 분야 실 docker/ML 추가 확충, 빈 hard 이상 슬롯 보강(현재 각 분야 hard≥1이나 ai/for/net은 1개뿐).
+>   AI 분야 실 docker/ML 추가 확충, 신규 트윈 서비스(GS-006~DN-006)를 킬체인 시나리오/SIEM 규칙에 연동.
 
 ## 5. 상태 요약 한 줄
 

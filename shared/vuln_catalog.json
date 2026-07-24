@@ -4,7 +4,9 @@
       "id": "GS-001",
       "name": "Telemetry API SQL Injection",
       "cwe": "CWE-89",
-      "mitre_attack": ["T1190"],
+      "mitre_attack": [
+        "T1190"
+      ],
       "endpoint": "GET /api/telemetry?sensor_id=",
       "description": "sensor_id 파라미터가 SQL 쿼리에 문자열 결합되어 삽입됨. UNION 기반으로 전체 텔레메트리/사용자 테이블 추출 가능.",
       "detection_hint": "WHERE 절 앞뒤 따옴표 이스케이프, UNION/OR 1=1 패턴 시그니처",
@@ -14,7 +16,10 @@
       "id": "GS-002",
       "name": "Hardcoded Admin Credentials / Weak JWT Secret",
       "cwe": "CWE-798",
-      "mitre_attack": ["T1078", "T1552.001"],
+      "mitre_attack": [
+        "T1078",
+        "T1552.001"
+      ],
       "endpoint": "POST /api/login",
       "description": "admin/admin123 하드코딩 계정 존재. JWT 서명 비밀키가 'supersecret123'으로 고정되어 위조 토큰 생성 가능.",
       "detection_hint": "동일 JWT secret으로 서명 위조 로그인 시도 탐지",
@@ -24,7 +29,9 @@
       "id": "GS-003",
       "name": "Mission Plan IDOR",
       "cwe": "CWE-639",
-      "mitre_attack": ["T1213"],
+      "mitre_attack": [
+        "T1213"
+      ],
       "endpoint": "GET /api/mission-plan/{id}",
       "description": "소유권 검증 없이 임의의 mission plan id 접근 가능. 순차 ID 스캔으로 전체 임무계획 유출.",
       "detection_hint": "동일 세션에서 순차적 id 접근 패턴",
@@ -34,7 +41,9 @@
       "id": "GS-004",
       "name": "File Download Path Traversal",
       "cwe": "CWE-22",
-      "mitre_attack": ["T1005"],
+      "mitre_attack": [
+        "T1005"
+      ],
       "endpoint": "GET /api/download?file=",
       "description": "file 파라미터 검증 없이 ../ 경로 조작으로 서버 임의 파일 열람 가능.",
       "detection_hint": "파일명 파라미터 내 ../ 또는 절대경로 패턴",
@@ -44,11 +53,37 @@
       "id": "GS-005",
       "name": "Debug Endpoint Config Exposure",
       "cwe": "CWE-215",
-      "mitre_attack": ["T1592"],
+      "mitre_attack": [
+        "T1592"
+      ],
       "endpoint": "GET /api/debug/config",
       "description": "운영 환경에서 디버그 엔드포인트가 비활성화되지 않아 내부 설정/환경변수 노출.",
       "detection_hint": "/api/debug/* 경로 외부 접근 로그",
       "patch_hint": "디버그 라우트 프로덕션 빌드에서 제거"
+    },
+    {
+      "id": "GS-006",
+      "name": "TLE Import SSRF",
+      "cwe": "CWE-918",
+      "mitre_attack": [
+        "T1090"
+      ],
+      "endpoint": "POST /api/tle/import",
+      "description": "궤도요소(TLE) 원격 가져오기 URL을 서버가 검증 없이 요청 → 내부 메타데이터/파일 스킴 접근(SSRF).",
+      "detection_hint": "내부/사설 대역·169.254.169.254·file:// 대상 요청 로그",
+      "patch_hint": "외부 https 도메인 allowlist, 내부/사설/파일 스킴 차단"
+    },
+    {
+      "id": "GS-007",
+      "name": "Config XML XXE",
+      "cwe": "CWE-611",
+      "mitre_attack": [
+        "T1005"
+      ],
+      "endpoint": "POST /api/config/xml-import",
+      "description": "설정 XML 파싱 시 외부 엔티티(SYSTEM file://) 확장 허용 → 서버 파일 유출(XXE).",
+      "detection_hint": "업로드 XML 내 <!DOCTYPE/<!ENTITY SYSTEM file:// 패턴",
+      "patch_hint": "DTD/외부 엔티티 비활성화"
     }
   ],
   "power_plant": [
@@ -56,7 +91,10 @@
       "id": "PP-001",
       "name": "Unauthenticated PLC Register Write",
       "cwe": "CWE-306",
-      "mitre_attack": ["T0836", "T1499"],
+      "mitre_attack": [
+        "T0836",
+        "T1499"
+      ],
       "endpoint": "POST /api/plc/write",
       "description": "PLC 레지스터 쓰기 API에 인증 없음. 임의 값 주입으로 안전 임계값 우회 시뮬레이션.",
       "detection_hint": "인증 헤더 없는 write 요청 전량 탐지",
@@ -66,7 +104,9 @@
       "id": "PP-002",
       "name": "Default HMI Credentials",
       "cwe": "CWE-521",
-      "mitre_attack": ["T1078.001"],
+      "mitre_attack": [
+        "T1078.001"
+      ],
       "endpoint": "POST /api/hmi/login",
       "description": "operator/operator 기본 계정이 변경되지 않음.",
       "detection_hint": "기본 계정명 로그인 시도",
@@ -76,7 +116,9 @@
       "id": "PP-003",
       "name": "Diagnostics Command Injection",
       "cwe": "CWE-78",
-      "mitre_attack": ["T1059"],
+      "mitre_attack": [
+        "T1059"
+      ],
       "endpoint": "POST /api/diagnostics/ping",
       "description": "host 파라미터가 검증 없이 쉘 명령에 결합되어 임의 명령 실행 가능(세미콜론/파이프 체이닝).",
       "detection_hint": "host 파라미터 내 ; | & $() 특수문자",
@@ -86,7 +128,9 @@
       "id": "PP-004",
       "name": "Historian Insecure Deserialization",
       "cwe": "CWE-502",
-      "mitre_attack": ["T1059.006"],
+      "mitre_attack": [
+        "T1059.006"
+      ],
       "endpoint": "POST /api/historian/export",
       "description": "base64로 인코딩된 pickle 객체를 서버에서 그대로 역직렬화하여 임의 코드 실행 가능.",
       "detection_hint": "pickle opcode 시그니처(\\x80\\x04 등) 포함 payload",
@@ -96,11 +140,38 @@
       "id": "PP-005",
       "name": "Safety Monitor Bypass Flag",
       "cwe": "CWE-284",
-      "mitre_attack": ["T0800"],
+      "mitre_attack": [
+        "T0800"
+      ],
       "endpoint": "POST /api/safety/override",
       "description": "안전 인터록 우회 플래그가 인증/승인 절차 없이 단일 요청으로 활성화됨.",
       "detection_hint": "override=true 요청 및 승인 로그 부재",
       "patch_hint": "2인 승인(4-eyes) 워크플로우, 물리적 인터록과 이중화"
+    },
+    {
+      "id": "PP-006",
+      "name": "Unauthorized Modbus Register Write",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0836",
+        "T0855"
+      ],
+      "endpoint": "POST /api/modbus/write-register",
+      "description": "인증 없이 Modbus write로 보호 안전 레지스터(EMERGENCY_SHUTDOWN 등) 조작 가능(ICS).",
+      "detection_hint": "미인증 write function code + 보호 레지스터 대상",
+      "patch_hint": "엔지니어링 워크스테이션 인증 + 보호 레지스터 변경관리 승인"
+    },
+    {
+      "id": "PP-007",
+      "name": "Unsigned Firmware Update",
+      "cwe": "CWE-345",
+      "mitre_attack": [
+        "T0857"
+      ],
+      "endpoint": "POST /api/plc/firmware-update",
+      "description": "펌웨어 업로드 시 벤더 서명 검증 없이 설치 → 악성 펌웨어 주입.",
+      "detection_hint": "서명 필드 없는 firmware-update 요청",
+      "patch_hint": "벤더 서명 검증 후에만 flashing"
     }
   ],
   "defense_network": [
@@ -108,7 +179,9 @@
       "id": "DN-001",
       "name": "SMB Anonymous Share Access",
       "cwe": "CWE-284",
-      "mitre_attack": ["T1039"],
+      "mitre_attack": [
+        "T1039"
+      ],
       "endpoint": "GET /api/smb/shares",
       "description": "익명 사용자가 인증 없이 파일 공유 목록과 더미 기밀 파일에 접근 가능.",
       "detection_hint": "익명/Guest 세션의 공유 접근 로그",
@@ -118,7 +191,9 @@
       "id": "DN-002",
       "name": "Kerberoastable Service Account",
       "cwe": "CWE-521",
-      "mitre_attack": ["T1558.003"],
+      "mitre_attack": [
+        "T1558.003"
+      ],
       "endpoint": "GET /api/ad/service-accounts",
       "description": "SPN이 등록된 서비스 계정의 암호가 약하게 설정되어 있어 티켓 오프라인 크래킹 시뮬레이션 가능.",
       "detection_hint": "다수 SPN에 대한 짧은 시간 내 TGS 요청 급증",
@@ -128,7 +203,9 @@
       "id": "DN-003",
       "name": "Exposed Backup Config with Plaintext Credentials",
       "cwe": "CWE-256",
-      "mitre_attack": ["T1552.001"],
+      "mitre_attack": [
+        "T1552.001"
+      ],
       "endpoint": "GET /api/fileserver/backup-config",
       "description": "백업 설정 파일에 평문 서비스 계정 자격증명이 포함되어 있으며 접근 제어 없음.",
       "detection_hint": "backup-config 엔드포인트 접근 로그, 평문 자격증명 패턴 스캔",
@@ -138,11 +215,37 @@
       "id": "DN-004",
       "name": "Open Mail Relay",
       "cwe": "CWE-284",
-      "mitre_attack": ["T1583.007"],
+      "mitre_attack": [
+        "T1583.007"
+      ],
       "endpoint": "POST /api/mail/relay",
       "description": "내부 메일 서버가 인증 없이 임의 발신자로 외부 발송을 중계하여 피싱 인프라로 악용 가능.",
       "detection_hint": "미인증 발신 도메인 불일치 다량 발송",
       "patch_hint": "SMTP AUTH 강제, 발신 도메인 SPF/DKIM 검증"
+    },
+    {
+      "id": "DN-005",
+      "name": "Directory LDAP Injection",
+      "cwe": "CWE-90",
+      "mitre_attack": [
+        "T1087"
+      ],
+      "endpoint": "GET /api/directory/search",
+      "description": "검색어를 LDAP 필터에 문자열 결합 → '*'/')(' 인젝션으로 전체·관리자 레코드 덤프.",
+      "detection_hint": "검색 파라미터 내 LDAP 메타문자(*, )(, |)",
+      "patch_hint": "LDAP 메타문자 이스케이프/거부"
+    },
+    {
+      "id": "DN-006",
+      "name": "URL Preview SSRF",
+      "cwe": "CWE-918",
+      "mitre_attack": [
+        "T1090"
+      ],
+      "endpoint": "POST /api/webhook/preview",
+      "description": "파일서버 링크 미리보기가 사용자 URL을 검증 없이 요청 → 내부 자원/메타데이터 접근(SSRF).",
+      "detection_hint": "미리보기 요청의 내부/사설 대상",
+      "patch_hint": "내부/사설/파일 스킴 차단, 외부 http(s)만 허용"
     }
   ]
 }

@@ -10,6 +10,8 @@ Live Fire Cyber Range 훈련용 모의 서비스. 실제 위성/지상국 시스
   GS-003 IDOR                     (/api/mission-plan/{id})
   GS-004 Path Traversal           (/api/download)
   GS-005 Debug Config Exposure    (/api/debug/config)
+  GS-006 SSRF                     (/api/tle/import)        — 궤도요소(TLE) 원격 가져오기
+  GS-007 XXE                      (/api/config/xml-import) — 지상국 설정 XML 업로드
 
 각 취약점은 환경변수 PATCH_GS_00X=true 로 개별 패치(비활성화) 가능하며,
 Patch Verification Manager의 safe probe가 이 상태를 판정합니다.
@@ -41,6 +43,8 @@ GS_ROUTE_VULN_MAP = {
     "/api/mission-plan": "GS-003",
     "/api/download": "GS-004",
     "/api/debug/config": "GS-005",
+    "/api/tle/import": "GS-006",
+    "/api/config/xml-import": "GS-007",
 }
 
 ASSET_NAME = "ground_station"
@@ -311,6 +315,84 @@ def debug_config(x_team_id: str = Header(default="default")):
         "jwt_secret": JWT_SECRET,
         "db_path": str(DB_PATH),
     }
+
+
+# ---------------------------------------------------------------------------
+# GS-006: SSRF (궤도요소 TLE 원격 가져오기)
+# ---------------------------------------------------------------------------
+class TLEImport(BaseModel):
+    url: str
+
+
+def _is_internal_target(url: str) -> bool:
+    u = url.lower()
+    if u.startswith("file://") or u.startswith("gopher://") or u.startswith("dict://"):
+        return True
+    for needle in ("169.254.169.254", "localhost", "127.0.0.1", "0.0.0.0",
+                   "10.", "192.168.", "internal", "metadata"):
+        if needle in u:
+            return True
+    return False
+
+
+# 내부에서만 접근 가능해야 할 더미 자원(SSRF로 유출되면 안 되는 것)
+_INTERNAL_RESOURCES = {
+    "169.254.169.254": {"iam_role": "ground-station-uplink", "secret_key": "DUMMY_AKIA_NOT_REAL"},
+    "file": "DUMMY_GROUNDSTATION_UPLINK_KEY_0x8842...",
+}
+
+
+@app.post("/api/tle/import")
+def tle_import(req: TLEImport, x_team_id: str = Header(default="default")):
+    internal = _is_internal_target(req.url)
+    if patched("PATCH_GS_006"):
+        # 패치 후: 외부 https 도메인 allowlist만 허용, 내부/사설/파일 스킴 차단(SSRF 방지)
+        if internal or not req.url.startswith("https://"):
+            raise HTTPException(400, "target not allowed: only external https TLE mirrors permitted")
+        return {"patched": True, "source": req.url, "tle": "1 25544U ... (external mirror)"}
+    # 취약 지점: 사용자가 준 URL로 서버가 그대로 요청 -> 내부 메타데이터/파일 접근(SSRF)
+    if internal:
+        emit_event(
+            event_id=Event.make_id(x_team_id, ASSET_NAME, "GS-006", req.url, str(time.time())),
+            event_type=EventType.red_attack_started, actor="red", target_asset=ASSET_NAME,
+            vuln_id="GS-006", phase=RedPhase.lateral_movement, team_id=x_team_id,
+            trace_id=Event.session_trace_id(x_team_id, ASSET_NAME),
+            metadata={"requested_url": req.url},
+        )
+        leaked = _INTERNAL_RESOURCES["file"] if req.url.lower().startswith("file://") else \
+            _INTERNAL_RESOURCES.get("169.254.169.254", {"internal": "resource"})
+        return {"patched": False, "source": req.url, "internal_response": leaked,
+                "note": "SSRF: server fetched an internal/metadata resource"}
+    return {"patched": False, "source": req.url, "tle": "1 25544U ... (external)"}
+
+
+# ---------------------------------------------------------------------------
+# GS-007: XXE (지상국 설정 XML 업로드)
+# ---------------------------------------------------------------------------
+class XMLImport(BaseModel):
+    xml: str
+
+
+@app.post("/api/config/xml-import")
+def xml_import(req: XMLImport, x_team_id: str = Header(default="default")):
+    body = req.xml
+    if patched("PATCH_GS_007"):
+        # 패치 후: DTD/외부 엔티티 선언 금지(XXE 방지)
+        if "<!DOCTYPE" in body or "<!ENTITY" in body:
+            raise HTTPException(400, "DTD/external entities are not allowed")
+        return {"patched": True, "status": "config parsed (entities disabled)"}
+    # 취약 지점: 외부 엔티티(SYSTEM file://)를 확장 -> 서버 파일 유출(시뮬레이션)
+    if "<!DOCTYPE" in body and "SYSTEM" in body and "file://" in body:
+        emit_event(
+            event_id=Event.make_id(x_team_id, ASSET_NAME, "GS-007", str(time.time())),
+            event_type=EventType.flag_exfiltrated, actor="red", target_asset=ASSET_NAME,
+            vuln_id="GS-007", phase=RedPhase.data_exfiltration, team_id=x_team_id,
+            trace_id=Event.session_trace_id(x_team_id, ASSET_NAME),
+            metadata={"note": "external entity expanded"},
+        )
+        return {"patched": False, "status": "config parsed",
+                "expanded_entity": "root:x:0:0:DUMMY_ETC_PASSWD_NOT_REAL:/root:/bin/bash"}
+    return {"patched": False, "status": "config parsed (no external entity in payload)"}
 
 
 if __name__ == "__main__":

@@ -81,6 +81,19 @@ def check_gs_005_debug():
     return status("GS-005 Debug Config Exposure", patched, "GS-005", "ground_station")
 
 
+def check_gs_006_ssrf():
+    r = requests.post(f"{GS}/api/tle/import", json={"url": "http://169.254.169.254/latest/meta-data"})
+    patched = r.status_code == 400
+    return status("GS-006 TLE Import SSRF", patched, "GS-006", "ground_station")
+
+
+def check_gs_007_xxe():
+    xml = '<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "file:///etc/passwd">]><r>&x;</r>'
+    r = requests.post(f"{GS}/api/config/xml-import", json={"xml": xml})
+    patched = r.status_code == 400
+    return status("GS-007 Config XML XXE", patched, "GS-007", "ground_station")
+
+
 def check_pp_001_plc():
     r = requests.post(f"{PP}/api/plc/write", json={"register": "TURBINE_RPM", "value": 9999})
     patched = r.status_code == 401
@@ -113,6 +126,20 @@ def check_pp_005_safety():
     return status("PP-005 Safety Override Bypass", patched, "PP-005", "power_plant")
 
 
+def check_pp_006_modbus():
+    r = requests.post(f"{PP}/api/modbus/write-register", json={"register": "EMERGENCY_SHUTDOWN", "value": True})
+    patched = r.status_code in (401, 403)
+    return status("PP-006 Unauth Modbus Write", patched, "PP-006", "power_plant")
+
+
+def check_pp_007_firmware():
+    import base64
+    fw = base64.b64encode(b"MALICIOUS_FW").decode()
+    r = requests.post(f"{PP}/api/plc/firmware-update", json={"version": "9.9.9", "firmware_b64": fw})
+    patched = r.status_code in (401, 403)
+    return status("PP-007 Unsigned Firmware Update", patched, "PP-007", "power_plant")
+
+
 def check_dn_001_smb():
     r = requests.get(f"{DN}/api/smb/shares")
     patched = r.status_code == 401
@@ -140,13 +167,26 @@ def check_dn_004_relay():
     return status("DN-004 Open Mail Relay", patched, "DN-004", "defense_network")
 
 
+def check_dn_005_ldap():
+    r = requests.get(f"{DN}/api/directory/search", params={"q": "*)(uid=*"})
+    patched = r.status_code == 400
+    return status("DN-005 Directory LDAP Injection", patched, "DN-005", "defense_network")
+
+
+def check_dn_006_ssrf():
+    r = requests.post(f"{DN}/api/webhook/preview", json={"url": "http://169.254.169.254/latest/meta-data"})
+    patched = r.status_code == 400
+    return status("DN-006 URL Preview SSRF", patched, "DN-006", "defense_network")
+
+
 if __name__ == "__main__":
     checks = [
         check_gs_001_sqli, check_gs_002_hardcoded, check_gs_003_idor,
-        check_gs_004_traversal, check_gs_005_debug,
+        check_gs_004_traversal, check_gs_005_debug, check_gs_006_ssrf, check_gs_007_xxe,
         check_pp_001_plc, check_pp_002_default_creds, check_pp_003_cmdi,
-        check_pp_004_deserialize, check_pp_005_safety,
+        check_pp_004_deserialize, check_pp_005_safety, check_pp_006_modbus, check_pp_007_firmware,
         check_dn_001_smb, check_dn_002_kerberoast, check_dn_003_backup, check_dn_004_relay,
+        check_dn_005_ldap, check_dn_006_ssrf,
     ]
     for check in checks:
         try:
