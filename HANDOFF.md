@@ -730,7 +730,14 @@ SIEM 규칙 4종/웹 취약점 3종/AI 보안 인시던트 5종).
 >   실증**(stage_completed=3 + chain_bonus=50). → **11개 섹터 전부 전용 킬체인 보유**(단일 11 + 크로스오버 2
 >   = 13 시나리오). 각 스테이지 objective_event는 트윈 emit event_type과 매칭(SQLi/PACS류=flag_exfiltrated,
 >   안전조작류=red_objective_success, 초기침투류=red_attack_started).
-> - **다음 착수 후보**: 섹터 CTF 챌린지, 신규 섹터 Suricata/Zeek 센서 사이드카, 섹터 크로스오버 시나리오.
+> - **섹터 CTF 챌린지(ics 분야 신설) 완료**: `schema_validate.VALID_CATEGORY`에 "ics" 추가.
+>   challenges/ics/ICS-000(안전 인터록 우회 Modbus, medium, 포트 8110: 레지스터 덤프로 SAFETY_KEY
+>   정보노출→인터록 우회) / ICS-001(OPC UA 익명 태그 열람, easy, 포트 8111: 브라우즈→은닉 진단노드
+>   익명 읽기). **둘 다 full docker C-QA PASS**(deploy_up→intended_solve→blank→flag_determinism→teardown).
+>   → 총 챌린지 51→**53**(7분야). AI-007/WEB 패턴과 동일(deploy/main.py FastAPI + exploit.solve(base,team)
+>   + grade_red 동적 HMAC 플래그).
+> - **다음 착수 후보**: 섹터 CTF 챌린지 확충(각 섹터별), 신규 섹터 Suricata/Zeek 센서 사이드카,
+>   섹터 크로스오버 시나리오, ICS 아티팩트형 챌린지(Modbus PCAP 분석 등).
 
 ## 5. 상태 요약 한 줄
 

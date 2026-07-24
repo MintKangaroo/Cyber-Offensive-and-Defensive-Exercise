@@ -1,0 +1,28 @@
+challenge:
+  id: "ICS-000"
+  title: "안전 인터록 우회 - Modbus Safety Interlock"
+  category: "ics"
+  difficulty: "medium"
+  points: { red: 120, blue: 60 }
+  mitre: [T0836, T0858]
+  description: |
+    발전 설비의 Modbus 홀딩 레지스터를 흉내낸 서비스가 배포돼 있다. 안전 인터록
+    (SAFETY_INTERLOCK, 40001)에 쓰려면 안전 키(SAFETY_KEY)가 필요하지만, 레지스터 덤프
+    엔드포인트가 이 키를 그대로 노출한다(정보 노출). 노출된 키로 인터록을 해제(0으로 쓰기)해
+    사보타주를 성공시키고 플래그를 획득하라.
+  red_task:
+    goal: "노출된 SAFETY_KEY로 SAFETY_INTERLOCK(40001)=0 쓰기 → 서버 플래그 획득"
+    flag_format: "flag{...}"
+    flag_type: "dynamic"
+    hints:
+      - { cost: 5, text: "GET /modbus/registers 응답에서 40100 레지스터를 살펴보라." }
+  blue_task:
+    goal: "안전 키 노출 제거 + 인터록 쓰기에 별도 인증/승인 강제"
+    success_criteria: "서술형 답변에 '정보 노출' 또는 '키 노출' 키워드 포함"
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: "manual_review"
+  artifacts: []
+  safety:
+    profile: "hardened"
+    notes: "합성 Modbus 시뮬레이션(실장비 무관). 키/플래그는 팀별 더미값. 컨테이너 read_only+cap_drop."

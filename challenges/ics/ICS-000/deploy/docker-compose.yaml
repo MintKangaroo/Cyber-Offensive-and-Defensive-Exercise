@@ -1,0 +1,17 @@
+version: "3.8"
+services:
+  ics000_deploy:
+    build:
+      context: .
+    container_name: ics000_deploy
+    ports:
+      - "8110:8110"
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-ics000-dev-secret}
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: "256m"
+    cpus: "0.5"

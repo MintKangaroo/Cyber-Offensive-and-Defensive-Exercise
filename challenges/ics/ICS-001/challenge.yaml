@@ -1,0 +1,26 @@
+challenge:
+  id: "ICS-001"
+  title: "OPC UA 익명 태그 열람 - Anonymous Read"
+  category: "ics"
+  difficulty: "easy"
+  points: { red: 70, blue: 40 }
+  mitre: [T0886]
+  description: |
+    OPC UA 서버를 흉내낸 서비스가 익명 세션(인증 없음)으로 전체 주소공간을 브라우즈·읽기
+    할 수 있게 열려 있다. 노드 브라우즈로 은닉된 진단 노드를 찾아 익명으로 읽어 플래그를 획득하라.
+  red_task:
+    goal: "노드 브라우즈로 진단 노드(ns=4;s=Diag.Maint_*)를 찾아 익명 읽기 → 플래그"
+    flag_format: "flag{...}"
+    flag_type: "dynamic"
+    hints:
+      - { cost: 5, text: "GET /opcua/browse 로 주소공간을 열거하라. 진단(Diag) 노드가 보인다." }
+  blue_task:
+    goal: "익명 세션 비활성화 + 노드 접근 권한(Role) 강제"
+    success_criteria: "서술형 답변에 '익명' 또는 'anonymous' 키워드 포함"
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: "manual_review"
+  artifacts: []
+  safety:
+    profile: "hardened"
+    notes: "합성 OPC UA 시뮬레이션(실장비 무관). 노드/플래그는 팀별 더미값. 컨테이너 read_only+cap_drop."
