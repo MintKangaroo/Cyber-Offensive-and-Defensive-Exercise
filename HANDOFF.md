@@ -725,8 +725,12 @@ SIEM 규칙 4종/웹 취약점 3종/AI 보안 인시던트 5종).
 >   PROBE-001(threshold distinct(vuln_id)>=3/120s). **E2E 실증**: 정유 시퀀스 발사 → SEQ 규칙 + 다중취약점
 >   threshold 규칙 발화 확인.
 > - **회귀**: 유닛 66 pass, 스모크 35/35.
-> - **다음 착수 후보**: 나머지 섹터 킬체인 시나리오(수도/LNG/철도/공항/데이터센터/스마트팩토리),
->   섹터 CTF 챌린지, 신규 섹터 Suricata/Zeek 센서 사이드카.
+> - **나머지 6개 섹터 킬체인 시나리오 완료**(WATER-POISON-01/LNG-ESD-SABOTAGE-01/RAIL-SIGNAL-
+>   SABOTAGE-01/AIRPORT-DISRUPT-01/DATACENTER-BLACKOUT-01/FACTORY-SABOTAGE-01). **6종 전부 E2E
+>   실증**(stage_completed=3 + chain_bonus=50). → **11개 섹터 전부 전용 킬체인 보유**(단일 11 + 크로스오버 2
+>   = 13 시나리오). 각 스테이지 objective_event는 트윈 emit event_type과 매칭(SQLi/PACS류=flag_exfiltrated,
+>   안전조작류=red_objective_success, 초기침투류=red_attack_started).
+> - **다음 착수 후보**: 섹터 CTF 챌린지, 신규 섹터 Suricata/Zeek 센서 사이드카, 섹터 크로스오버 시나리오.
 
 ## 5. 상태 요약 한 줄
 

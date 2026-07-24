@@ -1,0 +1,54 @@
+# 단일 시나리오: 공항 OT — 운영 교란
+# ====================================
+# BHS 경로 SQLi → 급유 밸브 무단 조작 → 활주로 조명 무단 제어(최종 안전 임팩트).
+scenario:
+  id: "AIRPORT-DISRUPT-01"
+  name: "공항 OT 운영 교란 작전"
+  description: "수하물 처리 침투와 급유 조작을 거쳐 활주로 조명을 장악하는 킬체인"
+  target_asset: "airport_ot"
+  difficulty: "hard"
+  time_limit_sec: 1800
+
+  initial_vuln_state:
+    AIR-001: vulnerable
+    AIR-002: vulnerable
+    AIR-003: vulnerable
+
+  stages:
+    - stage: 1
+      name: "정보 수집 - 수하물(BHS) 경로 SQL 인젝션"
+      objective_event: flag_exfiltrated
+      match: { vuln_id: "AIR-002" }
+      points: 25
+      mitre: [T1190]
+    - stage: 2
+      name: "제어 장악 - 급유 밸브 무단 조작"
+      objective_event: red_attack_started
+      match: { vuln_id: "AIR-003" }
+      points: 35
+      requires_stage: 1
+      mitre: [T0836]
+    - stage: 3
+      name: "목표 달성 - 활주로 조명 무단 제어"
+      objective_event: red_objective_success
+      match: { vuln_id: "AIR-001" }
+      points: 60
+      requires_stage: 2
+      mitre: [T0855]
+      is_final: true
+
+  chain_bonus:
+    all_stages_in_order: 50
+    within_sec: 600
+
+  blue_objectives:
+    - name: "활주로 조명 제어 탐지"
+      match_alert: "ICS-AIR-RUNWAY-001"
+      points: 40
+    - name: "BHS SQLi 탐지"
+      match_alert: "ICS-AIR-BHS-SQLI-001"
+      points: 30
+
+  noise:
+    enabled: true
+    normal_traffic_eps: 5

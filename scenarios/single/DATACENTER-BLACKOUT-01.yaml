@@ -1,0 +1,54 @@
+# 단일 시나리오: 데이터센터 — 전력/냉방 블랙아웃
+# ================================================
+# DCIM SSRF 정찰 → CRAC 냉방 설정 변조(과열) → UPS 무단 셧다운(최종).
+scenario:
+  id: "DATACENTER-BLACKOUT-01"
+  name: "데이터센터 블랙아웃 작전"
+  description: "DCIM 정찰과 냉방 조작을 거쳐 UPS를 셧다운시키는 시설 킬체인"
+  target_asset: "datacenter_bms"
+  difficulty: "hard"
+  time_limit_sec: 1800
+
+  initial_vuln_state:
+    DCX-001: vulnerable
+    DCX-002: vulnerable
+    DCX-003: vulnerable
+
+  stages:
+    - stage: 1
+      name: "정찰 - DCIM SSRF 내부 자원 조회"
+      objective_event: red_attack_started
+      match: { vuln_id: "DCX-003" }
+      points: 25
+      mitre: [T1090]
+    - stage: 2
+      name: "환경 조작 - CRAC 냉방 설정 변조(과열)"
+      objective_event: red_objective_success
+      match: { vuln_id: "DCX-001" }
+      points: 35
+      requires_stage: 1
+      mitre: [T0836]
+    - stage: 3
+      name: "목표 달성 - UPS 무단 셧다운"
+      objective_event: red_objective_success
+      match: { vuln_id: "DCX-002" }
+      points: 60
+      requires_stage: 2
+      mitre: [T0816]
+      is_final: true
+
+  chain_bonus:
+    all_stages_in_order: 50
+    within_sec: 600
+
+  blue_objectives:
+    - name: "UPS 셧다운 탐지"
+      match_alert: "ICS-DCX-UPS-001"
+      points: 40
+    - name: "DCIM SSRF 탐지"
+      match_alert: "ICS-DCX-SSRF-001"
+      points: 30
+
+  noise:
+    enabled: true
+    normal_traffic_eps: 5

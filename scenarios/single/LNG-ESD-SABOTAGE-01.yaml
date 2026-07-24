@@ -1,0 +1,54 @@
+# 단일 시나리오: LNG 터미널 — 비상정지(ESD) 사보타주
+# ====================================================
+# BOG 압축기 설정치 변조 → 화재/가스 알람 억제 → 비상정지(ESD) 무단 조작(최종).
+scenario:
+  id: "LNG-ESD-SABOTAGE-01"
+  name: "LNG 터미널 ESD 사보타주 작전"
+  description: "BOG 조작과 F&G 억제를 거쳐 비상정지 계통을 장악하는 킬체인"
+  target_asset: "lng_terminal"
+  difficulty: "hard"
+  time_limit_sec: 1800
+
+  initial_vuln_state:
+    LNG-001: vulnerable
+    LNG-002: vulnerable
+    LNG-003: vulnerable
+
+  stages:
+    - stage: 1
+      name: "공정 조작 - BOG 압축기 설정치 변조"
+      objective_event: red_attack_started
+      match: { vuln_id: "LNG-002" }
+      points: 25
+      mitre: [T0836]
+    - stage: 2
+      name: "안전 무력화 - 화재/가스 알람 억제"
+      objective_event: red_objective_success
+      match: { vuln_id: "LNG-003" }
+      points: 35
+      requires_stage: 1
+      mitre: [T0878]
+    - stage: 3
+      name: "목표 달성 - 비상정지(ESD) 무단 조작"
+      objective_event: red_objective_success
+      match: { vuln_id: "LNG-001" }
+      points: 60
+      requires_stage: 2
+      mitre: [T0858]
+      is_final: true
+
+  chain_bonus:
+    all_stages_in_order: 50
+    within_sec: 600
+
+  blue_objectives:
+    - name: "ESD 무단 조작 탐지"
+      match_alert: "ICS-LNG-ESD-001"
+      points: 40
+    - name: "F&G 억제 탐지"
+      match_alert: "ICS-LNG-FIREGAS-001"
+      points: 30
+
+  noise:
+    enabled: true
+    normal_traffic_eps: 5

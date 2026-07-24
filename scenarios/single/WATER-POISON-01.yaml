@@ -1,0 +1,51 @@
+# 단일 시나리오: 수도 시설 — 염소 투입 조작
+# ==========================================
+# HMI 기본계정 로그인 → 펌프 무단 제어 → 염소 투입량 조작(최종 공중보건 임팩트).
+scenario:
+  id: "WATER-POISON-01"
+  name: "정수장 염소 투입 조작 작전"
+  description: "HMI 초기 침투부터 염소 투입량 변조까지의 수도 SCADA 킬체인"
+  target_asset: "water_utility"
+  difficulty: "medium"
+  time_limit_sec: 1800
+
+  initial_vuln_state:
+    WTR-001: vulnerable
+    WTR-002: vulnerable
+    WTR-003: vulnerable
+
+  stages:
+    - stage: 1
+      name: "초기 침투 - SCADA HMI 기본계정 로그인"
+      objective_event: red_attack_started
+      match: { vuln_id: "WTR-003" }
+      points: 25
+      mitre: [T0812]
+    - stage: 2
+      name: "제어 장악 - 취수/배수 펌프 무단 제어"
+      objective_event: red_attack_started
+      match: { vuln_id: "WTR-002" }
+      points: 30
+      requires_stage: 1
+      mitre: [T0855]
+    - stage: 3
+      name: "목표 달성 - 염소 투입량 무단 변경"
+      objective_event: red_objective_success
+      match: { vuln_id: "WTR-001" }
+      points: 55
+      requires_stage: 2
+      mitre: [T0836]
+      is_final: true
+
+  chain_bonus:
+    all_stages_in_order: 50
+    within_sec: 600
+
+  blue_objectives:
+    - name: "염소 투입 조작 탐지"
+      match_alert: "ICS-WTR-DOSING-001"
+      points: 40
+
+  noise:
+    enabled: true
+    normal_traffic_eps: 5

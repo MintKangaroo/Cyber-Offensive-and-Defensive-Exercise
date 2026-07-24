@@ -1,0 +1,54 @@
+# 단일 시나리오: 철도 — 신호 사보타주
+# ====================================
+# ATS 임의 명령 → 연동장치 무단 우회 → 신호기 현시 무단 변경(최종 안전 임팩트).
+scenario:
+  id: "RAIL-SIGNAL-SABOTAGE-01"
+  name: "철도 신호 사보타주 작전"
+  description: "ATS 침투와 연동장치 우회를 거쳐 신호기 현시를 조작하는 킬체인"
+  target_asset: "railway_signaling"
+  difficulty: "hard"
+  time_limit_sec: 1800
+
+  initial_vuln_state:
+    RWY-001: vulnerable
+    RWY-002: vulnerable
+    RWY-003: vulnerable
+
+  stages:
+    - stage: 1
+      name: "초기 침투 - ATS 임의 명령"
+      objective_event: red_attack_started
+      match: { vuln_id: "RWY-003" }
+      points: 25
+      mitre: [T0807]
+    - stage: 2
+      name: "안전 무력화 - 연동장치 무단 우회"
+      objective_event: red_objective_success
+      match: { vuln_id: "RWY-002" }
+      points: 35
+      requires_stage: 1
+      mitre: [T0858]
+    - stage: 3
+      name: "목표 달성 - 신호기 현시 무단 변경"
+      objective_event: red_objective_success
+      match: { vuln_id: "RWY-001" }
+      points: 60
+      requires_stage: 2
+      mitre: [T0855]
+      is_final: true
+
+  chain_bonus:
+    all_stages_in_order: 50
+    within_sec: 600
+
+  blue_objectives:
+    - name: "신호기 현시 변경 탐지"
+      match_alert: "ICS-RWY-SIGNAL-001"
+      points: 40
+    - name: "연동장치 우회 탐지"
+      match_alert: "ICS-RWY-INTERLOCK-001"
+      points: 30
+
+  noise:
+    enabled: true
+    normal_traffic_eps: 5
