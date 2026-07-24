@@ -1,0 +1,11 @@
+- id: DET-003
+  title: "Web Shell Upload then Execute (sequence)"
+  severity: 4
+  mitre: [T1505.003]
+  source_type: twin
+  kind: sequence
+  sequence_group_by: "src.ip"
+  sequence_within_sec: 300
+  sequence_steps:
+    - raw.file: "~.php"     # step1: .php 파일 업로드
+    - raw.uri: "~.php"      # step2: 같은 IP가 .php 실행

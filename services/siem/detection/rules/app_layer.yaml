@@ -1,0 +1,94 @@
+# 앱 계층 탐지 규칙 (06번 문서 1절, twin 소스 기반)
+# 각 규칙은 Detection Engine의 Rule 데이터클래스와 1:1 대응.
+
+- id: TWIN-SQLI-001
+  title: "SQLi 시도 - Telemetry"
+  severity: 3
+  mitre: [T1190]
+  source_type: twin
+  kind: match
+  match:
+    vuln_id: "GS-001"
+
+- id: TWIN-TRAVERSAL-001
+  title: "경로순회 시도 - Download"
+  severity: 3
+  mitre: [T1005]
+  source_type: twin
+  kind: match
+  match:
+    vuln_id: "GS-004"
+
+- id: TWIN-DEFAULT-CRED-001
+  title: "기본계정 로그인 성공"
+  severity: 3
+  mitre: [T1078.001]
+  source_type: twin
+  kind: match
+  match:
+    vuln_id: "GS-002"
+    status: 200
+
+- id: TWIN-CMDI-001
+  title: "커맨드 인젝션 시도 - Diagnostics"
+  severity: 4
+  mitre: [T1059]
+  source_type: twin
+  kind: match
+  match:
+    vuln_id: "PP-003"
+
+- id: TWIN-DESERIAL-001
+  title: "역직렬화 시도 - Historian Export"
+  severity: 4
+  mitre: [T1059.006]
+  source_type: twin
+  kind: match
+  match:
+    vuln_id: "PP-004"
+
+- id: TWIN-PLC-WRITE-001
+  title: "미인증 PLC 쓰기"
+  severity: 4
+  mitre: [T0836]
+  source_type: twin
+  kind: match
+  match:
+    vuln_id: "PP-001"
+
+- id: TWIN-SAFETY-001
+  title: "세이프티 인터록 우회 시도"
+  severity: 4
+  mitre: [T0800]
+  source_type: twin
+  kind: match
+  match:
+    vuln_id: "PP-005"
+
+- id: TWIN-DEBUG-001
+  title: "디버그 엔드포인트 접근"
+  severity: 2
+  mitre: [T1592]
+  source_type: twin
+  kind: match
+  match:
+    vuln_id: "GS-005"
+
+- id: TWIN-IDOR-SCAN-001
+  title: "IDOR 순차 스캔 의심 (Mission Plan)"
+  severity: 2
+  mitre: [T1213]
+  source_type: twin
+  kind: threshold
+  threshold_group_by: "src.ip"
+  threshold_condition: "distinct(raw.endpoint) >= 3"
+  threshold_window_sec: 30
+
+- id: FW-RELAY-ABUSE-001
+  title: "오픈 메일릴레이 악용"
+  severity: 3
+  mitre: [T1583.007]
+  source_type: twin
+  kind: match
+  match:
+    vuln_id: "DN-004"

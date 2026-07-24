@@ -1,0 +1,11 @@
+.env
+.env.local
+*.local
+__pycache__/
+*.pyc
+*.db
+*.sqlite
+node_modules/
+dist/
+.venv/
+/var/log/siem/

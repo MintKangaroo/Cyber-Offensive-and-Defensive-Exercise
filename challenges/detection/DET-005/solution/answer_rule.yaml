@@ -1,0 +1,18 @@
+# Log4Shell(JNDI)은 User-Agent/URI 등 여러 필드로 들어올 수 있어 두 필드를 각각 매칭한다.
+- id: DET-005-UA
+  title: "Log4Shell JNDI in User-Agent"
+  severity: 4
+  mitre: [T1190]
+  source_type: twin
+  kind: match
+  match:
+    raw.user_agent: "~${jndi:"
+
+- id: DET-005-URI
+  title: "Log4Shell JNDI in URI"
+  severity: 4
+  mitre: [T1190]
+  source_type: twin
+  kind: match
+  match:
+    raw.uri: "~${jndi:"

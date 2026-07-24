@@ -1,0 +1,24 @@
+challenge:
+  id: "NET-002"
+  title: "경계를 넘어 - Lateral Pivot"
+  category: "network"
+  difficulty: "medium"
+  points: { red: 150, blue: 100 }
+  asset: "defense_network"
+  mitre: [T1021, T1090]
+  description: |
+    네트워크 맵(network_map.json)이 주어진다. DMZ에서 시작해 방화벽 규칙을 지키며
+    목표 자산(internal_db)까지 도달하는 경로를 찾아라.
+  red_task:
+    goal: "network_map.json의 방화벽 규칙을 지키며 DMZ -> internal_db 경로 도출"
+    submit_fields: ["path"]  # 예: "dmz,jump_host,internal_db"
+  blue_task:
+    goal: "이 경로를 차단하는 최소 규칙 변경 제안(어떤 host-pair를 끊어야 하는지)"
+    success_criteria: "제안한 규칙 제거 후 그래프 탐색으로 경로가 없어지는지 확인"
+  scoring:
+    red_verify: "path_match"
+    blue_verify: "graph_check"
+  artifacts: ["network_map.json"]
+  safety:
+    profile: "standard"
+    notes: "합성 네트워크 토폴로지(그래프). 실제 인프라 아님."

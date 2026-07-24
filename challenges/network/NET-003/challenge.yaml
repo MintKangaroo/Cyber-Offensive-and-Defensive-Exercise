@@ -1,0 +1,24 @@
+challenge:
+  id: "NET-003"
+  title: "C2 비콘 간격 분석"
+  category: "network"
+  difficulty: "medium"
+  points: { red: 55, blue: 40 }
+  mitre: [T1071]
+  description: |
+    내부 호스트의 연결 로그(conn_log.jsonl)에서 규칙적인 간격으로 외부에 접속하는
+    C2 비콘을 찾아라. 정상 트래픽은 불규칙하지만 비콘은 일정한 주기를 갖는다. C2 IP와
+    비콘 주기(초), 그리고 비콘에 실린 implant 식별자를 복원하라.
+  red_task:
+    goal: "규칙적 비콘을 식별해 c2_ip / beacon_interval_sec / implant_id 제출"
+    submit_fields: ["c2_ip", "beacon_interval_sec", "implant_id"]
+  blue_task:
+    goal: "비콘 탐지/차단 방안 서술(주기성 분석, jitter, 목적지 평판)"
+    success_criteria: "서술형 답변에 '비콘' 또는 '주기' 키워드 포함"
+  scoring:
+    red_verify: "field_match"
+    blue_verify: "manual_review"
+  artifacts: ["conn_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 연결 로그. C2 IP/implant는 전부 더미(TEST-NET 대역)."

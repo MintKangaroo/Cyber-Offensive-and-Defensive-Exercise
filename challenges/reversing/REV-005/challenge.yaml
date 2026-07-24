@@ -1,0 +1,20 @@
+challenge:
+  id: "REV-005"
+  title: "LCG 스트림 사이퍼 복호화"
+  category: "reversing"
+  difficulty: "hard"
+  points: { red: 130, blue: 0 }
+  mitre: [T1027]
+  description: |
+    cipher.bin은 플래그를 선형 합동 생성기(LCG) 키스트림으로 XOR한 결과다. 파일 앞 4바이트는
+    seed(리틀엔디언)이고, LCG 파라미터(a/c/m)는 glibc 계열 고정 상수다. LCG를 알아보고 seed로
+    키스트림을 재현해 XOR 복호화하라.
+  red_task:
+    goal: "seed + LCG 키스트림을 재현해 flag{...} 복원"
+    submit_fields: ["flag"]
+  scoring:
+    red_verify: "flag_match"
+  artifacts: ["cipher.bin"]
+  safety:
+    profile: "standard"
+    notes: "합성 바이너리. 플래그는 팀별 더미 값. 실행 파일 아님."

@@ -1,0 +1,9 @@
+# 로컬(WSL) 검증 전용 오버라이드.
+# 이 샌드박스에서는 호스트 8080/8081을 code-server가, 18080은 별도 프로젝트(patchtower-nginx)가
+# 점유하므로 edr_backend의 "호스트 포트"만 18090으로 리맵한다. 컨테이너 내부 포트(8080)는
+# 그대로라 config_service<->edr 등 서비스간 통신/헬스체크에는 영향 없음.
+# GCP/정상 환경에서는 이 파일을 두지 않으면 됨(override는 자동 병합됨).
+services:
+  edr_backend:
+    ports: !override
+      - "18090:8080"

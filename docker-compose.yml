@@ -1,0 +1,287 @@
+# Cyber Range 통합 개발용 오케스트레이션 (17번 문서 구조 / 단일 모노레포)
+# ---------------------------------------------------------------------------
+# 이전에는 cyber-range / cyber-range-contracts 두 리포를 형제 디렉토리로 두고
+# context: ../cyber-range-contracts 로 참조했지만, 이제 하나의 리포로 합쳐졌으므로
+# 모든 build context 는 리포 루트(.) 하나로 단순화된다.
+#
+# 각 디지털 트윈은 독립 네트워크(twin_*)로 격리하고, 코어 서비스와는
+# range_control 네트워크로만 통신한다(이벤트/점수/패치/텔레메트리 전용 경로).
+version: "3.8"
+
+services:
+  event_collector:
+    build: { context: ., dockerfile: services/event_collector/Dockerfile }
+    container_name: event_collector
+    ports: ["8010:8010"]
+    # 격리된 트윈들이 이벤트를 보낼 수 있도록 각 twin_* internal 네트워크에도 연결.
+    networks: [range_control, twin_ground_station, twin_power_plant, twin_defense_network]
+
+  scoring_engine:
+    build: { context: ., dockerfile: services/scoring_engine/Dockerfile }
+    container_name: scoring_engine
+    ports: ["8020:8020"]
+    environment:
+      # /score/adjust(수동 점수조정) RBAC용. 토큰 미설정 시 dev 모드로 열리므로 반드시 주입.
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-dev-instructor-token}
+      - RED_TOKEN=${RED_TOKEN:-}
+      - BLUE_TOKEN=${BLUE_TOKEN:-}
+      - OBSERVER_TOKEN=${OBSERVER_TOKEN:-}
+      # 관전자 read 게이트(기본 off = 공개). true 시 /scores 등 read에 유효 토큰 요구.
+      - OBSERVER_READ_ENFORCE=${OBSERVER_READ_ENFORCE:-}
+    networks: [range_control]
+
+  config_service:
+    build: { context: ., dockerfile: services/config_service/Dockerfile }
+    container_name: config_service
+    ports: ["8030:8030"]
+    environment:
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-dev-instructor-token}
+      - RED_TOKEN=${RED_TOKEN:-}
+      - BLUE_TOKEN=${BLUE_TOKEN:-}
+      - OBSERVER_TOKEN=${OBSERVER_TOKEN:-}
+    # 격리된 트윈들이 패치 상태를 폴링할 수 있도록 각 twin_* 네트워크에도 연결.
+    networks: [range_control, twin_ground_station, twin_power_plant, twin_defense_network]
+
+  edr_backend:
+    build: { context: ., dockerfile: services/edr/Dockerfile }
+    container_name: edr_backend
+    ports: ["8080:8080"]
+    environment:
+      - CONFIG_SERVICE_URL=http://config_service:8030
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-dev-instructor-token}
+      - RED_TOKEN=${RED_TOKEN:-}
+      - BLUE_TOKEN=${BLUE_TOKEN:-}
+      - OBSERVER_TOKEN=${OBSERVER_TOKEN:-}
+      # 관전자 read 게이트(기본 off = 공개). true 시 /edr/hosts 등 read에 유효 토큰 요구.
+      - OBSERVER_READ_ENFORCE=${OBSERVER_READ_ENFORCE:-}
+    depends_on: [config_service]
+    # 격리된 트윈의 EDR 에이전트가 텔레메트리를 보낼 수 있도록 각 twin_* 네트워크에도 연결.
+    networks: [range_control, twin_ground_station, twin_power_plant, twin_defense_network]
+
+  siem_api:
+    build: { context: ., dockerfile: services/siem/Dockerfile }
+    container_name: siem_api
+    ports:
+      - "8040:8040"
+      - "1514:1514/udp"   # syslog 수신(26번 문서 5절)
+    environment:
+      - SIEM_LOG_DIR=/var/log/siem
+      - SYSLOG_UDP_PORT=1514
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - PUSH_TO_LIVEFIRE=true
+      - SIEM_NOISE_ENABLED=false
+      - SIEM_NOISE_EPS=2.0
+    volumes:
+      - siem_logs:/var/log/siem:ro
+    depends_on: [event_collector]
+    networks: [range_control]
+
+  scenario_engine:
+    build: { context: ., dockerfile: services/scenario_engine/Dockerfile }
+    container_name: scenario_engine
+    ports: ["8045:8045"]
+    environment:
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - EVENT_COLLECTOR_WS_URL=ws://event_collector:8010/ws
+      - CONFIG_SERVICE_URL=http://config_service:8030
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-dev-instructor-token}
+    depends_on: [event_collector, config_service]
+    networks: [range_control]
+
+  instructor_api:
+    build: { context: ., dockerfile: services/instructor_api/Dockerfile }
+    container_name: instructor_api
+    ports: ["8050:8050"]
+    environment:
+      - SCENARIO_ENGINE_URL=http://scenario_engine:8045
+      - SCORING_ENGINE_URL=http://scoring_engine:8020
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-dev-instructor-token}
+      - RED_TOKEN=${RED_TOKEN:-}
+      - BLUE_TOKEN=${BLUE_TOKEN:-}
+      - OBSERVER_TOKEN=${OBSERVER_TOKEN:-}
+    depends_on: [scenario_engine, scoring_engine, event_collector]
+    networks: [range_control]
+
+  aar_report:
+    build: { context: ., dockerfile: services/aar_report/Dockerfile }
+    container_name: aar_report
+    ports: ["8090:8090"]
+    environment:
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - SCORING_ENGINE_URL=http://scoring_engine:8020
+      - SIEM_API_URL=http://siem_api:8040
+    depends_on: [event_collector, scoring_engine]
+    networks: [range_control]
+
+  # NOC 모니터: 트윈 /health 폴링 + Recovery Watcher(04번 2절).
+  # asset_compromised 이력 + 취약점 patched + 3회 연속 정상 -> asset_recovered(+50) 발행.
+  # 트윈 상태를 폴링해야 하므로 각 twin_* 네트워크와 range_control 모두에 연결.
+  noc_monitor:
+    build: { context: ., dockerfile: services/noc_monitor/Dockerfile }
+    container_name: noc_monitor
+    ports: ["8070:8070"]
+    environment:
+      - CONFIG_SERVICE_URL=http://config_service:8030
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - EVENT_COLLECTOR_WS_URL=ws://event_collector:8010/ws
+    depends_on: [event_collector, config_service, ground_station, power_plant, defense_network]
+    networks: [range_control, twin_ground_station, twin_power_plant, twin_defense_network]
+
+  # EDR 콘솔 / Live Fire 대시보드는 Node 개발서버로 별도 기동 권장(21번 M4/M6).
+
+  # 트윈 인그레스 게이트웨이(로드맵 F ★★★): 격리된 트윈(internal 네트워크)에 호스트가
+  # 접근할 수 있게 리버스 프록시. per-twin으로 분리해 각 게이트웨이가 자기 트윈 네트워크
+  # 하나와만 연결 → 트윈이 게이트웨이를 경유해 형제 트윈에 도달하는 간접 lateral까지 차단.
+  gs_gateway:
+    image: nginx:alpine
+    container_name: gs_gateway
+    ports: ["8001:8001"]
+    volumes: [./infra/twin_gateway/gs.conf:/etc/nginx/conf.d/default.conf:ro]
+    depends_on: [ground_station]
+    networks: [range_control, twin_ground_station]
+
+  pp_gateway:
+    image: nginx:alpine
+    container_name: pp_gateway
+    ports: ["8002:8002"]
+    volumes: [./infra/twin_gateway/pp.conf:/etc/nginx/conf.d/default.conf:ro]
+    depends_on: [power_plant]
+    networks: [range_control, twin_power_plant]
+
+  dn_gateway:
+    image: nginx:alpine
+    container_name: dn_gateway
+    ports: ["8003:8003"]
+    volumes: [./infra/twin_gateway/dn.conf:/etc/nginx/conf.d/default.conf:ro]
+    depends_on: [defense_network]
+    networks: [range_control, twin_defense_network]
+
+  ground_station:
+    build: { context: ., dockerfile: services/ground_station/Dockerfile }
+    container_name: gs_twin
+    # 호스트 포트 미노출 — twin_gateway를 통해서만 접근(격리 F ★★★).
+    environment:
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - CONFIG_SERVICE_URL=http://config_service:8030
+      - EDR_BACKEND_URL=http://edr_backend:8080
+      - SIEM_LOG_DIR=/var/log/siem
+    volumes:
+      - siem_logs:/var/log/siem
+    depends_on: [event_collector, config_service, edr_backend]
+    # 격리(로드맵 F ★★★): range_control 미연결. 트윈은 자기 internal 네트워크에만 있어
+    # 다른 트윈으로의 lateral 이동과 인터넷 egress가 모두 차단된다. 코어 서비스(event_collector/
+    # config_service/edr_backend)가 이 twin_* 네트워크에 함께 붙어 트윈→코어 통신만 허용.
+    networks: [twin_ground_station]
+
+  power_plant:
+    build: { context: ., dockerfile: services/power_plant/Dockerfile }
+    container_name: pp_twin
+    # 호스트 포트 미노출 — twin_gateway 경유(격리 F ★★★).
+    environment:
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - CONFIG_SERVICE_URL=http://config_service:8030
+      - EDR_BACKEND_URL=http://edr_backend:8080
+      - SIEM_LOG_DIR=/var/log/siem
+    volumes:
+      - siem_logs:/var/log/siem
+    depends_on: [event_collector, config_service, edr_backend]
+    networks: [twin_power_plant]   # 격리: internal 네트워크에만 (F ★★★, ground_station 주석 참고)
+
+  defense_network:
+    build: { context: ., dockerfile: services/defense_network/Dockerfile }
+    container_name: dn_twin
+    # 호스트 포트 미노출 — twin_gateway 경유(격리 F ★★★).
+    environment:
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - CONFIG_SERVICE_URL=http://config_service:8030
+      - EDR_BACKEND_URL=http://edr_backend:8080
+      - SIEM_LOG_DIR=/var/log/siem
+    volumes:
+      - siem_logs:/var/log/siem
+    depends_on: [event_collector, config_service, edr_backend]
+    networks: [twin_defense_network]   # 격리: internal 네트워크에만 (F ★★★, ground_station 주석 참고)
+
+  # --- Suricata/Zeek 사이드카 (26번 문서). 트윈과 netns 공유로 트래픽 관측 ---
+  gs_suricata:
+    image: jasonish/suricata:latest
+    container_name: gs_suricata
+    network_mode: "service:ground_station"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
+      - ./infra/suricata/custom.rules:/etc/suricata/rules/custom.rules:ro
+      - siem_logs:/var/log/siem
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/ground_station && suricata -c /etc/suricata/suricata.yaml -l /var/log/siem/ground_station -i eth0"]
+    depends_on: [ground_station]
+
+  gs_zeek:
+    image: zeek/zeek:latest
+    container_name: gs_zeek
+    network_mode: "service:ground_station"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/zeek/local.zeek:/usr/local/zeek/share/zeek/site/local.zeek:ro
+      - siem_logs:/var/log/siem
+    working_dir: /var/log/siem/ground_station
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/ground_station && cd /var/log/siem/ground_station && zeek -i eth0 local"]
+    depends_on: [ground_station]
+
+  pp_suricata:
+    image: jasonish/suricata:latest
+    container_name: pp_suricata
+    network_mode: "service:power_plant"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
+      - ./infra/suricata/custom.rules:/etc/suricata/rules/custom.rules:ro
+      - siem_logs:/var/log/siem
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/power_plant && suricata -c /etc/suricata/suricata.yaml -l /var/log/siem/power_plant -i eth0"]
+    depends_on: [power_plant]
+
+  pp_zeek:
+    image: zeek/zeek:latest
+    container_name: pp_zeek
+    network_mode: "service:power_plant"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/zeek/local.zeek:/usr/local/zeek/share/zeek/site/local.zeek:ro
+      - siem_logs:/var/log/siem
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/power_plant && cd /var/log/siem/power_plant && zeek -i eth0 local"]
+    depends_on: [power_plant]
+
+  dn_suricata:
+    image: jasonish/suricata:latest
+    container_name: dn_suricata
+    network_mode: "service:defense_network"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
+      - ./infra/suricata/custom.rules:/etc/suricata/rules/custom.rules:ro
+      - siem_logs:/var/log/siem
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/defense_network && suricata -c /etc/suricata/suricata.yaml -l /var/log/siem/defense_network -i eth0"]
+    depends_on: [defense_network]
+
+  dn_zeek:
+    image: zeek/zeek:latest
+    container_name: dn_zeek
+    network_mode: "service:defense_network"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/zeek/local.zeek:/usr/local/zeek/share/zeek/site/local.zeek:ro
+      - siem_logs:/var/log/siem
+    working_dir: /var/log/siem/defense_network
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/defense_network && cd /var/log/siem/defense_network && zeek -i eth0 local"]
+    depends_on: [defense_network]
+
+networks:
+  # 트윈 격리 네트워크(로드맵 F ★★★): internal:true 로 인터넷 egress 차단.
+  # 각 트윈은 자기 네트워크에만 있고 코어 서비스(event_collector/config_service/edr_backend)만
+  # 함께 붙어 있어, 트윈→코어 통신은 되지만 트윈끼리(lateral)·외부(egress)는 도달 불가.
+  twin_ground_station: { driver: bridge, internal: true }
+  twin_power_plant: { driver: bridge, internal: true }
+  twin_defense_network: { driver: bridge, internal: true }
+  range_control: { driver: bridge }
+
+volumes:
+  siem_logs:

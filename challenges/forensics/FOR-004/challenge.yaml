@@ -1,0 +1,24 @@
+challenge:
+  id: "FOR-004"
+  title: "이메일 헤더 포렌식 - 피싱 발신지 추적"
+  category: "forensics"
+  difficulty: "easy"
+  points: { red: 50, blue: 30 }
+  mitre: [T1566]
+  description: |
+    임원(CEO)을 사칭한 송금 요청 피싱 이메일의 원본 헤더(email_headers.txt)가 주어진다.
+    From 주소는 위조되었지만 Received 체인의 최초 홉이 실제 발신 IP를 드러낸다. 실제 발신
+    IP와 사칭된 발신자 주소, 그리고 피싱 링크에 실린 verification 토큰을 복원하라.
+  red_task:
+    goal: "Received 체인을 분석해 originating_ip / spoofed_from / verification_token 제출"
+    submit_fields: ["originating_ip", "spoofed_from", "verification_token"]
+  blue_task:
+    goal: "이메일 스푸핑 탐지/차단 방안 서술(SPF/DKIM/DMARC)"
+    success_criteria: "서술형 답변에 'SPF' 또는 'DMARC' 또는 'DKIM' 키워드 포함"
+  scoring:
+    red_verify: "field_match"
+    blue_verify: "manual_review"
+  artifacts: ["email_headers.txt"]
+  safety:
+    profile: "standard"
+    notes: "합성 이메일 헤더. 도메인/IP/토큰은 전부 더미(example/TEST-NET)."

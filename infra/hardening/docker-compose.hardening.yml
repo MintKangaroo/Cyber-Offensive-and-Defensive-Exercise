@@ -1,0 +1,72 @@
+# 하드닝 오버레이 (08번 안전장치 3절)
+# ================================================
+# 기존 docker-compose.yml 위에 덮어써서 적용:
+#   docker compose -f docker-compose.yml -f infra/hardening/docker-compose.hardening.yml up --build
+#
+# 원칙:
+#   - 커맨드인젝션(PP-003)/역직렬화(PP-004) 트윈은 최강 격리
+#   - 모든 트윈에 리소스 상한 + non-root
+#   - internal 네트워크로 실제 배포 시 외부 egress 차단(개발 편의를 위해 기본은 false,
+#     배포 전 체크리스트에서 true로 전환 확인)
+
+version: "3.8"
+
+services:
+  ground_station:
+    cpus: "0.5"
+    mem_limit: "512m"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    user: "1000:1000"
+
+  power_plant:
+    # 커맨드 인젝션(PP-003) + 역직렬화(PP-004) 보유 -> 가장 강한 격리
+    cpus: "0.5"
+    mem_limit: "512m"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: ["ALL"]
+    security_opt:
+      - "no-new-privileges:true"
+      # seccomp 커스텀 프로파일은 infra/hardening/README.md의 절차대로 생성해
+      # infra/hardening/seccomp-restrictive.json 으로 배치 후 아래 줄의 주석 해제:
+      # - "seccomp=infra/hardening/seccomp-restrictive.json"
+    user: "1000:1000"
+    pids_limit: 64          # fork bomb류 완화(커맨드인젝션 대응)
+    ulimits:
+      nproc: 64
+      nofile: 256
+
+  defense_network:
+    cpus: "0.5"
+    mem_limit: "512m"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    user: "1000:1000"
+
+  event_collector:
+    cpus: "0.5"
+    mem_limit: "512m"
+
+  scoring_engine:
+    cpus: "0.5"
+    mem_limit: "512m"
+
+networks:
+  # 실배포 시 반드시 internal: true로 전환(개발 중엔 curl 디버깅 편의상 false 유지 가능)
+  twin_ground_station:
+    driver: bridge
+    internal: true
+  twin_power_plant:
+    driver: bridge
+    internal: true
+  twin_defense_network:
+    driver: bridge
+    internal: true

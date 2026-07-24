@@ -1,0 +1,28 @@
+challenge:
+  id: "WEB-001"
+  title: "네트워크 진단 명령 주입"
+  category: "web"
+  difficulty: "medium"
+  points: { red: 150, blue: 60 }
+  asset: "ground_station"
+  mitre: [T1059]
+  description: |
+    지상국 운영 콘솔에 호스트 도달성을 확인하는 진단 엔드포인트(/api/net/ping)가 있다.
+    입력이 셸로 그대로 전달되어 명령 주입이 가능하다. 이를 이용해 서버의 플래그 파일을 읽어라.
+  red_task:
+    goal: "/api/net/ping?host= 에 명령을 주입해 /app/flag.txt 읽기"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    hints:
+      - { cost: 5, text: "host 파라미터가 셸에서 어떻게 쓰이는지 생각해보라(; | $())." }
+  blue_task:
+    goal: "셸 실행 제거(배열 인자) + 입력 검증 패치"
+    success_criteria: "패치판에서 주입 문자열이 400으로 거부됨"
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: "patch_check"
+  patch_env: "PATCH_WEB_001=true"
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용 격리 서비스. 플래그/시크릿은 전부 더미. ping은 localhost 대상."

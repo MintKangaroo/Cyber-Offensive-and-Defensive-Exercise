@@ -1,0 +1,88 @@
+# 크로스오버 시나리오: 펌웨어 리버싱 → 익스플로잇 → 네트워크 피벗
+# =================================================================
+# Phase 1(Red/Reversing): 펌웨어에서 취약점·자격증명 발견
+# Phase 2(Red/Pwn): 발견한 취약점으로 익스플로잇
+# Phase 3(Red/Network): 장악한 장비를 발판으로 OT 세그먼트 피벗
+# Blue는 각 단계의 방어 과제를 병행한다.
+
+crossover_scenario:
+  id: "XOVER-REV-PWN-NET-01"
+  name: "펌웨어에서 발전소까지 - 임베디드 침해 체인"
+  description: |
+    발전소 현장 장비의 펌웨어를 분석해 취약점을 찾고(Reversing),
+    익스플로잇으로 장비를 장악한 뒤(Pwn), 이를 발판으로 OT 세그먼트의
+    PLC에 도달한다(Network). 임베디드→OT 침해의 전형적 경로.
+  target_asset: "power_plant"
+  difficulty: "insane"
+  time_limit_sec: 7200          # 120분
+  category_chain: ["reversing", "reversing", "network"]
+
+  phase_1_reversing:
+    actor: "red"
+    linked_challenge: "REV-004"   # 펌웨어 분석
+    objectives:
+      - name: "펌웨어에서 하드코딩 자격증명 추출"
+        submit: "hardcoded_cred"
+        points: 80
+      - name: "취약 서비스/함수 식별"
+        submit: "vuln_function"
+        points: 100
+    completion_unlocks: "phase_2_pwn"
+    blue_parallel:
+      goal: "펌웨어 시크릿 제거 + 안전한 부트/서명 검증 설계"
+      points: 100
+
+  phase_2_pwn:
+    actor: "red"
+    locked_until: "phase_1_reversing.completed"
+    linked_challenge: "REV-003"   # BOF 익스플로잇
+    objective: "Phase 1에서 찾은 취약 함수를 BOF로 익스플로잇 → 장비 셸 획득"
+    success_criteria: "제어흐름 탈취 → flag{device_pwned}"
+    points: 150
+    completion_unlocks: "phase_3_network"
+    blue_parallel:
+      goal: "완화기법(카나리/NX/ASLR) 적용으로 익스플로잇 무력화"
+      points: 120
+
+  phase_3_network:
+    actor: "red"
+    locked_until: "phase_2_pwn.completed"
+    linked_challenge: "NET-003"   # Modbus 조작
+    objective: |
+      장악한 현장 장비를 발판으로 OT 세그먼트에 피벗,
+      Modbus로 PLC 세이프티 레지스터 조작.
+    stages:
+      - stage: 1
+        name: "OT 세그먼트 피벗"
+        objective_event: red_attack_started
+        match: { phase: "lateral_movement" }
+        points: 80
+      - stage: 2
+        name: "PLC 세이프티 무력화"
+        objective_event: red_objective_success
+        match: { vuln_id: "PP-005" }
+        points: 150
+        requires_stage: 1
+        is_final: true
+    blue_parallel:
+      goal: "IT/OT 세그멘테이션 + Modbus 이상탐지 + 2인승인"
+      points: 200
+
+  full_chain_bonus:
+    all_phases_completed: 150
+    description: "펌웨어→OT 전체 킬체인 완주"
+
+  scoring_summary:
+    red_total: 640              # 180+150+230+bonus는 별도
+    blue_total: 420
+    full_chain_bonus: 150
+
+  noise:
+    enabled: true
+    normal_traffic_eps: 6
+
+  safety:
+    profile: "hardened"         # 펌웨어/Pwn/OT 전부 강격리
+    notes: |
+      펌웨어는 훈련용 합성 이미지, OT는 pymodbus 시뮬레이터.
+      익스플로잇은 강격리 컨테이너 내부로 제한. 실장비 절대 미연결.

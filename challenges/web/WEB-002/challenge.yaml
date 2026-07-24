@@ -1,0 +1,37 @@
+challenge:
+  id: "WEB-002"
+  title: "위조된 지휘권 - JWT Forgery"
+  category: "web"
+  difficulty: "medium"
+  points: { red: 150, blue: 150 }
+  asset: "ground_station"
+  mitre: [T1078, T1552.001]
+
+  description: |
+    위성 지상국 콘솔은 JWT로 세션을 관리한다. 서명 검증 어딘가에 문제가 있다.
+    관리자만 접근 가능한 임무 승인 엔드포인트에 도달하라.
+
+  red_task:
+    goal: "admin 권한이 필요한 POST /api/mission/approve 를 위조 토큰으로 호출해 승인 코드 획득"
+    flag_format: "flag{...}"
+    flag_type: "dynamic"
+    hints:
+      - { cost: 15, text: "토큰 헤더의 alg를 눈여겨보라." }
+      - { cost: 25, text: "서버가 alg=none 또는 약한 대칭키를 허용하는지 시험하라." }
+      - { cost: 40, text: "GS-005 디버그 노출이 있었다면 시크릿을 이미 알 수도 있다." }
+
+  blue_task:
+    goal: "위조 토큰 사용을 탐지하고, 재발을 막도록 패치"
+    success_criteria: |
+      (1) SIEM에 WEB-JWT-FORGE 알림이 위조 요청에 대해 발생
+      (2) safe_probe에서 위조 토큰(POST /api/mission/approve) 이 401 로 거부됨
+    points_breakdown: { detection: 50, patch: 100 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["alert", "safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "모든 계정/시크릿 더미. 실제 위성 무관."

@@ -1,0 +1,21 @@
+challenge:
+  id: "DET-000"
+  title: "첫 브루트포스 룰"
+  category: "detection"
+  difficulty: "easy"
+  points: { red: 0, blue: 60 }
+  asset: null
+  mitre: [T1110]
+  description: |
+    동일 src의 로그인 401이 연속으로 발생하는 패턴을 잡는 임계 탐지 룰을 작성하라.
+  blue_task:
+    goal: "동일 src의 401 연속 10회/60초를 잡는 threshold 룰 작성(우리 Detection Engine 문법)"
+    success_criteria: |
+      (1) attack_log.jsonl(공격 로그셋)에 알림 발생
+      (2) normal_log.jsonl(정상 로그셋)에는 오탐 없음
+  scoring:
+    blue_verify: "alert_dataset_check"
+  artifacts: ["attack_log.jsonl", "normal_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 로그 데이터셋만 사용."

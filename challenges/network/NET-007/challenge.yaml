@@ -1,0 +1,22 @@
+challenge:
+  id: "NET-007"
+  title: "다중 홉 피벗 체인 상관 추적"
+  category: "network"
+  difficulty: "hard"
+  points: { red: 180, blue: 0 }
+  mitre: [T1090.003]
+  description: |
+    netflow.jsonl은 내부망 넷플로우 로그다. 공격자가 외부 진입호스트에서 내부 여러 홉을 거쳐
+    도메인 컨트롤러(10.4.0.10)로 피벗했다. 각 홉의 유입/유출 플로우는 바이트 크기가 거의
+    보존되고 시각이 수십 ms 차로 이어진다. 무관한 정상 트래픽과, 바이트만 비슷하고 시각이
+    벌어진 미끼 플로우가 섞여 있어 단순 필터로는 풀 수 없다. 홉 그래프를 상관으로 복원해
+    진입 IP와 전체 피벗 경로를 찾고, 최종 홉 note(base64) 토큰을 진입 IP로 XOR 복호해 flag를 얻어라.
+  red_task:
+    goal: "피벗 체인 복원 → 진입 IP 식별 → 최종 홉 토큰을 진입 IP로 XOR 복호 → flag"
+    submit_fields: ["entry_ip", "flag"]
+  scoring:
+    red_verify: "flag_match"
+  artifacts: ["netflow.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 넷플로우(실트래픽/실호스트 아님). IP/경로/토큰/플래그는 팀별 더미값."

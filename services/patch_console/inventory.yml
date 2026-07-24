@@ -1,0 +1,23 @@
+# Patch Console 인벤토리
+# ========================
+# 이 인벤토리는 range_control 네트워크의 트윈 "컨테이너"만 대상으로 한다.
+# 호스트 SSH 대상을 추가하지 않는다 — Patch Console이 실제 인프라를 건드리면 안 됨.
+# 연결은 docker connection plugin을 사용해 컨테이너 내부로만 명령을 전달한다.
+
+all:
+  children:
+    ground_station_twin:
+      hosts:
+        gs_twin:
+          ansible_connection: docker
+          ansible_docker_extra_args: "--network range_control"
+    power_plant_twin:
+      hosts:
+        pp_twin:
+          ansible_connection: docker
+          ansible_docker_extra_args: "--network range_control"
+    defense_network_twin:
+      hosts:
+        dn_twin:
+          ansible_connection: docker
+          ansible_docker_extra_args: "--network range_control"

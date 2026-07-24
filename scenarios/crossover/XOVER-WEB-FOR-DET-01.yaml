@@ -1,0 +1,120 @@
+# 크로스오버 시나리오: 웹 침해 → 포렌식 재구성 → 탐지
+# =====================================================
+# 하나의 사건을 세 분야 관점에서 연속으로 다룬다.
+# Phase 1(Red/Web): 실제 공격 수행
+# Phase 2(Blue/Forensics): 그 공격을 포렌식으로 재구성
+# Phase 3(Blue/Detection): 재발 방지 탐지룰 작성
+# scenario_engine(B3)이 로드하며, 각 phase 완료가 다음 phase를 언락한다.
+
+crossover_scenario:
+  id: "XOVER-WEB-FOR-DET-01"
+  name: "지상국 침해 사건 - 공격에서 탐지까지"
+  description: |
+    위성 지상국이 웹 취약점으로 침해당했다. 공격을 수행하고(Red),
+    남겨진 증거로 사건을 재구성하고(Forensics), 재발을 막는 탐지를 구축한다(Detection).
+    한 사건의 생애주기를 세 분야로 학습하는 연계 시나리오.
+  target_asset: "ground_station"
+  difficulty: "hard"
+  time_limit_sec: 5400          # 90분(3 phase)
+  category_chain: ["web", "forensics", "detection"]
+
+  # 초기 취약점 상태 (Phase 1 공격 대상)
+  initial_vuln_state:
+    GS-001: vulnerable          # SQLi
+    GS-002: vulnerable          # 하드코딩/약한 JWT
+    GS-003: vulnerable          # IDOR
+    GS-004: patched
+    GS-005: vulnerable          # 디버그 노출
+
+  # ── Phase 1: WEB (Red 공격) ──
+  phase_1_web:
+    actor: "red"
+    linked_challenge: "WEB-002"   # JWT 위조 문제 재사용
+    stages:
+      - stage: 1
+        name: "정찰 - 디버그 설정에서 시크릿 확보"
+        objective_event: red_attack_started
+        match: { vuln_id: "GS-005" }
+        points: 20
+      - stage: 2
+        name: "침투 - 확보한 시크릿으로 JWT 위조 → 관리자 접근"
+        objective_event: red_attack_started
+        match: { vuln_id: "GS-002", challenge_id: "WEB-002" }
+        points: 40
+        requires_stage: 1
+      - stage: 3
+        name: "유출 - IDOR로 기밀 임무계획 반출"
+        objective_event: flag_exfiltrated
+        match: { vuln_id: "GS-003" }
+        points: 50
+        requires_stage: 2
+        is_final: true
+    completion_unlocks: "phase_2_forensics"
+    # Phase 1의 모든 공격은 trace_id로 묶여 Phase 2 증거가 된다
+    emits_evidence: true
+
+  # ── Phase 2: FORENSICS (Blue 재구성) ──
+  phase_2_forensics:
+    actor: "blue"
+    locked_until: "phase_1_web.completed"
+    # Phase 1에서 생성된 실제 이벤트/로그가 증거 아티팩트로 자동 패키징됨
+    evidence_source: "trace_id_from_phase_1"
+    linked_challenge: "FOR-002"   # pcap 재구성 문제 형식 재사용
+    objectives:
+      - name: "공격자 진입점 특정"
+        submit: "entry_vuln_id"       # 정답: GS-005
+        points: 40
+      - name: "권한상승 방법 특정"
+        submit: "privesc_method"      # 정답: JWT forgery(WEB-002)
+        points: 60
+      - name: "유출된 데이터 특정"
+        submit: "exfiltrated_asset"   # 정답: mission_plan flag
+        points: 50
+      - name: "공격 타임라인 재구성"
+        submit: "timeline_json"        # 3단계 시각 순서
+        points: 50
+    scoring: "field_match(부분점수)"
+    completion_unlocks: "phase_3_detection"
+
+  # ── Phase 3: DETECTION (Blue 탐지 구축) ──
+  phase_3_detection:
+    actor: "blue"
+    locked_until: "phase_2_forensics.completed"
+    linked_challenge: "DET-004"   # 시퀀스 탐지 문제 형식
+    objective: |
+      Phase 1의 공격 체인(디버그접근 → JWT위조 → IDOR유출)을 하나의
+      상관 알림으로 잡는 시퀀스 룰을 작성하라.
+    success_criteria:
+      - "Phase 1 재현 트래픽에 정확히 1개 시퀀스 알림"
+      - "부분 공격(1~2단계만)엔 미발화"
+      - "정상+노이즈엔 오탐 0"
+    expected_rule_shape:
+      sequence:
+        - match: { vuln_id: "GS-005" }
+        - match: { challenge_id: "WEB-002" }
+        - match: { event_type: "flag_exfiltrated", vuln_id: "GS-003" }
+      within_sec: 600
+      group_by: "src.ip"
+    points: 150
+    is_final: true
+
+  # ── 전체 완주 보너스 ──
+  full_chain_bonus:
+    all_phases_completed: 100
+    description: "세 분야를 모두 완주하면 사건 생애주기 마스터 보너스"
+
+  # ── 점수 배분 요약 ──
+  scoring_summary:
+    phase_1_web_red: 110          # 20+40+50
+    phase_2_forensics_blue: 200   # 40+60+50+50
+    phase_3_detection_blue: 150
+    full_chain_bonus: 100
+    total_possible: 560
+
+  noise:
+    enabled: true
+    normal_traffic_eps: 8         # Phase 2·3의 재구성/탐지 난이도용 배경
+
+  safety:
+    profile: "standard"
+    notes: "모든 데이터 더미. Phase 2 증거는 Phase 1 실제 이벤트에서 자동 생성(합성 불필요)."

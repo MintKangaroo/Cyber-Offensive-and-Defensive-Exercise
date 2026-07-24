@@ -1,0 +1,21 @@
+challenge:
+  id: "DET-001"
+  title: "잡음 속의 스캔 - Threshold Tuning"
+  category: "detection"
+  difficulty: "medium"
+  points: { red: 0, blue: 100 }
+  mitre: [T1046]
+  description: |
+    수평 포트스캔을 탐지하되, 정상 트래픽 노이즈에서 오탐이 나지 않게 임계를 튜닝하라.
+    DET-000(브루트포스 도입)의 응용판 — 이번엔 노이즈가 섞여 난이도가 있다.
+  blue_task:
+    goal: "distinct(dst.port) 임계 룰 작성 + 임계값 튜닝"
+    success_criteria: |
+      (1) scan_log.jsonl(포트스캔)에 알림 발생
+      (2) noise_log.jsonl(정상+잡음)에는 오탐 없음
+  scoring:
+    blue_verify: "alert_dataset_check"
+  artifacts: ["scan_log.jsonl", "noise_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 로그 데이터셋만 사용."

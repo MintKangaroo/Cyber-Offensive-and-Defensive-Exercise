@@ -1,0 +1,17 @@
+version: "3.8"
+services:
+  ai007_deploy:
+    build:
+      context: .
+    container_name: ai007_deploy
+    ports:
+      - "8107:8107"
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-ai007-dev-secret}
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: "512m"
+    cpus: "0.5"

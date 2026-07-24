@@ -1,0 +1,20 @@
+challenge:
+  id: "REV-003"
+  title: "다단계 인코딩 복원"
+  category: "reversing"
+  difficulty: "medium"
+  points: { red: 130, blue: 0 }
+  mitre: [T1140]
+  description: |
+    encoded.txt는 플래그를 세 계층(단일바이트 XOR → 바이트 역순 → base64)으로 인코딩한
+    결과다. 계층을 역순으로 벗겨 플래그를 복원하라. 마지막 XOR 키는 플래그가 'flag{'로
+    시작한다는 known-plaintext로 구할 수 있다.
+  red_task:
+    goal: "encoded.txt의 3계층을 해제해 flag{...} 복원"
+    submit_fields: ["flag"]
+  scoring:
+    red_verify: "flag_match"
+  artifacts: ["encoded.txt"]
+  safety:
+    profile: "standard"
+    notes: "합성 텍스트 아티팩트. 플래그는 팀별 더미 값."

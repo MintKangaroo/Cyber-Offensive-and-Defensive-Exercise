@@ -1,0 +1,23 @@
+challenge:
+  id: "DET-006"
+  title: "DNS DGA 탐지 - 대량 도메인 조회"
+  category: "detection"
+  difficulty: "medium"
+  points: { red: 0, blue: 90 }
+  mitre: [T1568.002]
+  description: |
+    감염 호스트가 DGA(도메인 생성 알고리즘)로 만든 무작위 도메인을 짧은 시간에 대량 조회하며
+    C2 랑데부를 시도한다. 한 출발지의 서로 다른 조회 도메인 수(distinct) 임계로 탐지하되,
+    캐시 워밍처럼 여러 정상 도메인을 조회하는 호스트에는 오탐이 나지 않게 임계를 튜닝하라.
+    우리 SIEM 엔진이 실제 채점한다.
+  blue_task:
+    goal: "src.ip 기준 distinct(raw.query) 임계 규칙 작성 + 임계 튜닝"
+    success_criteria: |
+      (1) attack_log.jsonl(DGA 대량 조회)에 알림 발생
+      (2) normal_log.jsonl(정상+캐시워밍)에는 오탐 없음
+  scoring:
+    blue_verify: "alert_dataset_check"
+  artifacts: ["attack_log.jsonl", "normal_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 DNS 로그 데이터셋만 사용."

@@ -1,0 +1,24 @@
+# 시퀀스(다단계) 탐지 규칙 (06번 문서 1절)
+
+- id: SEQ-KILLCHAIN-001
+  title: "다단계 침해 - 스캔→앱공격→유출"
+  severity: 4
+  mitre: [T1046, T1190, T1041]
+  kind: sequence
+  sequence_group_by: "src.ip"
+  sequence_within_sec: 300
+  sequence_steps:
+    - category: "network"
+    - source_type: "twin"
+    - event_type: "flag_exfiltrated"
+
+- id: SEQ-RECON-TO-EXPLOIT-001
+  title: "정찰 후 즉시 익스플로잇"
+  severity: 3
+  mitre: [T1592, T1190]
+  kind: sequence
+  sequence_group_by: "src.ip"
+  sequence_within_sec: 60
+  sequence_steps:
+    - vuln_id: "GS-005"
+    - vuln_id: "GS-002"

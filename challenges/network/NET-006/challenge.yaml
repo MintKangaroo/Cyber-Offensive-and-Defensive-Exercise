@@ -1,0 +1,24 @@
+challenge:
+  id: "NET-006"
+  title: "TCP 세그먼트 재조립 - 분할 유출 복원"
+  category: "network"
+  difficulty: "medium"
+  points: { red: 50, blue: 35 }
+  mitre: [T1041]
+  description: |
+    캡처된 TCP 세그먼트 로그(tcp_segments.jsonl)가 순서 없이 저장되어 있다. 공격자가 유출
+    데이터를 여러 세그먼트로 쪼개 C2로 보냈다. 공격자 흐름을 골라 seq 순서로 재조립하고
+    base64를 디코드해 유출된 비밀을 복원하라.
+  red_task:
+    goal: "공격자 흐름을 seq로 재조립해 attacker_ip / reassembled_secret / attack_technique 제출"
+    submit_fields: ["attacker_ip", "reassembled_secret", "attack_technique"]
+  blue_task:
+    goal: "분할 유출 탐지/차단 서술(스트림 재조립 IDS, DLP, egress)"
+    success_criteria: "서술형 답변에 '재조립' 또는 'DLP' 또는 'egress' 키워드 포함"
+  scoring:
+    red_verify: "field_match"
+    blue_verify: "manual_review"
+  artifacts: ["tcp_segments.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 세그먼트 로그. IP/비밀은 전부 더미."

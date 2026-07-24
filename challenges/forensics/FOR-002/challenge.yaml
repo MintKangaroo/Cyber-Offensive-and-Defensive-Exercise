@@ -1,0 +1,21 @@
+challenge:
+  id: "FOR-002"
+  title: "침묵하는 지상국 - 침해 재구성"
+  category: "forensics"
+  difficulty: "medium"
+  points: { red: 200, blue: 0 }
+  asset: "ground_station"
+  mitre: [T1190, T1046, T1041]
+  description: |
+    위성 지상국에서 이상 트래픽이 포착되어 캡처했다(실제 pcap 대신 훈련용 JSON 캡처 로그).
+    분석해 공격자의 행위를 재구성하라.
+  red_task:
+    goal: "capture_log.jsonl을 분석해 4개 항목 특정"
+    submit_fields: ["attacker_ip", "exploited_endpoint", "exfiltrated_flag", "attack_technique"]
+    flag_format: "필드별 부분점수(50점×4)"
+  scoring:
+    red_verify: "field_match"
+  artifacts: ["capture_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 캡처 로그. 모든 IP/데이터는 더미."

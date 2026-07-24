@@ -1,0 +1,9 @@
+- id: DET-006
+  title: "DNS DGA Detection (distinct query volume)"
+  severity: 3
+  mitre: [T1568.002]
+  source_type: twin
+  kind: threshold
+  threshold_group_by: "src.ip"
+  threshold_condition: "distinct(raw.query) >= 20"
+  threshold_window_sec: 300

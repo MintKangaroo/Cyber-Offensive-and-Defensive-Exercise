@@ -1,0 +1,24 @@
+challenge:
+  id: "FOR-001"
+  title: "명령 이력 포렌식 - 데이터 유출 추적"
+  category: "forensics"
+  difficulty: "easy"
+  points: { red: 50, blue: 30 }
+  mitre: [T1048]
+  description: |
+    침해된 호스트에서 수집한 셸 명령 이력(bash_history.jsonl)이 주어진다. 정상 운영
+    명령들 사이에 데이터를 외부로 유출한 악성 명령이 하나 섞여 있다. 유출에 사용된
+    C2 호스트와 base64로 인코딩되어 빠져나간 비밀 값을 복원하라.
+  red_task:
+    goal: "유출 명령을 찾아 exfil_host와 디코드된 비밀, 사용된 ATT&CK 기법을 제출"
+    submit_fields: ["exfil_host", "decoded_secret", "attack_technique"]
+  blue_task:
+    goal: "아웃바운드 유출을 탐지/차단하는 방안 서술(egress 필터링/DLP)"
+    success_criteria: "서술형 답변에 'egress' 또는 '아웃바운드' 키워드 포함"
+  scoring:
+    red_verify: "field_match"
+    blue_verify: "manual_review"
+  artifacts: ["bash_history.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 명령 이력(실제 시스템 아님). 유출 호스트/비밀은 전부 더미."

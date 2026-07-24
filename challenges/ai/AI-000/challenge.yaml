@@ -1,0 +1,27 @@
+challenge:
+  id: "AI-000"
+  title: "특징공간 회피 - Feature-Space Evasion"
+  category: "ai"
+  difficulty: "easy"
+  points: { red: 60, blue: 40 }
+  mitre: [T1027]
+  description: |
+    피싱 URL 탐지기(로지스틱 회귀, 특징 6개)가 있다. 제약 없이(feature-space) 특징값을
+    직접 조작해 악성 판정을 회피하라. AI-002(문제공간 제약)의 도입판 — 여기서는 실현
+    가능성을 따지지 않고 "특징만 바꾸면 얼마나 쉬운지" 체감한다.
+  red_task:
+    goal: "제공된 악성 샘플의 특징벡터를 조작해 malicious_score < 0.5로 만들기"
+    flag_format: "flag{...}"
+    flag_type: "dynamic"
+    hints:
+      - { cost: 10, text: "어떤 특징이 점수에 가장 크게 기여하는지 모델 계수를 살펴보라." }
+  blue_task:
+    goal: "왜 feature-space 회피가 비현실적인지 서술 + 입력 검증(실제 URL 재구성 가능 여부 확인) 추가"
+    success_criteria: "서술형 답변에 'problem-space' 또는 '문제공간' 키워드 포함"
+  scoring:
+    red_verify: "detector_query"
+    blue_verify: "manual_review"
+  artifacts: ["malicious_sample.json"]
+  safety:
+    profile: "hardened"
+    notes: "합성 데이터로 학습된 소형 로지스틱회귀 모델. 실제 피싱 URL/실도메인 미포함."

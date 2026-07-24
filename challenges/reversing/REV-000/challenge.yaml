@@ -1,0 +1,26 @@
+challenge:
+  id: "REV-000"
+  title: "가려진 신호 - XOR Decode"
+  category: "reversing"
+  difficulty: "easy"
+  points: { red: 100, blue: 50 }
+  mitre: [T1027]
+  description: |
+    지상국 진단 도구가 남긴 바이너리 blob 안에 XOR로 인코딩된 플래그가 있다. 복원하라.
+  red_task:
+    goal: "제공된 encoded.bin에서 단일바이트 XOR 키를 찾아 플래그 복원"
+    flag_format: "flag{...}"
+    flag_type: "dynamic"
+    hints:
+      - { cost: 10, text: "플래그는 항상 'flag{'로 시작한다 — known-plaintext로 키를 구할 수 있다." }
+      - { cost: 20, text: "단일 바이트 키다. 256가지뿐이니 전수조사도 가능하다." }
+  blue_task:
+    goal: "하드코딩된 시크릿을 서버측 검증으로 전환하는 방법 서술"
+    success_criteria: "서술형 답변에 '서버 검증' 또는 '외부 볼트' 키워드 포함"
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: "manual_review"
+  artifacts: ["encoded.bin"]
+  safety:
+    profile: "standard"
+    notes: "합성 바이너리. 실제 취약점 없음(단순 인코딩 연습)."

@@ -1,0 +1,25 @@
+challenge:
+  id: "NET-001"
+  title: "DNS 터널링 분석 - 은닉 채널 유출 복원"
+  category: "network"
+  difficulty: "medium"
+  points: { red: 60, blue: 40 }
+  mitre: [T1071.004]
+  description: |
+    내부 호스트의 DNS 조회 로그(dns_queries.jsonl)가 주어진다. 정상 조회에 섞여
+    한 호스트가 특정 도메인으로 비정상적으로 많은 서브도메인 조회를 보냈다. 이는
+    DNS를 은닉 채널로 쓴 데이터 유출이다. C2 도메인을 식별하고 서브도메인 라벨에
+    hex로 실려나간 비밀을 복원하라.
+  red_task:
+    goal: "C2 도메인과 hex 인코딩되어 유출된 비밀, 사용된 ATT&CK 기법을 제출"
+    submit_fields: ["c2_domain", "decoded_data", "attack_technique"]
+  blue_task:
+    goal: "DNS 터널링 탐지/차단 방안 서술(조회량 임계, 엔트로피, 알려진 리졸버만 허용)"
+    success_criteria: "서술형 답변에 'DNS' 및 '탐지' 또는 '임계' 키워드 포함"
+  scoring:
+    red_verify: "field_match"
+    blue_verify: "manual_review"
+  artifacts: ["dns_queries.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 DNS 로그(실제 트래픽 아님). C2 도메인/비밀은 전부 더미."

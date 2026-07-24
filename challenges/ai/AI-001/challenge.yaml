@@ -1,0 +1,24 @@
+challenge:
+  id: "AI-001"
+  title: "그림자 모델 - Model Extraction"
+  category: "ai"
+  difficulty: "medium"
+  points: { red: 150, blue: 100 }
+  mitre: [T1587.001]
+  description: |
+    AI-000의 피싱 탐지기를 쿼리 접근만으로 복제하라. 원본 모델 내부는 볼 수 없고
+    /predict API만 호출 가능하다는 가정 하에, 쿼리-응답 쌍으로 대리모델(surrogate)을
+    학습시켜 원본과 얼마나 일치하는지 확인한다.
+  red_task:
+    goal: "쿼리 예산 500회 이내로 대리모델을 학습시켜 원본과 90% 이상 일치하는 결정 경계 확보"
+    flag_on_success: "대리모델의 held-out 일치율이 grader 기준을 넘으면 자동 발급"
+  blue_task:
+    goal: "쿼리 레이트리밋 또는 출력 반올림으로 추출 난이도를 높이는 방어 제안"
+    success_criteria: "방어 적용 후 같은 쿼리 예산으로 일치율이 유의미하게 떨어지는지 확인"
+  scoring:
+    red_verify: "surrogate_agreement_check"
+    blue_verify: "manual_review"
+  artifacts: []
+  safety:
+    profile: "hardened"
+    notes: "합성 데이터/모델. AI-000과 동일 원본 모델 재사용."

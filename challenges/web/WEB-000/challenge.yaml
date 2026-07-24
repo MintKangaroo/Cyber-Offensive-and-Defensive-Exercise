@@ -1,0 +1,26 @@
+challenge:
+  id: "WEB-000"
+  title: "노출된 디버그 설정"
+  category: "web"
+  difficulty: "easy"
+  points: { red: 50, blue: 50 }
+  asset: "ground_station"
+  mitre: [T1592]
+  description: |
+    위성 지상국 콘솔에 디버그 엔드포인트가 열려있다. 여기서 무엇을 얻을 수 있는지 확인하라.
+  red_task:
+    goal: "/api/debug/config 접근해 노출된 JWT 시크릿 확보"
+    flag_format: "flag{...}"
+    flag_type: "dynamic"
+    hints:
+      - { cost: 5, text: "디버그/설정 관련 엔드포인트를 추측해보라." }
+  blue_task:
+    goal: "디버그 라우트 제거 패치 + 접근 탐지룰"
+    success_criteria: "safe_probe에서 404 반환 확인 + 접근 시도 알림 발생"
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe", "alert"]
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "모든 시크릿은 더미. 실제 위성 무관."

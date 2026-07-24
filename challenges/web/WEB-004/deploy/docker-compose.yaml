@@ -1,0 +1,11 @@
+version: "3.8"
+services:
+  web004_deploy:
+    build:
+      context: .
+    container_name: web004_deploy
+    ports:
+      - "8104:8104"
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web004-dev-secret}
+      - PATCH_WEB_004=false

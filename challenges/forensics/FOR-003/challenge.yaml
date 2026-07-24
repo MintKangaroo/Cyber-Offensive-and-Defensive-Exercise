@@ -1,0 +1,24 @@
+challenge:
+  id: "FOR-003"
+  title: "세션 하이재킹 흔적 - 접근 로그 조사"
+  category: "forensics"
+  difficulty: "medium"
+  points: { red: 55, blue: 35 }
+  mitre: [T1539]
+  description: |
+    웹 접근 로그(access_log.jsonl)가 주어진다. 한 사용자의 세션 토큰이 탈취되어 다른
+    위치(IP)에서 재사용되었고, 공격자는 이 세션으로 민감한 작업을 수행했다. 하이재킹된
+    세션 ID와 공격자 IP, 공격자가 수행한 민감 작업을 찾아라.
+  red_task:
+    goal: "여러 IP에서 재사용된 세션을 찾아 attacker_ip/session_id/sensitive_action 제출"
+    submit_fields: ["attacker_ip", "session_id", "sensitive_action"]
+  blue_task:
+    goal: "세션 하이재킹 탐지/완화 방안 서술(IP 바인딩, 재인증, 세션 회전)"
+    success_criteria: "서술형 답변에 '세션' 및 'IP' 또는 '재인증' 키워드 포함"
+  scoring:
+    red_verify: "field_match"
+    blue_verify: "manual_review"
+  artifacts: ["access_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 접근 로그. 세션/IP는 전부 더미."

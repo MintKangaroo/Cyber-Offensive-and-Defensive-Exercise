@@ -1,0 +1,38 @@
+challenge:
+  id: "WEB-005"
+  title: "복원의 대가 - Historian Deserialization RCE"
+  category: "web"
+  difficulty: "hard"
+  points: { red: 250, blue: 250 }
+  asset: "power_plant"
+  mitre: [T1059, T1203]
+
+  description: |
+    발전소 히스토리안(Historian)은 저장된 리포트를 "가져오기(import)"할 때 바이너리
+    스냅샷을 복원한다. 그 복원 방식이 무엇인지, 신뢰할 수 없는 입력에 안전한지 확인하라.
+    성공하면 서버에서 임의 코드가 실행된다.
+
+  red_task:
+    goal: "POST /api/historian/import 에 악성 직렬화 페이로드를 보내 원격 코드 실행으로 플래그 파일을 읽어라"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    hints:
+      - { cost: 20, text: "import가 받는 blob은 base64로 감싼 무엇인가? JSON이 아닐 수도 있다." }
+      - { cost: 35, text: "python pickle은 __reduce__로 역직렬화 시 임의 호출을 트리거한다." }
+      - { cost: 50, text: "플래그는 서버의 /tmp/flag.txt 에 있다. check_output(['cat','/tmp/flag.txt'])를 반환하는 __reduce__를 만들어라." }
+
+  blue_task:
+    goal: "역직렬화 RCE를 탐지하고, 안전한 포맷(JSON)으로 전환해 패치"
+    success_criteria: |
+      (1) SIEM에 WEB-PICKLE-RCE 알림이 pickle 매직바이트 페이로드에 대해 발생
+      (2) 패치(JSON 전환) 후 pickle 페이로드가 코드 실행 없이 400으로 거부됨
+    points_breakdown: { detection: 80, patch: 170 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["alert", "safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "hardened"
+    notes: "실제 RCE가 발생하므로 cap_drop/read-only/mem_limit 하드닝 필수. 모든 데이터 더미."

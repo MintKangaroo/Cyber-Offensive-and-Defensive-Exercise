@@ -1,0 +1,8 @@
+- id: DET-002
+  title: "SQL Injection Attempt (UNION-based)"
+  severity: 3
+  mitre: [T1190]
+  source_type: twin
+  kind: match
+  match:
+    raw.uri: "~UNION SELECT"

@@ -1,0 +1,29 @@
+challenge:
+  id: "AI-007"
+  title: "예산 제약 적대적 회피 - PGD Evasion"
+  category: "ai"
+  difficulty: "hard"
+  points: { red: 220, blue: 100 }
+  mitre: [T1027]
+  description: |
+    비선형 악성코드 탐지기(2층 MLP, 특징 8개)가 배포돼 있다. 탐지기 앞단에는 입력 방어가
+    걸려 있어, 소스 샘플 x0로부터의 L∞ 섭동 예산(epsilon)과 [0,1] 박스 제약을 강제한다.
+    따라서 특징을 마음대로 정상값으로 몰아넣는 AI-000식 회피는 '예산 초과'로 거부된다.
+    /model 로 공개된 가중치(화이트박스)를 이용해 예산 안에서 malware→benign 오분류를 유도하라.
+  red_task:
+    goal: "예산 ||x - x0||_inf <= epsilon 안에서 benign 오분류를 만들어 서버 플래그 획득"
+    flag_format: "flag{...}"
+    flag_type: "dynamic"
+    hints:
+      - { cost: 10, text: "MLP는 h=ReLU(W1 x+b1), logits=W2 h+b2. malware-benign 로짓 차의 입력 그래디언트를 구하라." }
+      - { cost: 20, text: "sign(grad) 스텝마다 결과를 x0±epsilon 볼과 [0,1] 박스로 사영하라(PGD)." }
+  blue_task:
+    goal: "적대적 견고성 강화 서술 — 예산 축소/입력 정규화/적대적 학습/앙상블 중 왜 효과적인지"
+    success_criteria: "서술형 답변에 'adversarial training' 또는 '적대적 학습' 키워드 포함"
+  scoring:
+    red_verify: "detector_query"
+    blue_verify: "manual_review"
+  artifacts: []
+  safety:
+    profile: "hardened"
+    notes: "합성 데이터로 학습된 소형 MLP. 실제 악성코드/실샘플 미포함. 컨테이너는 read_only+cap_drop."

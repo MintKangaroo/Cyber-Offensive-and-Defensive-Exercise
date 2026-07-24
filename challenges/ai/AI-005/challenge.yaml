@@ -1,0 +1,24 @@
+challenge:
+  id: "AI-005"
+  title: "모델 추출 API 남용 탐지"
+  category: "ai"
+  difficulty: "easy"
+  points: { red: 50, blue: 40 }
+  mitre: [T1595]
+  description: |
+    모델 추론 API의 접근 로그(api_log.jsonl)가 주어진다. 정상 클라이언트는 소량만 조회하지만,
+    한 클라이언트가 대량의 서로 다른 쿼리를 보내 대리모델 학습용 입출력을 긁어갔다(모델 추출).
+    남용 클라이언트와 그 api_key, 총 쿼리 수를 찾아라.
+  red_task:
+    goal: "쿼리 수가 압도적인 클라이언트를 찾아 abusive_client / leaked_api_key / query_count 제출"
+    submit_fields: ["abusive_client", "leaked_api_key", "query_count"]
+  blue_task:
+    goal: "모델 추출 방어 서술(레이트리밋, 이상탐지, 워터마킹/출력 제한)"
+    success_criteria: "서술형 답변에 '레이트' 또는 '추출' 또는 '이상탐지' 키워드 포함"
+  scoring:
+    red_verify: "field_match"
+    blue_verify: "manual_review"
+  artifacts: ["api_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 API 로그. 키/클라이언트는 전부 더미."

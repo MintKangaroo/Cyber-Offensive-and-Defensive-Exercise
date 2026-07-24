@@ -1,0 +1,25 @@
+challenge:
+  id: "REV-009"
+  title: "커스텀 VM 난독화 (핸들러 테이블)"
+  category: "reversing"
+  difficulty: "insane"
+  points: { red: 300, blue: 0 }
+  mitre: [T1027.007]
+  description: |
+    vm_image.json은 커스텀 바이트코드 VM의 이미지다. 명령의 opcode는 자연스러운 값이 아니라
+    dispatch 테이블(핸들러 점프 테이블)을 통해 실제 연산으로 매핑된다 — 즉 raw opcode를 그대로
+    믿으면 안 되고, dispatch로 canonical 연산을 복원해야 한다. VM은 스택 기반이며 XOR 연산은
+    이미지 안의 seed로 구동되는 LCG 키스트림을 소비한다(호출마다 1바이트 전진). ROL/ADD/MOD256
+    등 8개 연산을 정확히 구현하고 키스트림 순서를 맞춰 실행해야 플래그가 방출된다.
+
+    단순히 문자 리터럴을 찾는 것으로는 안 되며, (1) dispatch 순열을 역매핑하고 (2) LCG 키스트림을
+    재현하며 (3) 스택 VM 전체를 구현해야 복원된다.
+  red_task:
+    goal: "핸들러 테이블을 복원하고 VM을 구현해 flag{...} 도출"
+    submit_fields: ["flag"]
+  scoring:
+    red_verify: "flag_match"
+  artifacts: ["vm_image.json"]
+  safety:
+    profile: "standard"
+    notes: "합성 바이트코드(JSON). 실행 파일 아님. 플래그는 팀별 HMAC 더미 값."

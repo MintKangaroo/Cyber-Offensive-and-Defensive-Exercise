@@ -1,0 +1,20 @@
+challenge:
+  id: "REV-004"
+  title: "스택 VM 리버싱"
+  category: "reversing"
+  difficulty: "hard"
+  points: { red: 140, blue: 0 }
+  mitre: [T1027]
+  description: |
+    program.json은 작은 스택 기반 가상머신(VM)의 바이트코드다. 명령은 PUSH/ADD/XOR/EMIT
+    네 가지이며, 실행하면 플래그를 한 문자씩 방출한다. VM의 동작을 파악하고 인터프리터를
+    구현해 프로그램을 실행, 플래그를 복원하라.
+  red_task:
+    goal: "VM 바이트코드를 실행해 flag{...} 복원"
+    submit_fields: ["flag"]
+  scoring:
+    red_verify: "flag_match"
+  artifacts: ["program.json"]
+  safety:
+    profile: "standard"
+    notes: "합성 바이트코드(JSON). 플래그는 팀별 더미 값. 실행 파일 아님."

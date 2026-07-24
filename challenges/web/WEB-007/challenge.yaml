@@ -1,0 +1,38 @@
+challenge:
+  id: "WEB-007"
+  title: "그림인 척 - Upload Filter Bypass"
+  category: "web"
+  difficulty: "medium"
+  points: { red: 150, blue: 150 }
+  asset: "ground_station"
+  mitre: [T1190, T1505.003]
+
+  description: |
+    운영 콘솔의 리포트 첨부 업로드는 이미지 파일만 허용한다고 한다. 하지만 무엇을 근거로
+    "이미지"라고 판단하는지 확인하라. 서버 측 스크립트로 저장·처리되는 파일을 올릴 수 있으면
+    승인 코드를 얻는다.
+
+  red_task:
+    goal: "이미지 전용이라는 업로드 필터를 우회해 서버측 스크립트 확장자(.py 등) 파일을 업로드하고 승인 코드를 획득"
+    flag_format: "flag{...}"
+    flag_type: "dynamic"
+    hints:
+      - { cost: 15, text: "서버는 파일 내용이 아니라 클라이언트가 보낸 무언가를 믿고 있다." }
+      - { cost: 25, text: "content_type 헤더/필드를 image/png로 두고 filename은 .py로 바꿔보라." }
+      - { cost: 35, text: "확장자 화이트리스트가 아니라 content_type만 검사하는 게 문제다." }
+
+  blue_task:
+    goal: "필터 우회 업로드를 탐지하고, 실제 확장자 화이트리스트로 패치"
+    success_criteria: |
+      (1) SIEM에 WEB-UPLOAD-BYPASS 알림이 스크립트 확장자 업로드 시도에 대해 발생
+      (2) 패치 후 content_type을 위조해도 스크립트 확장자(.py 등) 업로드가 400으로 거부됨
+    points_breakdown: { detection: 50, patch: 100 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["alert", "safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "업로드는 실제 실행 없이 시뮬레이션 처리. 모든 데이터 더미."

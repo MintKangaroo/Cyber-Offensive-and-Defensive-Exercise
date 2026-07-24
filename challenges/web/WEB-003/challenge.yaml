@@ -1,0 +1,38 @@
+challenge:
+  id: "WEB-003"
+  title: "열람 권한 없음 - Mission Plan IDOR"
+  category: "web"
+  difficulty: "medium"
+  points: { red: 120, blue: 120 }
+  asset: "ground_station"
+  mitre: [T1083, T1213]
+
+  description: |
+    지상국 임무계획(Mission Plan) 조회 API는 계획 ID로 직접 접근한다.
+    본인 팀 계획만 보이도록 되어 있다고 하지만, 정말 그런지 확인하라.
+    지휘부(command)만 열람 가능한 기밀 계획에는 승인 코드가 들어 있다.
+
+  red_task:
+    goal: "본인 소유가 아닌 기밀 임무계획(TOP SECRET)에 IDOR로 접근해 승인 코드를 획득"
+    flag_format: "flag{...}"
+    flag_type: "dynamic"
+    hints:
+      - { cost: 10, text: "본인 계획 ID는 4000번대 초반이다. 그 주변만 있을까?" }
+      - { cost: 20, text: "plan_id를 순차적으로 스캔하는 스크립트를 짜라(수작업으로 찾지 말 것)." }
+      - { cost: 30, text: "소유자 검증 없이 ID만 맞으면 돌려주는지 확인하라." }
+
+  blue_task:
+    goal: "IDOR 스캔을 탐지하고, 소유자 검증을 추가해 재발을 막도록 패치"
+    success_criteria: |
+      (1) SIEM에 WEB-IDOR-SCAN 알림이 순차 열람 시도에 대해 발생
+      (2) 패치 후 본인 소유가 아닌 plan_id 접근이 403으로 거부됨
+    points_breakdown: { detection: 40, patch: 80 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["alert", "safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "모든 임무계획/승인코드 더미. 실제 위성 운용과 무관."

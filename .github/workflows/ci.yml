@@ -1,0 +1,65 @@
+name: CI
+
+# 회귀 안전망(P1-2): 순수 로직 유닛 테스트(빠름) + docker 통합 스모크(강력).
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1) 유닛 테스트 — docker 불필요, 수 초 내 완료. 모든 푸시/PR에서 실행.
+  #    metrics/heatmap(AAR), _event_epoch(SIEM), EDR 규칙 등 버그 회귀 방지.
+  # ---------------------------------------------------------------------------
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install deps
+        run: pip install -r requirements-dev.txt
+      - name: Run unit + contract tests
+        run: python -m pytest tests/ -v
+
+  # ---------------------------------------------------------------------------
+  # 2) 통합 스모크 — 실제 docker 스택을 띄우고 E2E 경로를 검증(격리·복구 포함).
+  #    override 파일이 없어 edr는 8080에 뜨며, smoke_test.sh가 포트를 자동 감지한다.
+  # ---------------------------------------------------------------------------
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build & start stack
+        run: |
+          docker compose up -d --build \
+            event_collector scoring_engine config_service edr_backend siem_api \
+            scenario_engine instructor_api aar_report noc_monitor \
+            ground_station power_plant defense_network \
+            gs_gateway pp_gateway dn_gateway
+
+      - name: Wait for core health
+        run: |
+          for i in $(seq 1 40); do
+            if curl -sf http://localhost:8010/health >/dev/null 2>&1 \
+               && curl -sf http://localhost:8090/health >/dev/null 2>&1; then
+              echo "core services healthy"; exit 0
+            fi
+            sleep 3
+          done
+          echo "services did not become healthy in time"; exit 1
+
+      - name: Integration smoke test (with recovery)
+        run: SMOKE_RECOVERY=1 bash scripts/smoke_test.sh
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker compose logs --tail=80
+
+      - name: Teardown
+        if: always()
+        run: docker compose down -v

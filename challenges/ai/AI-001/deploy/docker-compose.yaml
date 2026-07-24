@@ -1,0 +1,13 @@
+version: "3.8"
+services:
+  ai001_deploy:
+    build:
+      context: .
+    container_name: ai001_deploy
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: "512m"
+    cpus: "0.5"

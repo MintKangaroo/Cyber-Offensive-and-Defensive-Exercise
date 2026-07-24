@@ -1,0 +1,25 @@
+challenge:
+  id: "NET-004"
+  title: "ARP 스푸핑 탐지 - 중간자 공격 추적"
+  category: "network"
+  difficulty: "easy"
+  points: { red: 50, blue: 40 }
+  mitre: [T1557]
+  description: |
+    로컬 세그먼트의 ARP 로그(arp_log.jsonl)에서 중간자(MITM) 공격 흔적을 찾아라.
+    공격자가 게이트웨이 IP를 자신의 MAC으로 announce 해 ARP 캐시를 오염시켰다. 그 결과
+    게이트웨이 IP가 두 개의 서로 다른 MAC에서 관측된다. 스푸핑된 IP와 공격자 MAC,
+    사용된 ATT&CK 기법을 제출하라.
+  red_task:
+    goal: "한 IP를 주장하는 두 MAC을 찾아 attacker_mac / spoofed_ip / attack_technique 제출"
+    submit_fields: ["attacker_mac", "spoofed_ip", "attack_technique"]
+  blue_task:
+    goal: "ARP 스푸핑 탐지/완화 방안 서술(DAI, static ARP, 포트 보안)"
+    success_criteria: "서술형 답변에 'ARP' 및 '탐지' 또는 'static' 키워드 포함"
+  scoring:
+    red_verify: "field_match"
+    blue_verify: "manual_review"
+  artifacts: ["arp_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 ARP 로그. MAC/IP는 전부 더미."

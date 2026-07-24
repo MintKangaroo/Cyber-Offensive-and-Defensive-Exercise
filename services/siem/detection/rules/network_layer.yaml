@@ -1,0 +1,53 @@
+# 네트워크 계층 탐지 규칙 (06번 문서 1절)
+# match/threshold 두 kind로 구현 가능한 것만 포함. C2 비콘(주기성 탐지)은
+# 현재 엔진의 3종 kind(match/threshold/sequence)로는 표현이 어려워
+# beacon_detection_note.md에 별도 설계로 남겨둔다(엔진 확장 필요).
+
+- id: NET-PORTSCAN-001
+  title: "수평 포트스캔 (distinct dst.port)"
+  severity: 2
+  mitre: [T1046]
+  source_type: [suricata, zeek]
+  kind: threshold
+  threshold_group_by: "src.ip"
+  threshold_condition: "distinct(dst.port) >= 15"
+  threshold_window_sec: 60
+
+- id: NET-HOSTSCAN-001
+  title: "수직 호스트스캔 (distinct dst.ip)"
+  severity: 2
+  mitre: [T1018]
+  source_type: [suricata, zeek]
+  kind: threshold
+  threshold_group_by: "src.ip"
+  threshold_condition: "distinct(dst.ip) >= 20"
+  threshold_window_sec: 60
+
+- id: NET-SURICATA-ALERT-PASSTHROUGH
+  title: "Suricata 시그니처 알림 승격"
+  severity: 2
+  mitre: []
+  source_type: suricata
+  kind: match
+  match:
+    category: "intrusion"
+
+- id: FW-BLOCK-SPIKE-001
+  title: "방화벽 차단 빈발 (동일 src 반복 차단)"
+  severity: 2
+  mitre: [T1595]
+  source_type: pfsense
+  kind: threshold
+  threshold_group_by: "src.ip"
+  threshold_condition: "distinct(dst.port) >= 5"
+  threshold_window_sec: 30
+
+- id: NET-DNS-TUNNEL-001
+  title: "DNS 터널링 의심 (짧은 시간 내 다수 DNS 쿼리)"
+  severity: 3
+  mitre: [T1071.004]
+  source_type: zeek
+  kind: threshold
+  threshold_group_by: "src.ip"
+  threshold_condition: "distinct(message) >= 20"
+  threshold_window_sec: 30

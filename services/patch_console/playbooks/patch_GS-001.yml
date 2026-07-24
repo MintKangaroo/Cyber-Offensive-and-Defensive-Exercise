@@ -1,0 +1,38 @@
+---
+# Patch GS-001 (Ground Station Telemetry SQL Injection)
+# 실제 동작: (1) 대상 컨테이너가 맞는지 라벨로 검증 (2) Config Service에 patched=true 반영
+# 파라미터 바인딩 코드 자체는 트윈에 이미 구현되어 있음(services/../ground_station/main.py의
+# patched() 분기) — 이 플레이북은 "그 안전 경로를 활성화"하는 실제 운영 흉내다.
+
+- name: Patch GS-001 (SQL Injection) on ground_station
+  hosts: ground_station_twin
+  gather_facts: false
+  vars:
+    instructor_token: "{{ lookup('env', 'INSTRUCTOR_TOKEN') }}"
+
+  tasks:
+    - name: Verify target container has expected app label (안전장치: 오적용 방지)
+      command: docker inspect --format "{{ '{{.Config.Labels.app}}' }}" "{{ inventory_hostname }}"
+      register: label_check
+      delegate_to: localhost
+      failed_when: "'ground-station-twin' not in label_check.stdout"
+
+    - name: Call Config Service to enable PATCH_GS_001
+      uri:
+        url: "http://config_service:8030/instructor/patch/toggle"
+        method: POST
+        body_format: json
+        body:
+          asset: "ground_station"
+          vuln_id: "GS-001"
+          patched: true
+          reason: "ansible playbook patch_GS-001 executed"
+        headers:
+          Authorization: "Bearer {{ instructor_token }}"
+        status_code: [200, 201]
+      delegate_to: localhost
+      register: config_result
+
+    - name: Report result
+      debug:
+        msg: "GS-001 patch applied. Config Service response: {{ config_result.json | default('n/a') }}"

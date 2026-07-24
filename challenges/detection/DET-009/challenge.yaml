@@ -1,0 +1,32 @@
+challenge:
+  id: "DET-009"
+  title: "APT Low-and-Slow 비콘 헌팅 (노이즈 90%)"
+  category: "detection"
+  difficulty: "insane"
+  points: { red: 0, blue: 200 }
+  mitre: [T1071.004, T1029]
+  description: |
+    APT 행위자가 탐지를 피하려고 low-and-slow 비콘을 심었다. 비콘 간격은 30분(1800초)으로
+    길고 약간의 지터가 섞여 있으며, 같은 감염 호스트가 만들어내는 대량의 잡음 트래픽(다양한
+    목적지로의 산발적 접속) 속에 파묻혀 있다. 우리 SIEM periodicity 엔진이 실제 채점한다.
+
+    이 문제가 어려운 이유:
+      1) 긴 주기(1800초): 8회 관측이 한 윈도우에 들어오려면 기본 window_sec(3600)로는 부족하다.
+         window_sec 를 충분히(약 14000초 이상) 넓혀야 비콘이 관측 수 임계를 넘긴다.
+      2) 잡음: 같은 src 가 여러 목적지로 산발 접속한다. (src,dst) 쌍으로 그룹핑하고 관측 수
+         임계를 두어 잡음 그룹이 오탐되지 않게 해야 한다.
+      3) 정상 규칙 폴링: 내부 DNS/NTP와 외부 모니터링이 규칙적으로 접속한다 — 이들을 allowlist로
+         제외하지 않으면 오탐이 난다.
+
+    윈도우/관측수/지터 임계를 동시에 튜닝하고 정상 폴링을 allowlist 해야만 통과한다.
+  blue_task:
+    goal: "low-and-slow 비콘용 periodicity 규칙 작성(window 확장 + 관측수/지터 튜닝 + 다중 allowlist)"
+    success_criteria: |
+      (1) attack_log.jsonl(1800초 저속 비콘)에 알림 발생
+      (2) normal_log.jsonl(다중 allowlist 폴링 + 불규칙 잡음)에는 오탐 없음
+  scoring:
+    blue_verify: "alert_dataset_check"
+  artifacts: ["attack_log.jsonl", "normal_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 연결 로그 데이터셋만 사용. 실제 트래픽/실도메인 없음."

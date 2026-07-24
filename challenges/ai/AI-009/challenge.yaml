@@ -1,0 +1,30 @@
+challenge:
+  id: "AI-009"
+  title: "적대적 회피 인시던트 재구성 (전이공격 분석)"
+  category: "ai"
+  difficulty: "insane"
+  points: { red: 300, blue: 0 }
+  mitre: [T1027, T1551]
+  description: |
+    evasion_incident.json은 피싱 URL 탐지기(로지스틱 회귀, 특징 6개)에 대한 적대적 회피
+    인시던트 로그다. 모델 카드(weights/bias/threshold)와 알려진 악성 시드 벡터, 그리고
+    공격자가 탐지기에 던진 수십 개의 쿼리(features + 반환 score)가 들어 있다.
+
+    공격자는 전이(transfer) 공격으로 악성 시드를 최소한만 섭동해 탐지를 회피했다.
+
+    1) 회피 쿼리 식별: score < threshold(양성 회피) 이면서 악성 시드와 극소수 특징에서만
+       다른(최소 L0 섭동) 단 하나의 쿼리를 찾아라. 나머지 양성 쿼리들은 시드와 무관한 잡음이다.
+    2) 섭동 특징 복원: 그 쿼리가 시드와 다른 특징 인덱스 집합 S 를 구하라.
+    3) 페이로드 복호: 회피 쿼리의 sig(hex)를 S(정렬한 인덱스들을 콤마로 이은 문자열)를 키로
+       반복 XOR 하면 flag{...} 가 나온다.
+
+    모델을 직접 재평가(sigmoid)하고 최소 섭동을 찾아야만 키가 나온다 — 단순 검색으로는 불가.
+  red_task:
+    goal: "회피 쿼리 id / 섭동 특징 인덱스 / flag 재구성"
+    submit_fields: ["evasion_query_id", "perturbed_features", "flag"]
+  scoring:
+    red_verify: "field_match"
+  artifacts: ["evasion_incident.json"]
+  safety:
+    profile: "standard"
+    notes: "합성 로지스틱회귀 모델 카드와 쿼리 로그(JSON). 실제 학습/추론 없음, 실도메인 미포함."

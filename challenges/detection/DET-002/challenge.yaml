@@ -1,0 +1,22 @@
+challenge:
+  id: "DET-002"
+  title: "웹 로그에서 SQL 인젝션 탐지"
+  category: "detection"
+  difficulty: "easy"
+  points: { red: 0, blue: 80 }
+  mitre: [T1190]
+  description: |
+    웹 접근 로그(attack_log.jsonl)에서 UNION 기반 SQL 인젝션 시도를 탐지하는 규칙을
+    작성하라. 단, 'union'/'select' 같은 단어가 들어간 정상 검색어(normal_log.jsonl)에는
+    오탐이 나지 않아야 한다. 우리 SIEM DetectionEngine이 규칙을 실제로 태워 채점한다.
+  blue_task:
+    goal: "raw.uri에 대한 match 규칙 작성(UNION SELECT 시그니처)"
+    success_criteria: |
+      (1) attack_log.jsonl(SQLi)에 알림 발생
+      (2) normal_log.jsonl(정상+유사 검색어)에는 오탐 없음
+  scoring:
+    blue_verify: "alert_dataset_check"
+  artifacts: ["attack_log.jsonl", "normal_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 웹 로그 데이터셋만 사용. 실제 시스템/DB 없음."

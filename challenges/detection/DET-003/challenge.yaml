@@ -1,0 +1,22 @@
+challenge:
+  id: "DET-003"
+  title: "웹쉘 킬체인 탐지 - 업로드 후 실행 시퀀스"
+  category: "detection"
+  difficulty: "medium"
+  points: { red: 0, blue: 90 }
+  mitre: [T1505.003]
+  description: |
+    같은 출발지가 .php 파일을 업로드한 뒤 그 .php를 실행하는 웹쉘 킬체인을 시퀀스 규칙으로
+    탐지하라. 단일 이벤트가 아니라 순서(업로드→실행)를 봐야 하며, 정상 업로드(이미지)나
+    업로드 이력 없는 .php 요청에는 오탐이 나지 않아야 한다. 우리 SIEM 엔진이 실제 채점한다.
+  blue_task:
+    goal: "src.ip 기준 sequence 규칙 작성(.php 업로드 → .php 실행)"
+    success_criteria: |
+      (1) attack_log.jsonl(웹쉘 킬체인)에 알림 발생
+      (2) normal_log.jsonl(정상 업로드/요청)에는 오탐 없음
+  scoring:
+    blue_verify: "alert_dataset_check"
+  artifacts: ["attack_log.jsonl", "normal_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 웹 로그 데이터셋만 사용."

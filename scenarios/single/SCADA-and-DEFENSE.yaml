@@ -1,0 +1,125 @@
+# 단일 시나리오: 발전소 사보타주
+scenario:
+  id: "SCADA-SABOTAGE-01"
+  name: "발전소 세이프티 무력화 작전"
+  description: "HMI 기본계정에서 세이프티 인터록 우회까지"
+  target_asset: "power_plant"
+  difficulty: "hard"
+  time_limit_sec: 2400
+
+  initial_vuln_state:
+    PP-001: vulnerable
+    PP-002: vulnerable
+    PP-003: vulnerable
+    PP-004: patched
+    PP-005: vulnerable
+
+  stages:
+    - stage: 1
+      name: "초기 침투 - HMI 기본계정 로그인"
+      objective_event: red_attack_started
+      match: { vuln_id: "PP-002" }
+      points: 20
+      mitre: [T1078.001]
+    - stage: 2
+      name: "측면이동 - 미인증 PLC 레지스터 쓰기"
+      objective_event: red_attack_started
+      match: { vuln_id: "PP-001" }
+      points: 30
+      requires_stage: 1
+      mitre: [T0836]
+    - stage: 3
+      name: "목표 - 세이프티 인터록 우회"
+      objective_event: red_objective_success
+      match: { vuln_id: "PP-005" }
+      points: 100
+      requires_stage: 2
+      mitre: [T0800]
+      is_final: true
+
+  chain_bonus:
+    all_stages_in_order: 50
+    within_sec: 900
+
+  blue_objectives:
+    - name: "커맨드 인젝션 탐지"
+      match_alert: "TWIN-CMDI-001"
+      points: 20
+    - name: "PLC 쓰기 차단"
+      match_event: blue_block_success
+      match: { vuln_id: "PP-001" }
+      points: 30
+    - name: "세이프티 2인승인 패치"
+      match_event: blue_patch_verified
+      match: { vuln_id: "PP-005" }
+      points: 50
+      time_bonus: true
+
+  noise:
+    enabled: true
+    normal_traffic_eps: 6
+
+---
+# 단일 시나리오: 국방망 데이터 유출
+scenario:
+  id: "DEFENSE-EXFIL-01"
+  name: "국방망 기밀 반출 작전"
+  description: "SMB 익명접근에서 오픈릴레이 데이터 반출까지"
+  target_asset: "defense_network"
+  difficulty: "hard"
+  time_limit_sec: 2400
+
+  initial_vuln_state:
+    DN-001: vulnerable
+    DN-002: vulnerable
+    DN-003: vulnerable
+    DN-004: vulnerable
+
+  stages:
+    - stage: 1
+      name: "초기 접근 - SMB 익명 공유 열람"
+      objective_event: red_attack_started
+      match: { vuln_id: "DN-001" }
+      points: 20
+      mitre: [T1039]
+    - stage: 2
+      name: "권한 상승 - Kerberoastable 계정 크래킹"
+      objective_event: red_attack_started
+      match: { vuln_id: "DN-002" }
+      points: 30
+      requires_stage: 1
+      mitre: [T1558.003]
+    - stage: 3
+      name: "자격증명 획득 - 백업 설정 평문 유출"
+      objective_event: flag_exfiltrated
+      match: { vuln_id: "DN-003" }
+      points: 50
+      requires_stage: 2
+      mitre: [T1552.001]
+    - stage: 4
+      name: "목표 - 오픈릴레이로 데이터 반출"
+      objective_event: red_objective_success
+      match: { vuln_id: "DN-004" }
+      points: 100
+      requires_stage: 3
+      mitre: [T1583.007]
+      is_final: true
+
+  chain_bonus:
+    all_stages_in_order: 60
+    within_sec: 1200
+
+  blue_objectives:
+    - name: "SMB 익명접근 차단"
+      match_event: blue_patch_verified
+      match: { vuln_id: "DN-001" }
+      points: 50
+    - name: "오픈릴레이 차단"
+      match_event: blue_patch_verified
+      match: { vuln_id: "DN-004" }
+      points: 50
+      time_bonus: true
+
+  noise:
+    enabled: true
+    normal_traffic_eps: 5

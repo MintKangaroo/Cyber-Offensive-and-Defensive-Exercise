@@ -1,0 +1,24 @@
+challenge:
+  id: "AI-004"
+  title: "RAG 간접 프롬프트 인젝션 흔적"
+  category: "ai"
+  difficulty: "medium"
+  points: { red: 55, blue: 40 }
+  mitre: [T1059]
+  description: |
+    사내 RAG 챗봇의 검색+응답 로그(rag_log.jsonl)가 주어진다. 신뢰되지 않은 소스에서 크롤링된
+    문서에 간접 프롬프트 인젝션 지시가 숨어 있었고, 어시스턴트가 그 지시를 따라 내부 admin
+    키를 응답에 노출했다. 오염된 문서의 소스와 노출된 키, 인젝션 유형을 찾아라.
+  red_task:
+    goal: "검색 문서 중 인젝션 지시를 담은 문서를 찾아 poisoned_doc_source / leaked_secret / injection_type 제출"
+    submit_fields: ["poisoned_doc_source", "leaked_secret", "injection_type"]
+  blue_task:
+    goal: "간접 프롬프트 인젝션 방어 서술(검색 콘텐츠 신뢰경계, 출력 필터, 소스 검증)"
+    success_criteria: "서술형 답변에 '간접' 또는 'RAG' 또는 '신뢰경계' 키워드 포함"
+  scoring:
+    red_verify: "field_match"
+    blue_verify: "manual_review"
+  artifacts: ["rag_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 RAG 로그. 키/문서는 전부 더미."

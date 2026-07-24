@@ -1,0 +1,11 @@
+version: "3.8"
+services:
+  web009_deploy:
+    build:
+      context: .
+    container_name: web009_deploy
+    ports:
+      - "8109:8109"
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web009-dev-secret}
+      - PATCH_WEB_009=${PATCH_WEB_009:-false}

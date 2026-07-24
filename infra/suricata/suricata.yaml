@@ -1,0 +1,37 @@
+%YAML 1.1
+---
+# 트윈 사이드카용 최소 Suricata 설정. network_mode: service:<트윈>으로 트윈과
+# 네트워크 네임스페이스를 공유하므로 -i eth0 로 트윈의 실제 트래픽을 그대로 본다.
+
+vars:
+  address-groups:
+    HOME_NET: "[10.0.0.0/8,172.16.0.0/12,192.168.0.0/16]"
+    EXTERNAL_NET: "!$HOME_NET"
+
+default-rule-path: /etc/suricata/rules
+rule-files:
+  - custom.rules
+  # - emerging-all.rules   # ET Open 커뮤니티 룰(별도 라이선스 취득 후 배치)
+
+outputs:
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: eve.json     # -l(로그 디렉토리)이 자산별 서브디렉토리이므로 파일명은 고정해도 충돌 없음
+      types:
+        - alert:
+            payload: no
+            metadata: yes
+        - http
+        - dns
+        - tls
+
+af-packet:
+  - interface: eth0
+    threads: 1
+    cluster-id: 99
+    cluster-type: cluster_flow
+    defrag: yes
+
+logging:
+  default-log-level: notice

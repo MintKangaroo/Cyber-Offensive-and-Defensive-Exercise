@@ -1,0 +1,4 @@
+# 개발/CI 전용 의존성 (런타임 이미지에는 포함하지 않음).
+# 설치: pip install -r requirements.txt -r requirements-dev.txt
+-r requirements.txt
+pytest==8.3.3

@@ -1,0 +1,24 @@
+challenge:
+  id: "FOR-006"
+  title: "지속성 흔적 분석 - 악성 스케줄 작업"
+  category: "forensics"
+  difficulty: "easy"
+  points: { red: 50, blue: 35 }
+  mitre: [T1053]
+  description: |
+    침해된 리눅스 호스트의 crontab 덤프(cron_dump.txt)가 주어진다. 정상 항목들 사이에
+    주기적으로 C2에서 페이로드를 받아 실행하는 지속성(persistence) 항목이 하나 숨어 있다.
+    악성 스케줄과 C2 호스트, 요청에 실린 implant 토큰을 복원하라.
+  red_task:
+    goal: "악성 cron 항목을 찾아 malicious_schedule / c2_host / implant_token 제출"
+    submit_fields: ["malicious_schedule", "c2_host", "implant_token"]
+  blue_task:
+    goal: "스케줄 작업 지속성 탐지/차단 서술(cron 무결성, 아웃바운드 차단)"
+    success_criteria: "서술형 답변에 'cron' 또는 '지속성' 또는 'persistence' 키워드 포함"
+  scoring:
+    red_verify: "field_match"
+    blue_verify: "manual_review"
+  artifacts: ["cron_dump.txt"]
+  safety:
+    profile: "standard"
+    notes: "합성 crontab. C2/토큰은 전부 더미(example 도메인)."

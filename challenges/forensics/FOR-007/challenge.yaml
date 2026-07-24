@@ -1,0 +1,23 @@
+challenge:
+  id: "FOR-007"
+  title: "인메모리 인젝션 탐지 - 프로세스 할로잉"
+  category: "forensics"
+  difficulty: "hard"
+  points: { red: 180, blue: 0 }
+  mitre: [T1055.012]
+  description: |
+    process_snapshot.json은 워크스테이션의 합성 프로세스 메모리 스냅샷이다. 프로세스마다
+    메모리 영역 목록(base/size/protect/type)이 있다. 정상 프로세스의 코드 영역은 파일 백업
+    image 타입 RX뿐이고 힙은 private RW다. 그러나 한 프로세스는 프로세스 할로잉을 당해
+    **private + RX**(W^X 위반 = 익명 실행영역에 코드 주입) 영역을 갖는다. 단순 문자열 검색이
+    아니라 이 이상 영역을 correlate로 찾아, 그 안에 base64로 은닉된 스테이저를 추출하고
+    XOR로 복호해 flag를 도출하라.
+  red_task:
+    goal: "할로잉된 프로세스 식별 → private+RX 영역의 은닉 스테이저 추출 → XOR 복호로 flag"
+    submit_fields: ["process", "flag"]
+  scoring:
+    red_verify: "flag_match"
+  artifacts: ["process_snapshot.json"]
+  safety:
+    profile: "standard"
+    notes: "합성 메모리 스냅샷(실행코드/실샘플 아님). 프로세스명/키/플래그는 팀별 더미값."

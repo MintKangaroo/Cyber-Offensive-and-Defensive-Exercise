@@ -1,0 +1,24 @@
+challenge:
+  id: "AI-003"
+  title: "데이터 포이즈닝 흔적 분석 - 백도어 트리거"
+  category: "ai"
+  difficulty: "medium"
+  points: { red: 55, blue: 40 }
+  mitre: [T1195]
+  description: |
+    스팸 분류기의 학습 데이터 로그(training_log.jsonl)가 주어진다. 공격자가 신뢰되지 않은
+    경로로 백도어 샘플을 주입했다 — 특정 트리거 토큰이 들어가면 악성이어도 benign으로
+    분류하게 학습시키는 포이즈닝이다. 주입 소스, 트리거 토큰, 오염된 라벨을 찾아라.
+  red_task:
+    goal: "포이즈닝 샘플을 찾아 injected_source / trigger_token / poisoned_label 제출"
+    submit_fields: ["injected_source", "trigger_token", "poisoned_label"]
+  blue_task:
+    goal: "데이터 포이즈닝 방어 서술(데이터 출처 검증, 이상치/라벨 검수, 신뢰 파이프라인)"
+    success_criteria: "서술형 답변에 '포이즈닝' 또는 '데이터 출처' 또는 '검수' 키워드 포함"
+  scoring:
+    red_verify: "field_match"
+    blue_verify: "manual_review"
+  artifacts: ["training_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 학습 로그. 텍스트/트리거는 전부 더미. ML 실행 불필요(로그 분석형)."

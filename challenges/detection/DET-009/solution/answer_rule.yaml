@@ -1,0 +1,15 @@
+- id: DET-009
+  title: "APT Low-and-Slow Beacon Periodicity Detection"
+  severity: 5
+  mitre: [T1071.004, T1029]
+  source_type: twin
+  kind: periodicity
+  periodicity_group_by_src: "src.ip"
+  periodicity_group_by_dst: "dst.ip"
+  periodicity_min_observations: 6      # 잡음 그룹(관측수 부족) 배제
+  periodicity_jitter_threshold: 0.1    # 저속 비콘은 지터 작음(CV≈0.02)
+  periodicity_window_sec: 15000        # 1800초 주기 8회(span≈12600)를 한 윈도우에 담기 위해 확장
+  periodicity_allowlist_dst:
+    - "10.0.0.53"        # 내부 DNS 규칙 폴링
+    - "10.0.0.123"       # 내부 NTP 규칙 폴링
+    - "198.51.100.10"    # 외부 모니터링 규칙 폴링

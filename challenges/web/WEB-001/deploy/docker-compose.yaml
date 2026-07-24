@@ -1,0 +1,11 @@
+version: "3.8"
+services:
+  web001_deploy:
+    build:
+      context: .
+    container_name: web001_deploy
+    ports:
+      - "8103:8103"
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web001-dev-secret}
+      - PATCH_WEB_001=false

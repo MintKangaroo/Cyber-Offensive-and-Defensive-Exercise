@@ -1,0 +1,31 @@
+challenge:
+  id: "FOR-009"
+  title: "안티포렌식 다단계 (타임스톰프 → 은닉채널 → 복호)"
+  category: "forensics"
+  difficulty: "insane"
+  points: { red: 300, blue: 0 }
+  mitre: [T1070.006, T1564.004, T1027]
+  description: |
+    disk_image.json은 합성 NTFS 유사 디스크 스냅샷이다. 파일마다 MFT의 mft_modified와
+    $LogFile 저널의 journal_write 타임스탬프가 함께 기록돼 있다. 공격자는 흔적을 감추려고
+    세 겹의 안티포렌식을 적용했다:
+
+    1) 타임스톰프: 정상 파일은 쓰기가 일어나면 저널 기록 시점이 MFT 수정 시점과 같거나 그
+       이후가 된다(journal_write <= mft_modified). 그러나 공격자가 mft_modified를 과거로
+       되돌린(백데이팅) 파일은 journal_write > mft_modified 라는 모순이 남는다. 이 한 개의
+       파일을 찾아야 한다.
+    2) 은닉 채널: 그 파일의 slack(슬랙 공간)에 base64로 "channel:{CHID}\npayload:{hex}"가
+       숨겨져 있다. 디코드해 채널 ID(CHID)와 페이로드(hex)를 추출한다.
+    3) 복호: 페이로드를 CHID 문자열을 키로 반복 XOR 하면 flag{...}가 나온다.
+
+    단순 문자열 검색으로는 풀 수 없고, (1) 타임라인 모순 탐지 (2) 슬랙 은닉채널 디코드
+    (3) 반복키 XOR 복호를 모두 수행해야 한다.
+  red_task:
+    goal: "타임스톰프 파일 → 은닉채널 CHID → XOR 복호로 flag{...} 도출"
+    submit_fields: ["timestomped_file", "channel_id", "flag"]
+  scoring:
+    red_verify: "field_match"
+  artifacts: ["disk_image.json"]
+  safety:
+    profile: "standard"
+    notes: "합성 디스크 스냅샷(JSON). 실제 디스크 아님. 플래그는 팀별 HMAC 더미 값."

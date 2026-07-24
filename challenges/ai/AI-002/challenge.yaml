@@ -1,0 +1,24 @@
+challenge:
+  id: "AI-002"
+  title: "프롬프트 인젝션 흔적 분석"
+  category: "ai"
+  difficulty: "easy"
+  points: { red: 60, blue: 40 }
+  mitre: [T1059]
+  description: |
+    사내 LLM 챗봇(SupportBot)의 대화 로그(chat_log.jsonl)가 주어진다. 공격자가 프롬프트
+    인젝션으로 가드레일을 우회해 시스템 프롬프트에 있던 내부 API 키를 유출시켰다. 로그에서
+    사용된 인젝션 기법과 유출된 API 키를 찾아라.
+  red_task:
+    goal: "인젝션 턴과 노출된 키를 찾아 leaked_secret / injection_technique 제출"
+    submit_fields: ["leaked_secret", "injection_technique"]
+  blue_task:
+    goal: "프롬프트 인젝션 방어 서술(시스템/사용자 입력 분리, 출력 필터, 최소권한)"
+    success_criteria: "서술형 답변에 '인젝션' 또는 '가드레일' 또는 '입력 분리' 키워드 포함"
+  scoring:
+    red_verify: "field_match"
+    blue_verify: "manual_review"
+  artifacts: ["chat_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 대화 로그. API 키/비밀은 전부 팀별 더미."

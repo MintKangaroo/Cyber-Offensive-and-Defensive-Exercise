@@ -1,0 +1,23 @@
+# Suricata 커스텀 시그니처 (26번 문서 2.2절)
+# 트윈의 알려진 취약점 익스플로잇 패턴을 네트워크 레벨에서 탐지한다.
+# ET Open 커뮤니티 룰(공개 라이선스로 별도 취득)과 함께 로드하는 것을 권장.
+
+alert http any any -> any any (msg:"CUSTOM Command Injection Attempt in ping host param"; \
+  content:"host="; http_uri; pcre:"/host=.*[;&|`]/U"; \
+  classtype:web-application-attack; sid:1000001; rev:1;)
+
+alert http any any -> any any (msg:"CUSTOM SQLi UNION SELECT in telemetry query"; \
+  content:"sensor_id="; http_uri; content:"UNION"; http_uri; nocase; \
+  classtype:web-application-attack; sid:1000002; rev:1;)
+
+alert http any any -> any any (msg:"CUSTOM Path Traversal Attempt"; \
+  content:"file="; http_uri; pcre:"/file=.*(\.\.\/|\.\.%2f)/Ui"; \
+  classtype:web-application-attack; sid:1000003; rev:1;)
+
+alert http any any -> any any (msg:"CUSTOM Reverse Shell Indicator in Request Body"; \
+  content:"/dev/tcp/"; http_client_body; \
+  classtype:shellcode-detect; sid:1000004; rev:1;)
+
+alert tcp any any -> any any (msg:"CUSTOM Modbus Write Register (unauth PLC write pattern)"; \
+  content:"|00 00 00 00 00 06|"; offset:2; depth:6; \
+  classtype:attempted-admin; sid:1000005; rev:1;)

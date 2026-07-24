@@ -1,0 +1,13 @@
+- id: DET-004
+  title: "C2 Beacon Periodicity Detection"
+  severity: 4
+  mitre: [T1071]
+  source_type: twin
+  kind: periodicity
+  periodicity_group_by_src: "src.ip"
+  periodicity_group_by_dst: "dst.ip"
+  periodicity_min_observations: 5
+  periodicity_jitter_threshold: 0.1
+  periodicity_window_sec: 3600
+  periodicity_allowlist_dst:
+    - "10.0.0.53"     # 내부 DNS/NTP 등 정상 규칙 폴링 목적지 제외

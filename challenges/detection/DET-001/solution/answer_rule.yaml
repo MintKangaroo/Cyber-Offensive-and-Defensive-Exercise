@@ -1,0 +1,9 @@
+- id: DET-001
+  title: "Port Scan Detection (tuned)"
+  severity: 2
+  mitre: [T1046]
+  source_type: zeek
+  kind: threshold
+  threshold_group_by: "src.ip"
+  threshold_condition: "distinct(dst.port) >= 15"
+  threshold_window_sec: 60

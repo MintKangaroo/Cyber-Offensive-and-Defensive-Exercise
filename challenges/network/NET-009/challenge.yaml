@@ -1,0 +1,30 @@
+challenge:
+  id: "NET-009"
+  title: "OT 사보타주 트레이스 재구성 (Modbus)"
+  category: "network"
+  difficulty: "insane"
+  points: { red: 300, blue: 0 }
+  mitre: [T0836, T0855, T0831]
+  description: |
+    ot_trace.json은 산업제어(OT) 세그먼트의 Modbus/TCP 트레이스다. assets에 인가된
+    엔지니어링 스테이션/HMI 목록이 있고, events에 각 요청(src_ip, func, register, value)이
+    기록돼 있다. 공격자가 인가되지 않은 호스트에서 PLC에 침투해 다단계 사보타주를 수행했다:
+
+    1) 인가되지 않은 소스: assets.authorized 에 없는 src_ip 가 쓰기(func 6/16) 명령을
+       발행했다. 이 rogue_ip 를 찾아라.
+    2) 은닉 채널 레지스터: rogue_ip 는 정상 공정 레지스터가 아닌 하나의 커버트 레지스터에
+       반복 쓰기를 했다. 그 covert_register 를 식별하라.
+    3) 페이로드 복원: 커버트 레지스터에 시간순으로 쓰인 value 들의 하위 바이트(value & 0xFF)를
+       이어붙이면 base64 문자열이 되고, 디코드하면 flag{...} 가 나온다.
+
+    단순 검색이 아니라 (1) 인가 목록 대조 (2) 쓰기 패턴 군집화 (3) 바이트 재조립+base64
+    디코드를 모두 수행해야 한다.
+  red_task:
+    goal: "rogue_ip / covert_register / flag 를 재구성해 제출"
+    submit_fields: ["rogue_ip", "covert_register", "flag"]
+  scoring:
+    red_verify: "field_match"
+  artifacts: ["ot_trace.json"]
+  safety:
+    profile: "standard"
+    notes: "합성 Modbus 트레이스(JSON). 실제 PLC 아님. IP는 RFC5737 대역, 플래그는 팀별 HMAC."

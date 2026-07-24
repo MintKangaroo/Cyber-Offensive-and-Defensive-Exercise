@@ -1,0 +1,23 @@
+challenge:
+  id: "FOR-000"
+  title: "평문 자격증명 카빙"
+  category: "forensics"
+  difficulty: "easy"
+  points: { red: 50, blue: 30 }
+  asset: null
+  mitre: [T1552.001]
+  description: |
+    제공된 백업 설정 파일 안에서 평문 자격증명을 찾아라.
+  red_task:
+    goal: "backup_config.txt에서 서비스 계정과 비밀번호를 찾아 제출"
+    submit_fields: ["service_account", "password"]
+  blue_task:
+    goal: "평문 저장의 위험 서술 + 볼트(Vault/DPAPI) 이관 방식 제시"
+    success_criteria: "서술형 답변에 '평문 금지'와 '볼트/암호화 저장' 키워드 포함"
+  scoring:
+    red_verify: "field_match"
+    blue_verify: "manual_review"
+  artifacts: ["backup_config.txt"]
+  safety:
+    profile: "standard"
+    notes: "모든 자격증명은 더미."

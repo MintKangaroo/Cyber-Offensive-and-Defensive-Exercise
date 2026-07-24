@@ -1,0 +1,29 @@
+challenge:
+  id: "WEB-004"
+  title: "파일 다운로드 경로 순회"
+  category: "web"
+  difficulty: "medium"
+  points: { red: 120, blue: 50 }
+  asset: "ground_station"
+  mitre: [T1083]
+  description: |
+    지상국 파일 서비스에 공개 문서 다운로드 엔드포인트(/api/files/download)가 있다. 파일명을
+    공개 디렉토리에 그대로 이어붙여 열기 때문에 경로 순회(../)로 공개 디렉토리 밖의 파일을
+    읽을 수 있다. 서버의 플래그 파일을 읽어라.
+  red_task:
+    goal: "/api/files/download?name=../flag.txt 로 경로 순회해 플래그 획득"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    hints:
+      - { cost: 5, text: "name 파라미터가 어떤 디렉토리에 이어붙는지, 상위로 올라갈 수 있는지 보라." }
+  blue_task:
+    goal: "경로 정규화/basename 처리로 순회 차단 패치"
+    success_criteria: "패치판에서 ../flag.txt 요청이 404로 거부됨"
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: "patch_check"
+  patch_env: "PATCH_WEB_004=true"
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용 격리 서비스. 플래그/문서는 전부 더미."

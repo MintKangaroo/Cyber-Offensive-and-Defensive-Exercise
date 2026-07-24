@@ -1,0 +1,23 @@
+challenge:
+  id: "NET-000"
+  title: "평문 프로토콜 스니핑"
+  category: "network"
+  difficulty: "easy"
+  points: { red: 50, blue: 30 }
+  mitre: [T1040]
+  description: |
+    제공된 캡처 로그(pcap 대신 훈련용 JSON 이벤트 시퀀스)에서 평문으로 전송된
+    자격증명을 찾아라.
+  red_task:
+    goal: "capture_log.jsonl에서 평문 텔넷 로그인 자격증명 추출"
+    submit_fields: ["username", "password"]
+  blue_task:
+    goal: "평문 프로토콜의 위험성 서술 + SSH/TLS 전환 제안"
+    success_criteria: "서술형 답변에 '암호화' 키워드 포함"
+  scoring:
+    red_verify: "field_match"
+    blue_verify: "manual_review"
+  artifacts: ["capture_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 캡처 로그(실제 pcap 아님). 모든 자격증명은 더미."

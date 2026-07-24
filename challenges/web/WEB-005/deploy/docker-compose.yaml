@@ -1,0 +1,35 @@
+version: "3.8"
+# hardened 프로파일(08번 안전장치): 실제 RCE가 발생하므로 컨테이너를 강하게 격리한다.
+services:
+  web005_deploy:
+    build:
+      context: .
+    container_name: web005_deploy
+    ports:
+      - "8100:8100"
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web005-dev-secret}
+      - PATCH_WEB_005=false
+      - FLAG_PATH=/tmp/flag.txt
+    # --- 하드닝(safety_scan 요구: cap_drop / read_only / mem_limit) ---
+    cap_drop:
+      - ALL
+    read_only: true
+    mem_limit: 256m
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp   # read_only 루트에서 플래그 파일/임시쓰기용 쓰기가능 영역
+    networks:
+      - challenge_isolated
+
+networks:
+  challenge_isolated:
+    driver: bridge
+    # 주의: internal:true 는 쓰지 않는다. Docker internal 네트워크는 호스트로의
+    # 포트 퍼블리시(8100:8100)를 막아버려서 플레이어/그레이더가 챌린지에 접속조차
+    # 못 한다(= 챌린지 자체가 동작 불가). egress 차단이 필요하면 compose 계층이
+    # 아니라 플랫폼 네트워크 계층(예: GCP 방화벽 egress 규칙)에서 강제할 것.
+    # 컨테이너 격리는 cap_drop:ALL / read_only / no-new-privileges / mem_limit /
+    # pids_limit / tmpfs 로 충분히 강하게 유지한다.

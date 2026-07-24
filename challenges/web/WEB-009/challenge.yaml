@@ -1,0 +1,34 @@
+challenge:
+  id: "WEB-009"
+  title: "WAF 우회 + 블라인드 SQL 인젝션"
+  category: "web"
+  difficulty: "insane"
+  points: { red: 300, blue: 150 }
+  asset: "ground_station"
+  mitre: [T1190]
+  description: |
+    제품 조회 엔드포인트(/api/product?id=)가 입력을 정수 컨텍스트로 SQL 에 그대로 결합한다.
+    앞단에는 문자 블랙리스트 WAF가 있어 공백/따옴표/`=`/`;`/`--`/`#` 등을 막으므로 순진한
+    페이로드(`1' OR '1'='1`, `1 AND 1=1`)는 400 으로 거부된다. 게다가 응답은 {"found": true/false}
+    뿐이라 출력이 없다 — 블라인드 불리언 인젝션이다.
+
+    WAF를 우회(공백→`/**/`, `=`→`>`, 따옴표 없이 컬럼 함수 unicode/substr)하고, 불리언
+    응답만으로 secrets 테이블 token 을 한 글자씩 이진탐색해 flag{...} 를 복원해야 한다.
+  red_task:
+    goal: "WAF를 우회한 블라인드 불리언 SQLi로 secrets.token(flag) 추출"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    hints:
+      - { cost: 10, text: "출력이 없다 — {\"found\"} 불리언 차이를 오라클로 삼아 한 글자씩 이진탐색하라." }
+      - { cost: 10, text: "공백은 /**/, 등호는 >, 따옴표 없이 unicode(substr(token,i,1))." }
+  blue_task:
+    goal: "블랙리스트 WAF 대신 파라미터 바인딩 + 정수 검증으로 근본 차단"
+    success_criteria: "패치판(PATCH_WEB_009=true)에서 우회 페이로드가 400 으로 거부됨"
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: "patch_check"
+  patch_env: "PATCH_WEB_009=true"
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용 격리 서비스. 플래그/시크릿은 전부 더미. DB는 컨테이너 내 합성 sqlite."

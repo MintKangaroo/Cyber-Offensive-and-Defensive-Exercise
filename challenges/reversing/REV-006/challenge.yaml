@@ -1,0 +1,20 @@
+challenge:
+  id: "REV-006"
+  title: "비트 회전 사이퍼 복호화"
+  category: "reversing"
+  difficulty: "medium"
+  points: { red: 130, blue: 0 }
+  mitre: [T1027]
+  description: |
+    encoded.bin은 각 플래그 바이트를 (키 K로 XOR한 뒤 비트 R칸 좌회전(ROL))해 만든 결과다.
+    K와 R은 아티팩트에 드러나지 않는다. 플래그가 'flag{'로 시작한다는 known-plaintext로
+    회전량 R(0~7)과 키 K를 복원해 디코드하라.
+  red_task:
+    goal: "R/K를 복원해 flag{...} 복원"
+    submit_fields: ["flag"]
+  scoring:
+    red_verify: "flag_match"
+  artifacts: ["encoded.bin"]
+  safety:
+    profile: "standard"
+    notes: "합성 바이너리. 플래그는 팀별 더미 값. 실행 파일 아님."

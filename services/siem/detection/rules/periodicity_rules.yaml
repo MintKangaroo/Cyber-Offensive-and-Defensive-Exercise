@@ -1,0 +1,18 @@
+# C2 비콘 탐지 (periodicity kind, beacon_detection_note.md의 설계를 실제 구현)
+
+- id: NET-C2-BEACON-001
+  title: "C2 비콘 의심 - 주기적 연결 패턴"
+  severity: 3
+  mitre: [T1071]
+  source_type: [zeek, suricata]
+  kind: periodicity
+  periodicity_group_by_src: "src.ip"
+  periodicity_group_by_dst: "dst.ip"
+  periodicity_min_observations: 5
+  periodicity_jitter_threshold: 0.1
+  periodicity_window_sec: 3600
+  periodicity_allowlist_dst:
+    - "event_collector"
+    - "scoring_engine"
+    - "config_service"
+    - "edr_backend"

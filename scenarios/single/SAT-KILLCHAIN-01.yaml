@@ -1,0 +1,66 @@
+# 단일 시나리오: 위성 지상국 임무계획 탈취
+# ==========================================
+# 05번 스펙의 SAT-KILLCHAIN-01을 실제 YAML로. challenge_schema.Scenario 준수.
+
+scenario:
+  id: "SAT-KILLCHAIN-01"
+  name: "위성 지상국 임무계획 탈취 작전"
+  description: "정찰부터 임무계획 유출까지의 다단계 침해 시나리오"
+  target_asset: "ground_station"
+  difficulty: "medium"
+  time_limit_sec: 1800
+
+  initial_vuln_state:
+    GS-001: vulnerable
+    GS-002: vulnerable
+    GS-003: vulnerable
+    GS-004: patched
+    GS-005: vulnerable
+
+  stages:
+    - stage: 1
+      name: "정찰 - 디버그 설정 노출"
+      objective_event: red_attack_started
+      match: { vuln_id: "GS-005" }
+      points: 20
+      mitre: [T1592]
+    - stage: 2
+      name: "초기 침투 - 하드코딩 계정 로그인"
+      objective_event: red_attack_started
+      match: { vuln_id: "GS-002" }
+      points: 20
+      requires_stage: 1
+      mitre: [T1078]
+    - stage: 3
+      name: "정보 수집 - SQLi로 사용자 테이블 추출"
+      objective_event: red_attack_started
+      match: { vuln_id: "GS-001" }
+      points: 30
+      requires_stage: 2
+      mitre: [T1190]
+    - stage: 4
+      name: "목표 달성 - IDOR로 기밀 임무계획 유출"
+      objective_event: flag_exfiltrated
+      match: { vuln_id: "GS-003" }
+      points: 50
+      requires_stage: 3
+      mitre: [T1213]
+      is_final: true
+
+  chain_bonus:
+    all_stages_in_order: 50
+    within_sec: 600
+
+  blue_objectives:
+    - name: "SQLi 탐지"
+      match_alert: "TWIN-SQLI-001"
+      points: 20
+    - name: "임무계획 유출 차단"
+      match_event: blue_patch_verified
+      match: { vuln_id: "GS-003" }
+      points: 50
+      time_bonus: true
+
+  noise:
+    enabled: true
+    normal_traffic_eps: 5

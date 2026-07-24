@@ -1,0 +1,20 @@
+challenge:
+  id: "REV-002"
+  title: "반복키 XOR 복원"
+  category: "reversing"
+  difficulty: "medium"
+  points: { red: 120, blue: 0 }
+  mitre: [T1027]
+  description: |
+    encoded.bin은 플래그를 4바이트 반복키 XOR로 인코딩한 결과다. 단일바이트 XOR
+    브루트포스로는 풀리지 않는다. 플래그가 'flag{'로 시작한다는 것(known-plaintext)을
+    이용해 반복키를 복원하고 플래그를 디코드하라.
+  red_task:
+    goal: "encoded.bin을 디코드해 flag{...} 복원"
+    submit_fields: ["flag"]
+  scoring:
+    red_verify: "flag_match"
+  artifacts: ["encoded.bin"]
+  safety:
+    profile: "standard"
+    notes: "합성 바이너리(실행 파일 아님). 플래그는 팀별 더미 값."

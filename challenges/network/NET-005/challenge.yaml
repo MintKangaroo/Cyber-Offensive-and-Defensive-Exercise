@@ -1,0 +1,24 @@
+challenge:
+  id: "NET-005"
+  title: "포트 노킹 시퀀스 복원"
+  category: "network"
+  difficulty: "medium"
+  points: { red: 50, blue: 35 }
+  mitre: [T1205]
+  description: |
+    방화벽 로그(fw_log.jsonl)에서 포트 노킹 흔적을 찾아라. 공격자가 닫힌 포트 몇 개를 정해진
+    순서로 두드린(drop) 뒤 보호된 SSH 포트에 접속(allow)했다. 노킹 시퀀스와 공격자 IP,
+    보호 포트를 복원하라.
+  red_task:
+    goal: "보호 포트 접속 직전의 노킹 시퀀스를 찾아 attacker_ip / knock_sequence / protected_port 제출"
+    submit_fields: ["attacker_ip", "knock_sequence", "protected_port"]
+  blue_task:
+    goal: "포트 노킹/은닉 접근 통제 위험 서술(SPA, 로그 상관, MFA VPN)"
+    success_criteria: "서술형 답변에 '노킹' 또는 'knock' 또는 'SPA' 키워드 포함"
+  scoring:
+    red_verify: "field_match"
+    blue_verify: "manual_review"
+  artifacts: ["fw_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 방화벽 로그. IP/포트는 전부 더미."

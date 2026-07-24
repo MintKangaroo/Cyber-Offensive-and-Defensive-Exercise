@@ -1,0 +1,12 @@
+- id: DET-000
+  title: "Bruteforce Login Detection"
+  severity: 2
+  mitre: [T1110]
+  source_type: twin
+  kind: threshold
+  threshold_group_by: "src.ip"
+  # 우리 엔진의 threshold는 'distinct(field) 개수'만 지원한다(포트스캔류에 최적화).
+  # 브루트포스처럼 '같은 행위의 반복 횟수'를 세려면, 이벤트마다 고유한 timestamp를
+  # distinct 대상으로 삼는 방식으로 사실상 이벤트 개수를 세는 우회가 필요하다.
+  threshold_condition: "distinct(timestamp) >= 10"
+  threshold_window_sec: 60

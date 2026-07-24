@@ -1,0 +1,17 @@
+version: "3.8"
+services:
+  ai000_deploy:
+    build:
+      context: .
+    container_name: ai000_deploy
+    ports:
+      - "8102:8102"
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-ai000-dev-secret}
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: "512m"
+    cpus: "0.5"

@@ -1,0 +1,23 @@
+challenge:
+  id: "DET-005"
+  title: "Log4Shell(JNDI) 인젝션 탐지"
+  category: "detection"
+  difficulty: "medium"
+  points: { red: 0, blue: 80 }
+  mitre: [T1190]
+  description: |
+    웹 로그(attack_log.jsonl)에서 Log4Shell(CVE-2021-44228) 공격 페이로드 `${jndi:...}`를
+    탐지하는 규칙을 작성하라. 페이로드는 User-Agent나 URI 등 여러 필드로 들어올 수 있다.
+    단, 'jndi'/'${' 단어가 우연히 든 정상 요청(normal_log.jsonl)에는 오탐이 나지 않아야 한다.
+    우리 SIEM 엔진이 규칙을 실제로 태워 채점한다.
+  blue_task:
+    goal: "여러 필드에 대한 ${jndi: match 규칙 작성"
+    success_criteria: |
+      (1) attack_log.jsonl(JNDI 페이로드)에 알림 발생
+      (2) normal_log.jsonl(정상+유사 단어)에는 오탐 없음
+  scoring:
+    blue_verify: "alert_dataset_check"
+  artifacts: ["attack_log.jsonl", "normal_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 웹 로그 데이터셋만 사용. 실제 취약 서버 없음."

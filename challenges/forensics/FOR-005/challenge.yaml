@@ -1,0 +1,24 @@
+challenge:
+  id: "FOR-005"
+  title: "메모리 덤프 문자열 분석 - 자격증명 복구"
+  category: "forensics"
+  difficulty: "easy"
+  points: { red: 50, blue: 30 }
+  mitre: [T1003]
+  description: |
+    데이터베이스 프로세스의 메모리 덤프(memory.dmp)가 주어진다. 이진 데이터 사이에 평문
+    문자열들이 남아 있고, 그중 하나에 DB 자격증명이 그대로 잔존한다. strings 분석으로
+    유출된 자격증명과 덤프의 출처 프로세스를 복원하라.
+  red_task:
+    goal: "메모리 문자열에서 leaked_credential / source_process 복원"
+    submit_fields: ["leaked_credential", "source_process"]
+  blue_task:
+    goal: "메모리 내 비밀 잔존 위험 완화 서술(비밀 관리, 메모리 스크러빙, 코어덤프 제한)"
+    success_criteria: "서술형 답변에 '메모리' 및 '비밀' 또는 '코어덤프' 키워드 포함"
+  scoring:
+    red_verify: "field_match"
+    blue_verify: "manual_review"
+  artifacts: ["memory.dmp"]
+  safety:
+    profile: "standard"
+    notes: "합성 메모리 덤프(실제 프로세스 아님). 자격증명은 팀별 더미."

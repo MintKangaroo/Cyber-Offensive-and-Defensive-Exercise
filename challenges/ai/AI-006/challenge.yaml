@@ -1,0 +1,24 @@
+challenge:
+  id: "AI-006"
+  title: "훈련 데이터 memorization 유출"
+  category: "ai"
+  difficulty: "medium"
+  points: { red: 55, blue: 40 }
+  mitre: [T1552]
+  description: |
+    LLM의 입출력 로그(model_io.jsonl)가 주어진다. 특정 divergence 프롬프트가 모델이 학습
+    데이터를 그대로 뱉게(memorization) 만들었고, 그 출력에 학습셋에 있던 비밀이 섞여
+    노출됐다. 유출을 유발한 트리거 프롬프트와 노출된 비밀을 찾아라.
+  red_task:
+    goal: "completion에 학습 비밀이 노출된 항목을 찾아 trigger_prompt / leaked_secret / attack_technique 제출"
+    submit_fields: ["trigger_prompt", "leaked_secret", "attack_technique"]
+  blue_task:
+    goal: "memorization 유출 방어 서술(중복제거/차등프라이버시, 출력 필터, 민감정보 제거)"
+    success_criteria: "서술형 답변에 'memorization' 또는 '차등' 또는 '출력 필터' 키워드 포함"
+  scoring:
+    red_verify: "field_match"
+    blue_verify: "manual_review"
+  artifacts: ["model_io.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 IO 로그. 비밀/PII는 전부 더미(example 도메인)."

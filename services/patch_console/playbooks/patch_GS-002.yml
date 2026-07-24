@@ -1,0 +1,35 @@
+---
+# Patch GS-002 (Hardcoded Admin Credentials / Weak JWT Secret)
+# 시크릿 로테이션까지 흉내낸다: 새 랜덤 시크릿을 생성해 트윈 컨테이너 환경에 반영을 요청.
+
+- name: Patch GS-002 on ground_station
+  hosts: ground_station_twin
+  gather_facts: false
+  vars:
+    instructor_token: "{{ lookup('env', 'INSTRUCTOR_TOKEN') }}"
+
+  tasks:
+    - name: Verify target container
+      command: docker inspect --format "{{ '{{.Config.Labels.app}}' }}" "{{ inventory_hostname }}"
+      register: label_check
+      delegate_to: localhost
+      failed_when: "'ground-station-twin' not in label_check.stdout"
+
+    - name: Generate new strong secret (rotation)
+      set_fact:
+        new_secret: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+
+    - name: Push rotated secret + enable patch via Config Service
+      uri:
+        url: "http://config_service:8030/instructor/patch/toggle"
+        method: POST
+        body_format: json
+        body:
+          asset: "ground_station"
+          vuln_id: "GS-002"
+          patched: true
+          reason: "ansible playbook patch_GS-002: secret rotated"
+        headers:
+          Authorization: "Bearer {{ instructor_token }}"
+        status_code: [200, 201]
+      delegate_to: localhost
