@@ -1,0 +1,22 @@
+challenge:
+  id: "ICS-007"
+  title: "HART 명령 주입 분석 - Transmitter Range Tamper"
+  category: "ics"
+  difficulty: "medium"
+  points: { red: 120, blue: 0 }
+  mitre: [T0836, T0855]
+  description: |
+    hart_traffic.jsonl은 정유 플랜트 계기망의 합성 HART-IP 트래픽 로그다. 정상 자산관리시스템
+    (AMS)의 읽기 명령(cmd 1/3) 사이에, 무단 마스터가 안전 트랜스미터(PT-101)에 범위 재설정
+    쓰기(cmd 35) 명령을 내려 계측값을 스푸핑한 사보타주가 숨어 있다. 안전 트랜스미터에 대한
+    write 명령(cmd 34/35/45/46)을 정상 AMS가 아닌 출발지에서 찾아 공격자 IP를 식별하고,
+    note(base64) 토큰을 공격자 IP로 XOR 복호해 flag를 도출하라.
+  red_task:
+    goal: "안전 트랜스미터 무단 HART write의 공격자 IP 식별 → note 토큰 XOR 복호 → flag"
+    submit_fields: ["attacker_ip", "flag"]
+  scoring:
+    red_verify: "flag_match"
+  artifacts: ["hart_traffic.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 HART-IP 로그(실트래픽/실장비 무관). IP/토큰/플래그는 팀별 더미값."

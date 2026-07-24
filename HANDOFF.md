@@ -748,8 +748,15 @@ SIEM 규칙 4종/웹 취약점 3종/AI 보안 인시던트 5종).
 >   (Modbus/DNP3/IEC104/Profinet/IEC61850 트래픽분석 + OPC UA/Modbus 서비스형).
 > - **최종 통합검증(이 시점)**: 58 챌린지 schema_validate OK, 14 시나리오 로드, safe_probe 44
 >   VULNERABLE, 유닛 66 pass, 스모크 35/35. (주의: schema_validate CLI는 `--challenge <ID>`, `--challenge-dir` 아님.)
-> - **다음 착수 후보**: 신규 섹터 Suricata/Zeek 센서 사이드카, AAR에 ICS 섹터 리포트 뷰,
->   HART/Foundation Fieldbus 챌린지, 섹터별 blue 패치 검증 자동화.
+> - **AAR ICS 통합 루프 실증(코드 변경 불요)**: ICS 섹터 다발 공격(refinery/lng/rail/hospital/datacenter)
+>   → SIEM ICS 규칙 탐지 → AAR `/report/aar`(default) 집계: MTTD 2.4s, 탐지율 77.6%, red flags 12,
+>   attack_heatmap이 **ATT&CK for ICS 기술(T0886/T0858 등 19종)을 occurred/detected+rule_ids로 매핑**,
+>   `/report/aar/pdf` 유효 %PDF 렌더. AAR는 제네릭 ATT&CK 히트맵이라 ICS 기술을 이미 지원.
+> - **HART 챌린지 완료**: ICS-007(HART 명령 주입, 안전 트랜스미터 무단 write 탐지). artifact_solve PASS.
+>   → ics 분야 **8종**, 총 챌린지 **59**. **7대 OT 프로토콜 커버**(Modbus/DNP3/IEC104/Profinet/IEC61850/
+>   HART 트래픽분석 + OPC UA 서비스).
+> - **다음 착수 후보**: 신규 섹터 Suricata/Zeek 센서 사이드카(격리 후 netns 공유 재설계 필요),
+>   Foundation Fieldbus/BACnet 챌린지, 섹터별 blue 자동 패치검증(safe_probe 확장).
 
 ## 5. 상태 요약 한 줄
 
