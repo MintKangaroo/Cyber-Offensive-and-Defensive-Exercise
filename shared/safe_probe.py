@@ -179,6 +179,51 @@ def check_dn_006_ssrf():
     return status("DN-006 URL Preview SSRF", patched, "DN-006", "defense_network")
 
 
+# ---------------------------------------------------------------------------
+# ICS/OT 확장 섹터 트윈 프로브(데이터 기반) — 정유/스마트팩토리/수도/LNG/철도/공항/데이터센터/병원
+# 각 항목: (base, method, path, params_or_json, patched_status, vuln_id, asset, name)
+# 취약(unpatched) 기본 상태는 200을 반환, 패치 시 patched_status(401/403/400/404)로 거부.
+# ---------------------------------------------------------------------------
+SECTOR_PROBES = [
+    ("http://localhost:8201", "GET", "/api/opcua/read", {"node": "ns=2;s=SIS.HH_Trip.Setpoint"}, 401, "REF-001", "refinery_plant", "REF-001 OPC UA Anonymous Read"),
+    ("http://localhost:8201", "POST", "/api/sis/bypass", {}, 403, "REF-002", "refinery_plant", "REF-002 SIS Safety Bypass"),
+    ("http://localhost:8201", "POST", "/api/tankfarm/gauge", {"level": 99}, 401, "REF-003", "refinery_plant", "REF-003 HART Tank Gauge Spoof"),
+    ("http://localhost:8202", "POST", "/api/plc/program-download", {}, 401, "FAC-001", "smart_factory", "FAC-001 PLC Program Download"),
+    ("http://localhost:8202", "POST", "/api/robot/exec", {"command": "MOVE 1 2"}, 403, "FAC-002", "smart_factory", "FAC-002 Robot Command Injection"),
+    ("http://localhost:8202", "GET", "/api/mes/workorder", {"id": "' OR '1'='1"}, 404, "FAC-003", "smart_factory", "FAC-003 MES Work-Order SQLi"),
+    ("http://localhost:8203", "POST", "/api/dosing/chlorine", {"ppm": 9}, 401, "WTR-001", "water_utility", "WTR-001 Chlorine Dosing Tamper"),
+    ("http://localhost:8203", "POST", "/api/pump/control", {"action": "stop"}, 401, "WTR-002", "water_utility", "WTR-002 Pump Control Unauth"),
+    ("http://localhost:8203", "POST", "/api/hmi/login", {"username": "operator", "password": "operator"}, 403, "WTR-003", "water_utility", "WTR-003 SCADA HMI Default Creds"),
+    ("http://localhost:8204", "POST", "/api/esd/trigger", {"action": "trip"}, 403, "LNG-001", "lng_terminal", "LNG-001 ESD Trigger/Bypass"),
+    ("http://localhost:8204", "POST", "/api/bog/compressor", {"setpoint": 9}, 401, "LNG-002", "lng_terminal", "LNG-002 BOG Compressor Setpoint"),
+    ("http://localhost:8204", "POST", "/api/firegas/suppress", {}, 403, "LNG-003", "lng_terminal", "LNG-003 Fire&Gas Alarm Suppress"),
+    ("http://localhost:8205", "POST", "/api/signal/set", {"aspect": "clear"}, 401, "RWY-001", "railway_signaling", "RWY-001 Signal Aspect Override"),
+    ("http://localhost:8205", "POST", "/api/interlocking/override", {"route": "R7"}, 403, "RWY-002", "railway_signaling", "RWY-002 Interlocking Bypass"),
+    ("http://localhost:8205", "POST", "/api/ats/command", {"command": "STOP"}, 403, "RWY-003", "railway_signaling", "RWY-003 ATS Command Injection"),
+    ("http://localhost:8206", "POST", "/api/runway/lighting", {"state": "off"}, 401, "AIR-001", "airport_ot", "AIR-001 Runway Lighting Control"),
+    ("http://localhost:8206", "GET", "/api/bhs/route", {"bag_id": "' OR '1'='1"}, 404, "AIR-002", "airport_ot", "AIR-002 BHS Route SQLi"),
+    ("http://localhost:8206", "POST", "/api/fuelfarm/valve", {"action": "open"}, 401, "AIR-003", "airport_ot", "AIR-003 Fuel Farm Valve Unauth"),
+    ("http://localhost:8207", "POST", "/api/crac/setpoint", {"temp_c": 40}, 401, "DCX-001", "datacenter_bms", "DCX-001 CRAC Setpoint Tamper"),
+    ("http://localhost:8207", "POST", "/api/ups/command", {"command": "SHUTDOWN"}, 403, "DCX-002", "datacenter_bms", "DCX-002 UPS Shutdown Unauth"),
+    ("http://localhost:8207", "POST", "/api/dcim/fetch", {"url": "http://169.254.169.254/latest/meta-data"}, 400, "DCX-003", "datacenter_bms", "DCX-003 DCIM SSRF"),
+    ("http://localhost:8208", "GET", "/api/pacs/study", {"id": "ST-1001"}, 401, "HSP-001", "hospital_ot", "HSP-001 PACS Study IDOR"),
+    ("http://localhost:8208", "GET", "/api/his/patient", {"id": "' OR '1'='1"}, 404, "HSP-002", "hospital_ot", "HSP-002 HIS Patient SQLi"),
+    ("http://localhost:8208", "POST", "/api/device/infusion", {"rate": 999}, 401, "HSP-003", "hospital_ot", "HSP-003 Infusion Pump Unauth"),
+]
+
+
+def _sector_check(base, method, path, data, patched_status, vuln_id, asset, name):
+    def _run():
+        if method == "GET":
+            r = requests.get(f"{base}{path}", params=data, timeout=3)
+        else:
+            r = requests.post(f"{base}{path}", json=data, timeout=3)
+        patched = r.status_code == patched_status
+        return status(name, patched, vuln_id, asset)
+    _run.__name__ = f"check_{vuln_id.replace('-', '_').lower()}"
+    return _run
+
+
 if __name__ == "__main__":
     checks = [
         check_gs_001_sqli, check_gs_002_hardcoded, check_gs_003_idor,
@@ -187,7 +232,7 @@ if __name__ == "__main__":
         check_pp_004_deserialize, check_pp_005_safety, check_pp_006_modbus, check_pp_007_firmware,
         check_dn_001_smb, check_dn_002_kerberoast, check_dn_003_backup, check_dn_004_relay,
         check_dn_005_ldap, check_dn_006_ssrf,
-    ]
+    ] + [_sector_check(*args) for args in SECTOR_PROBES]
     for check in checks:
         try:
             print(check())

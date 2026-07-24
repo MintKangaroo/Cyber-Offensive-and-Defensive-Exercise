@@ -1,8 +1,9 @@
 # 🛡️ Cyber Range Platform — 공방(攻防) 통합 훈련 플랫폼
 
-> **위성 지상국 · 발전소(SCADA) · 사내망**을 모사한 디지털 트윈 위에서
+> **위성 지상국 · 전력망(SCADA) · 사내망 + 정유/석유화학 · 스마트팩토리 · 수도 · LNG · 철도 · 공항 ·
+> 데이터센터 · 병원** 등 **11개 ICS/OT 섹터**를 모사한 디지털 트윈 위에서
 > Red(공격) · Blue(방어) · 관전자 · 교관이 함께 훈련하는 **풀스택 사이버 레인지**입니다.
-> 취약 서비스 트윈, EDR, SIEM, 시나리오 엔진, 실시간 대시보드, 자동 채점(AAR),
+> 취약 서비스 트윈(**44종**), EDR, SIEM, 시나리오 엔진, 실시간 대시보드, 자동 채점(AAR),
 > 그리고 6개 분야 **51개 CTF 챌린지**를 하나의 `docker compose`로 기동합니다.
 
 <p align="center">
@@ -18,7 +19,7 @@
 - [아키텍처](#아키텍처)
 - [주요 화면 (스크린샷)](#주요-화면-스크린샷)
 - [핵심 기능](#핵심-기능)
-- [트윈 취약 서비스 (20종)](#트윈-취약-서비스-20종)
+- [트윈 취약 서비스 (44종)](#트윈-취약-서비스-44종)
 - [챌린지 카탈로그 (51종)](#챌린지-카탈로그-51종)
 - [빠른 시작](#빠른-시작)
 - [검증 · 품질 게이트](#검증--품질-게이트)
@@ -122,7 +123,7 @@ SIEM 8040 · Scenario 8045 · Instructor 8050 · NOC 8070 · EDR 8080 · AAR 809
 
 | 영역 | 내용 |
 |---|---|
-| **디지털 트윈** | 위성 지상국·발전소(SCADA)·사내망 3종에 **취약 서비스 20종**(SQLi/IDOR/RCE/명령주입/SSRF/XXE/LDAP인젝션/Modbus·펌웨어 ICS 등)을 내장하고 텔레메트리·access log를 발생. **네트워크 격리**(per-twin nginx 게이트웨이)로 lateral·egress 원천 차단. |
+| **디지털 트윈** | **11개 ICS/OT 섹터**(위성·전력·사내망 + 정유·스마트팩토리·수도·LNG·철도·공항·데이터센터·병원)에 **취약 서비스 44종**(SQLi/IDOR/RCE/명령주입/SSRF/XXE/LDAP + OPC UA·Modbus·HART·SIS·ESD·Profinet 등 OT 프로토콜)을 내장하고 텔레메트리·access log를 발생. 핵심 3종은 **네트워크 격리**(per-twin nginx 게이트웨이)로 lateral·egress 차단. |
 | **EDR** | 프로세스 스냅샷 수집 → 리버스쉘·웹서버발 셸 생성 등 행위 탐지 → 호스트 격리/프로세스 kill(감사 로그). |
 | **SIEM** | 인제스천(트윈 로그·Suricata·Zeek·pfSense syslog) → 정규화 → 4종 규칙(match/threshold/sequence/periodicity) 탐지 → Live Fire 점수 연동. ATT&CK 커버리지 매핑. |
 | **시나리오 엔진** | 코드로 정의된 킬체인 시나리오(순서 강제, chain bonus). 단일·크로스오버 시나리오 로드. |
@@ -133,10 +134,36 @@ SIEM 8040 · Scenario 8045 · Instructor 8050 · NOC 8070 · EDR 8080 · AAR 809
 
 ---
 
-## 트윈 취약 서비스 (20종)
+## 트윈 취약 서비스 (44종)
 
-세 디지털 트윈에 내장된 취약 서비스 목록입니다. 각 취약점은 `PATCH_<ID>=true` 환경변수 또는
-교관 콘솔의 무중단 패치 토글로 개별 비활성화되며, Safe Probe가 patched/vulnerable 상태를 판정합니다.
+11개 ICS/OT 섹터 트윈에 내장된 취약 서비스 목록입니다. 각 취약점은 `PATCH_<ID>=true` 환경변수 또는
+교관 콘솔의 무중단 패치 토글로 개별 비활성화되며, `python3 shared/safe_probe.py` 로 44종 전부의
+patched/vulnerable 상태를 한 번에 판정합니다.
+
+<p align="center">
+  <img src="docs/images/edr-console-fleet.png" alt="EDR 콘솔 — 11개 ICS/OT 섹터 자산" width="900"/>
+  <br/><em>EDR 콘솔 — 11개 ICS/OT 섹터 자산이 온라인으로 관측되는 모습</em>
+</p>
+
+### 11개 ICS/OT 섹터
+| # | 섹터 | 자산 키 | 주요 서브시스템 / 프로토콜 | 상태 |
+|---|---|---|---|---|
+| 1 | 전력망 SCADA | `power_plant` | 발전소·EMS·RTU/IED / IEC 104·DNP3·Modbus·IEC 61850 | 기존 |
+| 2 | 위성 지상국 | `ground_station` | TT&C·안테나제어·RF·GPS·Mission Control | 기존 |
+| 3 | 사내망 | `defense_network` | AD·SMB·파일서버·메일 | 기존 |
+| 4 | 정유·석유화학 | `refinery_plant` | DCS·SIS·Tank Farm / OPC UA·Modbus·HART | **신규** |
+| 5 | 스마트팩토리 | `smart_factory` | PLC·Robot·MES·Conveyor / Profinet·S7 | **신규** |
+| 6 | 수도 시설 | `water_utility` | 정수장·펌프·염소투입 / SCADA·Modbus | **신규** |
+| 7 | LNG 터미널 | `lng_terminal` | Storage·BOG·Cryogenic·F&G·ESD | **신규** |
+| 8 | 철도 신호 | `railway_signaling` | 신호·ATS·ATP·CTC·전력공급 | **신규** |
+| 9 | 공항 OT | `airport_ot` | BHS·활주로조명·Fuel Farm·ATC | **신규** |
+| 10 | 데이터센터 | `datacenter_bms` | UPS·CRAC·Generator·BMS·DCIM | **신규** |
+| 11 | 병원 OT | `hospital_ot` | PACS·HIS·의료기기 VLAN·BMS | **신규** |
+
+> 신규 8개 섹터는 공통 **ICS 트윈 팩토리**(`shared/ics_twin.py`)로 구축되어 EDR 에이전트 / SIEM
+> access log / Config 무중단 패치 / 격리·킬스위치 / 이벤트 발행 계약을 그대로 상속합니다.
+
+### 핵심 3종 (네트워크 격리 적용)
 
 #### 🛰️ 위성 지상국 (`ground_station`) — 7종
 | ID | 취약점 | CWE | ATT&CK | 엔드포인트 |
@@ -170,8 +197,68 @@ SIEM 8040 · Scenario 8045 · Instructor 8050 · NOC 8070 · EDR 8080 · AAR 809
 | **DN-005** | **Directory LDAP Injection** | CWE-90 | T1087 | `GET /api/directory/search` |
 | **DN-006** | **URL Preview SSRF** | CWE-918 | T1090 | `POST /api/webhook/preview` |
 
-> **굵게** 표시된 6종(GS-006/007, PP-006/007, DN-005/006)이 이번에 추가된 서비스입니다.
-> `python3 shared/safe_probe.py` 로 20종 전부의 patched/vulnerable 상태를 한 번에 점검할 수 있습니다.
+> GS-006/007, PP-006/007, DN-005/006 은 SSRF/XXE/ICS/LDAP 확장 서비스입니다.
+
+### 확장 ICS/OT 섹터 8종 (24 서비스)
+
+#### ⛽ 정유·석유화학 플랜트 (`refinery_plant`) — DCS·SIS·Tank Farm / OPC UA·Modbus·HART
+| ID | 취약점 | CWE | ATT&CK | 엔드포인트 |
+|---|---|---|---|---|
+| REF-001 | OPC UA Anonymous Read | CWE-306 | T0886 | `GET /api/opcua/read` |
+| REF-002 | SIS Safety Bypass | CWE-284 | T0858,T0800 | `POST /api/sis/bypass` |
+| REF-003 | HART Tank Gauge Spoof | CWE-306 | T0836 | `POST /api/tankfarm/gauge` |
+
+#### 🏭 스마트팩토리 (`smart_factory`) — PLC·Robot·MES / Profinet·S7·OPC UA
+| ID | 취약점 | CWE | ATT&CK | 엔드포인트 |
+|---|---|---|---|---|
+| FAC-001 | PLC Program Download | CWE-306 | T0843 | `POST /api/plc/program-download` |
+| FAC-002 | Robot Command Injection | CWE-77 | T0807 | `POST /api/robot/exec` |
+| FAC-003 | MES Work-Order SQLi | CWE-89 | T1190 | `GET /api/mes/workorder` |
+
+#### 🚰 수도 시설 (`water_utility`) — 정수장·펌프·염소투입 / SCADA·Modbus
+| ID | 취약점 | CWE | ATT&CK | 엔드포인트 |
+|---|---|---|---|---|
+| WTR-001 | Chlorine Dosing Tamper | CWE-306 | T0836 | `POST /api/dosing/chlorine` |
+| WTR-002 | Pump Control Unauth | CWE-306 | T0855 | `POST /api/pump/control` |
+| WTR-003 | SCADA HMI Default Creds | CWE-521 | T0812 | `POST /api/hmi/login` |
+
+#### ❄️ LNG 터미널 (`lng_terminal`) — Storage·BOG·Cryogenic·F&G·ESD
+| ID | 취약점 | CWE | ATT&CK | 엔드포인트 |
+|---|---|---|---|---|
+| LNG-001 | ESD Trigger/Bypass | CWE-284 | T0858 | `POST /api/esd/trigger` |
+| LNG-002 | BOG Compressor Setpoint | CWE-306 | T0836 | `POST /api/bog/compressor` |
+| LNG-003 | Fire&Gas Alarm Suppress | CWE-284 | T0878 | `POST /api/firegas/suppress` |
+
+#### 🚈 철도 신호 (`railway_signaling`) — 신호·ATS·ATP·CTC
+| ID | 취약점 | CWE | ATT&CK | 엔드포인트 |
+|---|---|---|---|---|
+| RWY-001 | Signal Aspect Override | CWE-306 | T0855 | `POST /api/signal/set` |
+| RWY-002 | Interlocking Bypass | CWE-284 | T0858 | `POST /api/interlocking/override` |
+| RWY-003 | ATS Command Injection | CWE-77 | T0807 | `POST /api/ats/command` |
+
+#### ✈️ 공항 OT (`airport_ot`) — BHS·활주로조명·Fuel Farm·ATC
+| ID | 취약점 | CWE | ATT&CK | 엔드포인트 |
+|---|---|---|---|---|
+| AIR-001 | Runway Lighting Control | CWE-306 | T0855 | `POST /api/runway/lighting` |
+| AIR-002 | BHS Route SQLi | CWE-89 | T1190 | `GET /api/bhs/route` |
+| AIR-003 | Fuel Farm Valve Unauth | CWE-306 | T0836 | `POST /api/fuelfarm/valve` |
+
+#### 🖧 데이터센터 (`datacenter_bms`) — UPS·CRAC·Generator·BMS·DCIM
+| ID | 취약점 | CWE | ATT&CK | 엔드포인트 |
+|---|---|---|---|---|
+| DCX-001 | CRAC Setpoint Tamper | CWE-306 | T0836 | `POST /api/crac/setpoint` |
+| DCX-002 | UPS Shutdown Unauth | CWE-306 | T0816 | `POST /api/ups/command` |
+| DCX-003 | DCIM SSRF | CWE-918 | T1090 | `POST /api/dcim/fetch` |
+
+#### 🏥 병원 OT (`hospital_ot`) — PACS·HIS·의료기기 VLAN·BMS
+| ID | 취약점 | CWE | ATT&CK | 엔드포인트 |
+|---|---|---|---|---|
+| HSP-001 | PACS Study IDOR | CWE-639 | T1213 | `GET /api/pacs/study` |
+| HSP-002 | HIS Patient SQLi | CWE-89 | T1190 | `GET /api/his/patient` |
+| HSP-003 | Infusion Pump Unauth | CWE-306 | T0855 | `POST /api/device/infusion` |
+
+> 신규 24종은 모두 팀별 무중단 패치 토글 + Safe Probe 판정을 지원하며, 실제 docker 기동 후
+> `python3 shared/safe_probe.py` 에서 **44종 전부 VULNERABLE** 로 확인됩니다.
 
 ---
 

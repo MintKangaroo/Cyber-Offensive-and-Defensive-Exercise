@@ -74,6 +74,14 @@ export function EventTimeline() {
           <option value="ground_station">위성 지상국</option>
           <option value="power_plant">발전소</option>
           <option value="defense_network">사내망</option>
+          <option value="refinery_plant">정유·석유화학</option>
+          <option value="smart_factory">스마트팩토리</option>
+          <option value="water_utility">수도 시설</option>
+          <option value="lng_terminal">LNG 터미널</option>
+          <option value="railway_signaling">철도 신호</option>
+          <option value="airport_ot">공항 OT</option>
+          <option value="datacenter_bms">데이터센터</option>
+          <option value="hospital_ot">병원 OT</option>
         </select>
         <select
           value={teamFilter}

@@ -653,6 +653,33 @@ SIEM 규칙 4종/웹 취약점 3종/AI 보안 인시던트 5종).
 > - **다음 착수 후보**: 관전자 read 게이트를 siem/scenario/event_collector/aar까지 확장(현재 scoring/edr만),
 >   AI 분야 실 docker/ML 추가 확충, 신규 트윈 서비스(GS-006~DN-006)를 킬체인 시나리오/SIEM 규칙에 연동.
 
+---
+
+## 📌 세션 연속성 메모 (2026-07-24 — ICS/OT 섹터 8종 확장)
+
+> **사용자 요청**: 위성/전력/사내망 3종에 더해 정유·스마트팩토리·수도·LNG·철도·공항·데이터센터·병원
+> 8개 ICS/OT 섹터를 트윈으로 확장. → **11개 섹터, 취약 서비스 44종(20→44)** 달성.
+>
+> - **ICS 트윈 팩토리 신규**(`shared/ics_twin.py`): `Vuln(id,path,method,event_type,phase,handler)` 목록 +
+>   `make_ics_twin(asset,title,vulns)` 로 트윈을 선언적으로 생성. EDR 에이전트/SIEM access log/Config
+>   무중단 패치/격리·킬스위치/이벤트 발행을 공통 상속. 핸들러 시그니처 `handler(patched,payload,emit)->dict`,
+>   패치 거부는 `deny(status,detail)`. GET=query, POST=query+json 병합해 payload 전달.
+> - **신규 트윈 8종**(각 3 서비스, 포트 8201~8208, `services/<name>/main.py`+Dockerfile):
+>   refinery_plant(REF, OPC UA/SIS/HART) / smart_factory(FAC, PLC·Robot·MES) / water_utility(WTR) /
+>   lng_terminal(LNG, ESD/BOG/F&G) / railway_signaling(RWY) / airport_ot(AIR) / datacenter_bms(DCX) /
+>   hospital_ot(HSP). compose에 range_control 직결로 추가(**per-twin 게이트웨이 격리는 신규 섹터엔
+>   미적용 — 후속 과제**. 기존 3종만 internal+gateway 격리).
+> - **safe_probe 데이터 기반 확장**(20→**44 프로브**): `SECTOR_PROBES` 리스트 + `_sector_check` 루프.
+>   `vuln_catalog.json`도 11자산 44종으로 확장.
+> - **대시보드 라벨**: livefire(AssetMap/EventTimeline/PatchMatrix) + edr console HostList에 8개 섹터
+>   한글 라벨 추가(topology 좌표 ASSET_POS는 미추가 — 신규 섹터는 토폴로지 도형엔 미표시, 목록/피드엔 표시).
+> - **실검증**: 8종 docker 빌드+기동 → 헬스 그린, safe_probe **44종 전부 VULNERABLE**, REF-002 config
+>   토글 패치 경로(200→403→원복) 실증, EDR 11 호스트 등록 확인. 대시보드 2종 빌드 OK. 유닛 66 pass,
+>   스모크 35/35. 신규 스크린샷 `docs/images/edr-console-fleet.png`(11 호스트).
+> - **⚠ 함정**: RedPhase엔 discovery/persistence 없음(5개뿐). 팩토리 핸들러 phase는 유효값만.
+> - **다음 착수 후보**: 신규 섹터 per-twin 게이트웨이 격리 패리티, 섹터별 킬체인 시나리오/SIEM 규칙,
+>   LiveFire 토폴로지에 신규 섹터 배치(ASSET_POS), 섹터 CTF 챌린지.
+
 ## 5. 상태 요약 한 줄
 
 M0 병합 / M1 **Docker 재검증** / **M2(EDR)** / **M3(시나리오)** / **M4(EDR 콘솔)** / **M5(SIEM 인제스천+탐지4종+LiveFire)** / **M6(대시보드/AAR)** 라이브 검증 완료 → **M0~M6 전 마일스톤 Docker 실검증 완료** / **P1-1 복구판정+MTTR 배선 완료(noc_monitor 배포, MTTR 실측)** / **P1-3 트윈 네트워크 격리 완료(per-twin nginx 게이트웨이, lateral·egress 차단 실측)** / **P1-2 유닛테스트 43개+GitHub Actions CI 완료** / **P2 C-QA docker 게이트 실검증(배포형 6종 full docker QA PASS, run_all 포트자동추출+아티팩트 감지 수정)** / **P3 RBAC(역할별 토큰, edr isolate 무검증 갭 차단)** / **P2b 아티팩트 exploit 계약 통일(artifact_solve, NET/FOR/REV 6종 solve+grade 실검증)** / **유닛 테스트 58 pass** / **통합 스모크 테스트 `scripts/smoke_test.sh` 35/35 PASS(+복구=38/38)** / **전체 48개 챌린지 C-QA PASS**(서비스형 9 docker + 아티팩트형 31 artifact_solve + 탐지형 8 detection_solve) / **insane 티어 6종 신규 완료·전부 C-QA PASS**(REV-009 핸들러테이블VM / FOR-009 안티포렌식3단 / NET-009 OT사보타주 Modbus / AI-009 전이회피 로그분석 / DET-009 APT low-and-slow 헌팅 / WEB-009 WAF우회+블라인드SQLi full-docker) → **6개 전 분야 easy~insane 곡선 완성(각 8문제)** / 버그 14건 수정(QA2 + 시나리오 라우팅1 + 콘솔 vite-env/CORS2 + SIEM timestamp/가드/죽은규칙3 + AAR 히트맵/상관키2 + 대시보드 vite-env/백엔드 CORS2 + 복구 scenario전파/AAR MTTR metadata2) / USAGE.md / **다음: 옵저버 read 엔드포인트 세분화, AI 분야 확충(실 ML/docker), 빈 medium/hard 칸 채우기(REV/FOR/NET medium 등).**

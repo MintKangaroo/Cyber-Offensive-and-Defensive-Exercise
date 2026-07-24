@@ -1,0 +1,62 @@
+"""
+Refinery / Petrochemical Plant Digital Twin (정유·석유화학 플랜트 트윈)
+=====================================================================
+DCS + SIS(Safety Instrumented System) + Tank Farm 을 모사. 프로토콜: OPC UA / Modbus / HART.
+훈련용 시뮬레이션 — 실제 플랜트/장비와 무관하며 모든 값은 더미다.
+
+취약점:
+  REF-001 OPC UA Anonymous Read    (GET  /api/opcua/read)      — 미인증 DCS 태그 열람
+  REF-002 SIS Safety Bypass        (POST /api/sis/bypass)      — 안전계장 트립 무단 우회(ICS)
+  REF-003 HART Tank Gauge Spoof    (POST /api/tankfarm/gauge)  — 탱크 레벨 위조(오버필 유도)
+"""
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent.parent))
+from shared.ics_twin import make_ics_twin, Vuln, deny  # noqa: E402
+
+TAGS = {
+    "ns=2;s=CDU.Furnace.TempC": 385.0,
+    "ns=2;s=SIS.HH_Trip.Setpoint": 420.0,   # 안전 계장 트립 설정치(민감)
+    "ns=2;s=TankFarm.T101.LevelPct": 63.2,
+}
+
+
+def opcua_read(patched, p, emit):
+    if patched and p.get("token") != "opcua-signed-session":
+        deny(401, "OPC UA anonymous access disabled; signed session required")
+    node = p.get("node", "")
+    if not patched:
+        emit({"node": node, "note": "anonymous OPC UA read of DCS/SIS tags"})
+    return {"node": node, "value": TAGS.get(node, "unknown-node"), "tags": TAGS}
+
+
+def sis_bypass(patched, p, emit):
+    if patched and p.get("approver_token") != "sis-4eyes-approval":
+        deny(403, "SIS bypass requires 2-person (4-eyes) approval")
+    if not patched:
+        emit({"function": "SIS_HH_TRIP", "note": "safety instrumented trip bypassed without approval"})
+    return {"sis_trip_enabled": False, "status": "safety interlock bypassed"}
+
+
+def tank_gauge(patched, p, emit):
+    if patched and p.get("authorization") != "Bearer engineering-station-token":
+        deny(401, "HART write requires engineering workstation auth")
+    if not patched:
+        emit({"tank": p.get("tank", "T101"), "spoofed_level": p.get("level"), "note": "HART tank gauge spoofed"})
+    return {"tank": p.get("tank", "T101"), "level_pct": p.get("level"), "status": "gauge updated"}
+
+
+VULNS = [
+    Vuln("REF-001", "/api/opcua/read", "GET", "OPC UA anonymous read",
+         "red_attack_started", "initial_access", opcua_read),
+    Vuln("REF-002", "/api/sis/bypass", "POST", "SIS safety bypass",
+         "red_objective_success", "objective", sis_bypass),
+    Vuln("REF-003", "/api/tankfarm/gauge", "POST", "HART tank gauge spoof",
+         "red_attack_started", "lateral_movement", tank_gauge),
+]
+
+app = make_ics_twin("refinery_plant", "Refinery/Petrochemical DCS/SIS Twin", VULNS)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8201)

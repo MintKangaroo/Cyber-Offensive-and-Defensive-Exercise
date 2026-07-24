@@ -247,5 +247,310 @@
       "detection_hint": "미리보기 요청의 내부/사설 대상",
       "patch_hint": "내부/사설/파일 스킴 차단, 외부 http(s)만 허용"
     }
+  ],
+  "refinery_plant": [
+    {
+      "id": "REF-001",
+      "name": "OPC UA Anonymous Read",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0886"
+      ],
+      "endpoint": "GET /api/opcua/read",
+      "description": "미인증 OPC UA 세션으로 DCS/SIS 태그 열람",
+      "detection_hint": "",
+      "patch_hint": "서명 세션/인증 강제"
+    },
+    {
+      "id": "REF-002",
+      "name": "SIS Safety Bypass",
+      "cwe": "CWE-284",
+      "mitre_attack": [
+        "T0858",
+        "T0800"
+      ],
+      "endpoint": "POST /api/sis/bypass",
+      "description": "안전계장(SIS) 트립을 승인 없이 우회",
+      "detection_hint": "",
+      "patch_hint": "2인 승인(4-eyes) 강제"
+    },
+    {
+      "id": "REF-003",
+      "name": "HART Tank Gauge Spoof",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0836"
+      ],
+      "endpoint": "POST /api/tankfarm/gauge",
+      "description": "탱크 레벨 게이지 위조로 오버필 유도",
+      "detection_hint": "",
+      "patch_hint": "엔지니어링 워크스테이션 인증"
+    }
+  ],
+  "smart_factory": [
+    {
+      "id": "FAC-001",
+      "name": "PLC Program Download",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0843"
+      ],
+      "endpoint": "POST /api/plc/program-download",
+      "description": "미인증 PLC 로직 다운로드(Profinet/S7)",
+      "detection_hint": "",
+      "patch_hint": "인증+화이트리스트"
+    },
+    {
+      "id": "FAC-002",
+      "name": "Robot Command Injection",
+      "cwe": "CWE-77",
+      "mitre_attack": [
+        "T0807"
+      ],
+      "endpoint": "POST /api/robot/exec",
+      "description": "로봇 컨트롤러 임의 명령 실행",
+      "detection_hint": "",
+      "patch_hint": "명령 allowlist"
+    },
+    {
+      "id": "FAC-003",
+      "name": "MES Work-Order SQLi",
+      "cwe": "CWE-89",
+      "mitre_attack": [
+        "T1190"
+      ],
+      "endpoint": "GET /api/mes/workorder",
+      "description": "작업지시 조회 SQL 인젝션",
+      "detection_hint": "",
+      "patch_hint": "파라미터 바인딩"
+    }
+  ],
+  "water_utility": [
+    {
+      "id": "WTR-001",
+      "name": "Chlorine Dosing Tamper",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0836"
+      ],
+      "endpoint": "POST /api/dosing/chlorine",
+      "description": "염소 투입 설정치 무단 변경(공중보건)",
+      "detection_hint": "",
+      "patch_hint": "운영자 인증"
+    },
+    {
+      "id": "WTR-002",
+      "name": "Pump Control Unauth",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0855"
+      ],
+      "endpoint": "POST /api/pump/control",
+      "description": "취수/배수 펌프 무단 기동/정지",
+      "detection_hint": "",
+      "patch_hint": "운영자 인증"
+    },
+    {
+      "id": "WTR-003",
+      "name": "SCADA HMI Default Creds",
+      "cwe": "CWE-521",
+      "mitre_attack": [
+        "T0812"
+      ],
+      "endpoint": "POST /api/hmi/login",
+      "description": "기본 자격증명 로그인",
+      "detection_hint": "",
+      "patch_hint": "초기 비밀번호 강제 변경"
+    }
+  ],
+  "lng_terminal": [
+    {
+      "id": "LNG-001",
+      "name": "ESD Trigger/Bypass",
+      "cwe": "CWE-284",
+      "mitre_attack": [
+        "T0858"
+      ],
+      "endpoint": "POST /api/esd/trigger",
+      "description": "비상정지(ESD) 무단 조작/우회",
+      "detection_hint": "",
+      "patch_hint": "감독자 승인"
+    },
+    {
+      "id": "LNG-002",
+      "name": "BOG Compressor Setpoint",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0836"
+      ],
+      "endpoint": "POST /api/bog/compressor",
+      "description": "BOG 압축기 설정치 변조",
+      "detection_hint": "",
+      "patch_hint": "제어실 인증"
+    },
+    {
+      "id": "LNG-003",
+      "name": "Fire&Gas Alarm Suppress",
+      "cwe": "CWE-284",
+      "mitre_attack": [
+        "T0878"
+      ],
+      "endpoint": "POST /api/firegas/suppress",
+      "description": "화재/가스 알람 억제",
+      "detection_hint": "",
+      "patch_hint": "안전 엔지니어 승인"
+    }
+  ],
+  "railway_signaling": [
+    {
+      "id": "RWY-001",
+      "name": "Signal Aspect Override",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0855"
+      ],
+      "endpoint": "POST /api/signal/set",
+      "description": "신호기 현시 무단 변경",
+      "detection_hint": "",
+      "patch_hint": "CTC 디스패처 인증"
+    },
+    {
+      "id": "RWY-002",
+      "name": "Interlocking Bypass",
+      "cwe": "CWE-284",
+      "mitre_attack": [
+        "T0858"
+      ],
+      "endpoint": "POST /api/interlocking/override",
+      "description": "연동장치 무단 우회",
+      "detection_hint": "",
+      "patch_hint": "2인 승인"
+    },
+    {
+      "id": "RWY-003",
+      "name": "ATS Command Injection",
+      "cwe": "CWE-77",
+      "mitre_attack": [
+        "T0807"
+      ],
+      "endpoint": "POST /api/ats/command",
+      "description": "ATS 임의 명령",
+      "detection_hint": "",
+      "patch_hint": "명령 allowlist"
+    }
+  ],
+  "airport_ot": [
+    {
+      "id": "AIR-001",
+      "name": "Runway Lighting Control",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0855"
+      ],
+      "endpoint": "POST /api/runway/lighting",
+      "description": "활주로 조명 무단 제어",
+      "detection_hint": "",
+      "patch_hint": "타워 운영 인증"
+    },
+    {
+      "id": "AIR-002",
+      "name": "BHS Route SQLi",
+      "cwe": "CWE-89",
+      "mitre_attack": [
+        "T1190"
+      ],
+      "endpoint": "GET /api/bhs/route",
+      "description": "수하물 경로 SQL 인젝션",
+      "detection_hint": "",
+      "patch_hint": "파라미터 바인딩"
+    },
+    {
+      "id": "AIR-003",
+      "name": "Fuel Farm Valve Unauth",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0836"
+      ],
+      "endpoint": "POST /api/fuelfarm/valve",
+      "description": "급유 밸브 무단 조작",
+      "detection_hint": "",
+      "patch_hint": "감독자 인증"
+    }
+  ],
+  "datacenter_bms": [
+    {
+      "id": "DCX-001",
+      "name": "CRAC Setpoint Tamper",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0836"
+      ],
+      "endpoint": "POST /api/crac/setpoint",
+      "description": "냉방 설정치 변조로 과열 유도",
+      "detection_hint": "",
+      "patch_hint": "시설 운영 인증"
+    },
+    {
+      "id": "DCX-002",
+      "name": "UPS Shutdown Unauth",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0816"
+      ],
+      "endpoint": "POST /api/ups/command",
+      "description": "UPS 무단 셧다운",
+      "detection_hint": "",
+      "patch_hint": "권한 인증"
+    },
+    {
+      "id": "DCX-003",
+      "name": "DCIM SSRF",
+      "cwe": "CWE-918",
+      "mitre_attack": [
+        "T1090"
+      ],
+      "endpoint": "POST /api/dcim/fetch",
+      "description": "DCIM 원격 URL 조회(SSRF)",
+      "detection_hint": "",
+      "patch_hint": "내부/사설 차단"
+    }
+  ],
+  "hospital_ot": [
+    {
+      "id": "HSP-001",
+      "name": "PACS Study IDOR",
+      "cwe": "CWE-639",
+      "mitre_attack": [
+        "T1213"
+      ],
+      "endpoint": "GET /api/pacs/study",
+      "description": "미인증 영상 스터디 열람(PHI)",
+      "detection_hint": "",
+      "patch_hint": "인증/소유권 검증"
+    },
+    {
+      "id": "HSP-002",
+      "name": "HIS Patient SQLi",
+      "cwe": "CWE-89",
+      "mitre_attack": [
+        "T1190"
+      ],
+      "endpoint": "GET /api/his/patient",
+      "description": "환자 조회 SQL 인젝션",
+      "detection_hint": "",
+      "patch_hint": "파라미터 바인딩"
+    },
+    {
+      "id": "HSP-003",
+      "name": "Infusion Pump Unauth",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0855"
+      ],
+      "endpoint": "POST /api/device/infusion",
+      "description": "주입펌프 투여율 무단 변경",
+      "detection_hint": "",
+      "patch_hint": "임상공학 인증"
+    }
   ]
 }

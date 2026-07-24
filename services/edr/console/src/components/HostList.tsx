@@ -13,6 +13,14 @@ const ASSET_LABEL: Record<string, string> = {
   ground_station: "위성 지상국",
   power_plant: "발전소 / SCADA",
   defense_network: "사내망",
+  refinery_plant: "정유·석유화학",
+  smart_factory: "스마트팩토리",
+  water_utility: "수도 시설",
+  lng_terminal: "LNG 터미널",
+  railway_signaling: "철도 신호",
+  airport_ot: "공항 OT",
+  datacenter_bms: "데이터센터",
+  hospital_ot: "병원 OT",
 };
 
 function StatusDot({ status, isolated }: { status: Host["status"]; isolated?: boolean }) {

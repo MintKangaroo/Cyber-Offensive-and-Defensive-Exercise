@@ -202,6 +202,122 @@ services:
     depends_on: [event_collector, config_service, edr_backend]
     networks: [twin_defense_network]   # 격리: internal 네트워크에만 (F ★★★, ground_station 주석 참고)
 
+  # === ICS/OT 확장 섹터 트윈 (정유/스마트팩토리/수도/LNG/철도/공항/데이터센터/병원) ===
+  # 신규 섹터 트윈은 range_control에 직접 연결(호스트 포트 노출). per-twin 게이트웨이 네트워크
+  # 격리(로드맵 F)는 기존 3종에만 적용돼 있으며, 신규 섹터의 격리 패리티는 후속 과제.
+
+  refinery_plant:
+    build: { context: ., dockerfile: services/refinery_plant/Dockerfile }
+    container_name: refinery_plant
+    ports: ["8201:8201"]
+    environment:
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - CONFIG_SERVICE_URL=http://config_service:8030
+      - EDR_BACKEND_URL=http://edr_backend:8080
+      - SIEM_LOG_DIR=/var/log/siem
+    volumes:
+      - siem_logs:/var/log/siem
+    depends_on: [event_collector, config_service, edr_backend]
+    networks: [range_control]
+
+  smart_factory:
+    build: { context: ., dockerfile: services/smart_factory/Dockerfile }
+    container_name: smart_factory
+    ports: ["8202:8202"]
+    environment:
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - CONFIG_SERVICE_URL=http://config_service:8030
+      - EDR_BACKEND_URL=http://edr_backend:8080
+      - SIEM_LOG_DIR=/var/log/siem
+    volumes:
+      - siem_logs:/var/log/siem
+    depends_on: [event_collector, config_service, edr_backend]
+    networks: [range_control]
+
+  water_utility:
+    build: { context: ., dockerfile: services/water_utility/Dockerfile }
+    container_name: water_utility
+    ports: ["8203:8203"]
+    environment:
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - CONFIG_SERVICE_URL=http://config_service:8030
+      - EDR_BACKEND_URL=http://edr_backend:8080
+      - SIEM_LOG_DIR=/var/log/siem
+    volumes:
+      - siem_logs:/var/log/siem
+    depends_on: [event_collector, config_service, edr_backend]
+    networks: [range_control]
+
+  lng_terminal:
+    build: { context: ., dockerfile: services/lng_terminal/Dockerfile }
+    container_name: lng_terminal
+    ports: ["8204:8204"]
+    environment:
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - CONFIG_SERVICE_URL=http://config_service:8030
+      - EDR_BACKEND_URL=http://edr_backend:8080
+      - SIEM_LOG_DIR=/var/log/siem
+    volumes:
+      - siem_logs:/var/log/siem
+    depends_on: [event_collector, config_service, edr_backend]
+    networks: [range_control]
+
+  railway_signaling:
+    build: { context: ., dockerfile: services/railway_signaling/Dockerfile }
+    container_name: railway_signaling
+    ports: ["8205:8205"]
+    environment:
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - CONFIG_SERVICE_URL=http://config_service:8030
+      - EDR_BACKEND_URL=http://edr_backend:8080
+      - SIEM_LOG_DIR=/var/log/siem
+    volumes:
+      - siem_logs:/var/log/siem
+    depends_on: [event_collector, config_service, edr_backend]
+    networks: [range_control]
+
+  airport_ot:
+    build: { context: ., dockerfile: services/airport_ot/Dockerfile }
+    container_name: airport_ot
+    ports: ["8206:8206"]
+    environment:
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - CONFIG_SERVICE_URL=http://config_service:8030
+      - EDR_BACKEND_URL=http://edr_backend:8080
+      - SIEM_LOG_DIR=/var/log/siem
+    volumes:
+      - siem_logs:/var/log/siem
+    depends_on: [event_collector, config_service, edr_backend]
+    networks: [range_control]
+
+  datacenter_bms:
+    build: { context: ., dockerfile: services/datacenter_bms/Dockerfile }
+    container_name: datacenter_bms
+    ports: ["8207:8207"]
+    environment:
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - CONFIG_SERVICE_URL=http://config_service:8030
+      - EDR_BACKEND_URL=http://edr_backend:8080
+      - SIEM_LOG_DIR=/var/log/siem
+    volumes:
+      - siem_logs:/var/log/siem
+    depends_on: [event_collector, config_service, edr_backend]
+    networks: [range_control]
+
+  hospital_ot:
+    build: { context: ., dockerfile: services/hospital_ot/Dockerfile }
+    container_name: hospital_ot
+    ports: ["8208:8208"]
+    environment:
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - CONFIG_SERVICE_URL=http://config_service:8030
+      - EDR_BACKEND_URL=http://edr_backend:8080
+      - SIEM_LOG_DIR=/var/log/siem
+    volumes:
+      - siem_logs:/var/log/siem
+    depends_on: [event_collector, config_service, edr_backend]
+    networks: [range_control]
+
   # --- Suricata/Zeek 사이드카 (26번 문서). 트윈과 netns 공유로 트래픽 관측 ---
   gs_suricata:
     image: jasonish/suricata:latest
