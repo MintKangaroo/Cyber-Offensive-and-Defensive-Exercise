@@ -743,8 +743,13 @@ SIEM 규칙 4종/웹 취약점 3종/AI 보안 인시던트 5종).
 >   정유 REF-001→REF-002, insane). **멀티에셋 크로스오버 E2E 실증**(phase_1 stage_completed×4 순서).
 >   crossover 트래커는 `_route_event`가 자산 무관하게 모든 이벤트를 전달 → IT/OT 경계 넘는 킬체인 성립.
 >   총 시나리오 **14**(단일 11 + 크로스오버 3). phase_2(포렌식)는 submit_objective API 기반(기존 XOVER 패턴).
-> - **다음 착수 후보**: 섹터 CTF 챌린지 추가 확충, 신규 섹터 Suricata/Zeek 센서 사이드카,
->   Profinet/IEC61850/HART 프로토콜 챌린지, AAR에 ICS 섹터 리포트 뷰.
+> - **Profinet/IEC 61850 챌린지 완료**: ICS-005(Profinet DCP 신원 스푸핑)/ICS-006(IEC 61850 GOOSE
+>   위조). 둘 다 artifact_solve PASS. → ics 분야 **7종**, 총 챌린지 **58**. 6대 OT 프로토콜 커버
+>   (Modbus/DNP3/IEC104/Profinet/IEC61850 트래픽분석 + OPC UA/Modbus 서비스형).
+> - **최종 통합검증(이 시점)**: 58 챌린지 schema_validate OK, 14 시나리오 로드, safe_probe 44
+>   VULNERABLE, 유닛 66 pass, 스모크 35/35. (주의: schema_validate CLI는 `--challenge <ID>`, `--challenge-dir` 아님.)
+> - **다음 착수 후보**: 신규 섹터 Suricata/Zeek 센서 사이드카, AAR에 ICS 섹터 리포트 뷰,
+>   HART/Foundation Fieldbus 챌린지, 섹터별 blue 패치 검증 자동화.
 
 ## 5. 상태 요약 한 줄
 
