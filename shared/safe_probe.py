@@ -287,16 +287,74 @@ def run(asset: str | None = None, emit: bool = True) -> dict:
                         "vulnerable": len(results) - patched, "by_asset": by_asset}}
 
 
+def _print_watch_cycle(cycle: int, out: dict, newly: set, regressed: set) -> None:
+    ts = time.strftime("%H:%M:%S")
+    s = out["summary"]
+    line = f"[{ts}] #{cycle} 패치 {s['patched']}/{s['total']}"
+    if newly:
+        line += f" · ✅신규패치 {','.join(sorted(newly))}"
+    if regressed:
+        line += f" · ⚠️회귀 {','.join(sorted(regressed))}"
+    if out["errors"]:
+        line += f" · [연결불가 {len(out['errors'])}]"
+    print(line, flush=True)
+
+
+def watch(interval: float = 30.0, asset: str | None = None, emit: bool = True,
+          iterations: int | None = None, on_cycle=None) -> int:
+    """주기적 재검증 데몬(호스트 사이드). blue 패치가 반영되면 그 사이클에서
+    blue_patch_verified(+50)를 발행하고, 직전 사이클 대비 **새로 patched/회귀**된 취약점을
+    델타로 보고한다. iterations=None이면 무한(Ctrl-C까지), 정수면 그 횟수만(테스트/유한 실행).
+    on_cycle(cycle, out, newly)가 주어지면 각 사이클마다 호출(연동/테스트용). 실행 사이클 수 반환.
+
+    참고: 연결 실패(서비스 다운)한 취약점은 결과에서 빠지므로 '회귀'로 오탐하지 않도록,
+    회귀는 이번 사이클에 실제로 probe된 취약점에 한해 판정한다."""
+    prev_patched: set[str] = set()
+    i = 0
+    while iterations is None or i < iterations:
+        i += 1
+        out = run(asset=asset, emit=emit)
+        probed = {r["vuln_id"] for r in out["results"]}
+        now_patched = {r["vuln_id"] for r in out["results"] if r["patched"]}
+        newly = now_patched - prev_patched
+        regressed = (prev_patched & probed) - now_patched
+        # prev는 probe된 것만 갱신(다운된 취약점의 이전 상태는 보존)
+        prev_patched = (prev_patched - probed) | now_patched
+        if on_cycle:
+            on_cycle(i, out, newly)
+        else:
+            _print_watch_cycle(i, out, newly, regressed)
+        if iterations is None or i < iterations:
+            time.sleep(interval)
+    return i
+
+
 if __name__ == "__main__":
     import argparse
     import json as _json
+    import sys
 
     ap = argparse.ArgumentParser(description="섹터별 blue 자동 패치검증(Safe Probe)")
     ap.add_argument("--asset", choices=ASSET_ORDER, help="특정 섹터만 재검증(미지정 시 전체)")
     ap.add_argument("--no-emit", action="store_true", help="blue_patch_verified 발행 억제(dry-run)")
     ap.add_argument("--summary", action="store_true", help="줄별 결과 대신 섹터 요약만 출력")
     ap.add_argument("--json", action="store_true", help="JSON으로 출력(자동화/대시보드 연동용)")
+    ap.add_argument("--watch", type=float, metavar="SEC",
+                    help="주기적 재검증 데몬 모드(SEC초 간격). 패치 반영 시 실시간 발행+델타 보고")
+    ap.add_argument("--max-iterations", type=int, default=None,
+                    help="--watch 사이클 수 제한(미지정 시 무한, Ctrl-C까지)")
     args = ap.parse_args()
+
+    if args.watch is not None:
+        emoji = "dry-run" if args.no_emit else "발행"
+        scope = args.asset or "전체 11섹터"
+        print(f"🔁 자동 재검증 데몬 시작 — {scope}, {args.watch}s 간격, blue_patch_verified {emoji}. Ctrl-C 종료.")
+        try:
+            watch(interval=args.watch, asset=args.asset, emit=not args.no_emit,
+                  iterations=args.max_iterations)
+        except KeyboardInterrupt:
+            print("\n종료.")
+        sys.exit(0)
 
     out = run(asset=args.asset, emit=not args.no_emit)
 

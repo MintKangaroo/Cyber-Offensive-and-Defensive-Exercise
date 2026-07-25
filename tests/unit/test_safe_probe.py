@@ -102,3 +102,37 @@ def test_full_run_covers_all_assets(mock_requests):
     out = safe_probe.run(emit=False)
     assert out["summary"]["total"] == 44
     assert set(out["summary"]["by_asset"]) == set(safe_probe.ASSET_ORDER)
+
+
+# --- watch(주기적 재검증 데몬) ---
+
+@pytest.fixture(autouse=True)
+def _no_sleep(monkeypatch):
+    """watch 루프의 time.sleep을 no-op로(테스트가 실제로 안 자게)."""
+    monkeypatch.setattr(safe_probe.time, "sleep", lambda *_: None)
+
+
+def test_watch_runs_bounded_iterations(mock_requests):
+    cycles = []
+    n = safe_probe.watch(interval=0, asset="refinery_plant", emit=False,
+                         iterations=3, on_cycle=lambda i, out, newly: cycles.append(i))
+    assert n == 3 and cycles == [1, 2, 3]
+
+
+def test_watch_reports_newly_patched_delta(mock_requests):
+    """1사이클: 미패치(REF-002 403 아님) → 2사이클: 패치 반영 시 신규패치 델타 보고."""
+    _, holder = mock_requests
+    seen = []
+
+    # 사이클마다 응답 상태를 바꿔 패치 전이 시뮬레이션.
+    holder["status"] = 200  # refinery 어느 것도 patched_status(401/403)와 불일치 → 전부 vulnerable
+
+    def cb(i, out, newly):
+        seen.append((i, sorted(newly), out["summary"]["patched"]))
+        if i == 1:
+            holder["status"] = 401  # 다음 사이클: REF-001·REF-003 patched로 전이
+
+    safe_probe.watch(interval=0, asset="refinery_plant", emit=False, iterations=2, on_cycle=cb)
+    assert seen[0][2] == 0                      # 1사이클: 0 patched
+    assert seen[1][2] == 2                      # 2사이클: 2 patched
+    assert seen[1][1] == ["REF-001", "REF-003"] # 신규패치 델타로 보고

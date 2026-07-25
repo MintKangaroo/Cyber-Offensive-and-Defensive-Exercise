@@ -159,7 +159,13 @@ patched/vulnerable 상태를 한 번에 판정합니다.
 > ```bash
 > python3 shared/safe_probe.py --asset refinery_plant --summary   # 정유 섹터만 재검증
 > python3 shared/safe_probe.py --json --no-emit                    # 전체 dry-run(자동화/대시보드용)
+> python3 shared/safe_probe.py --watch 30                          # 30초 간격 자동 재검증 데몬
+> python3 shared/safe_probe.py --asset water_utility --watch 15    # 수도 섹터만 15초 간격 감시
 > ```
+> **`--watch <초>` 데몬 모드**: 지정 간격으로 계속 재검증하며 blue 패치가 반영되는 즉시
+> `blue_patch_verified`(+50)를 발행하고, 직전 사이클 대비 **새로 patched/회귀된 취약점을 델타로**
+> 실시간 보고(`✅신규패치 REF-001` / `⚠️회귀 …`). blue 팀이 패치 작업 중 별도 창에 띄워두면
+> 패치가 실제로 닫혔는지 즉시 피드백을 받는다(호스트 사이드 실행 — 트윈 게시포트 경유).
 
 <p align="center">
   <img src="docs/images/edr-console-fleet.png" alt="EDR 콘솔 — 11개 ICS/OT 섹터 자산" width="900"/>
