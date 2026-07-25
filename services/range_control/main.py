@@ -20,6 +20,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Optional
 
 import requests
 from fastapi import FastAPI, Header, HTTPException
@@ -105,6 +106,96 @@ def _count_patched() -> int:
 
 class RangeReq(BaseModel):
     reason: str = "range control"
+
+
+# ===========================================================================
+# P1 #9 — 다중 팀 테넌트 격리: Range → Match → Team → Twin Set
+# ---------------------------------------------------------------------------
+# 이벤트/점수는 이미 scenario_id로 파티셔닝되므로, Match마다 고유 scenario_id를 부여하면
+# per-match 이벤트 스트림·per-match 점수가 그대로 격리된다(GET /replay/events?scenario_id=,
+# GET /scores?scenario_id=). 플래그는 팀별 HMAC(team_id)로 이미 격리. Twin Set(팀별 트윈 인스턴스)
+# 물리 격리는 per-twin internal 네트워크 위에서 phased(문서 docs/MULTI-TENANT.md 참조).
+MATCHES_PATH = Path(os.environ.get("RANGE_MATCHES", "/tmp/range_matches.json"))
+
+
+def _load_matches() -> dict:
+    try:
+        return json.loads(MATCHES_PATH.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_matches(d: dict):
+    try:
+        MATCHES_PATH.write_text(json.dumps(d))
+    except OSError:
+        pass
+
+
+class MatchReq(BaseModel):
+    range_id: str
+    match_id: str
+    red_teams: list[str] = []
+    blue_teams: list[str] = []
+    twin_set: list[str] = []          # 이 매치가 쓰는 트윈 자산 키
+    scenario_id: str | None = None    # 미지정 시 match_id 사용(이벤트/점수 파티션 키)
+
+
+@app.post("/matches")
+def create_match(req: MatchReq, authorization: str = Header(default="")):
+    _auth(authorization)
+    matches = _load_matches()
+    scen = req.scenario_id or req.match_id
+    matches[req.match_id] = {
+        "range_id": req.range_id, "match_id": req.match_id,
+        "red_teams": req.red_teams, "blue_teams": req.blue_teams,
+        "twin_set": req.twin_set, "scenario_id": scen, "created_at": time.time(),
+        # 팀→테넌트 매핑(모든 데이터에 range_id/match_id/team_id 부여의 기준)
+        "team_index": {t: {"side": "red", "match_id": req.match_id, "range_id": req.range_id} for t in req.red_teams}
+                    | {t: {"side": "blue", "match_id": req.match_id, "range_id": req.range_id} for t in req.blue_teams},
+    }
+    _save_matches(matches)
+    return {"match": matches[req.match_id],
+            "streams": {"events": f"/replay/events?scenario_id={scen}",
+                        "scores": f"/scores?scenario_id={scen}"}}
+
+
+@app.get("/matches")
+def list_matches(range_id: Optional[str] = None):
+    matches = _load_matches()
+    items = [m for m in matches.values() if not range_id or m["range_id"] == range_id]
+    return {"matches": items, "count": len(items)}
+
+
+@app.get("/matches/{match_id}")
+def get_match(match_id: str):
+    m = _load_matches().get(match_id)
+    if not m:
+        raise HTTPException(404, "match 없음")
+    return m
+
+
+@app.get("/matches/{match_id}/scoreboard")
+def match_scoreboard(match_id: str):
+    """해당 Match의 점수(scenario_id 파티션) — 팀 간 직접 조회 대신 매치 스코프로."""
+    m = _load_matches().get(match_id)
+    if not m:
+        raise HTTPException(404, "match 없음")
+    try:
+        r = requests.get(f"{SCORING}/scores?scenario_id={m['scenario_id']}", timeout=4)
+        scores = r.json() if r.status_code == 200 else {}
+    except requests.RequestException:
+        scores = {}
+    return {"match_id": match_id, "scenario_id": m["scenario_id"], "scores": scores}
+
+
+@app.delete("/matches/{match_id}")
+def delete_match(match_id: str, authorization: str = Header(default="")):
+    _auth(authorization)
+    matches = _load_matches()
+    matches.pop(match_id, None)
+    _save_matches(matches)
+    return {"deleted": match_id}
 
 
 @app.get("/health")
