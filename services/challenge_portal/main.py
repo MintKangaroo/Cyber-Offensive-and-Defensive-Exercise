@@ -250,6 +250,14 @@ async def submit(cid: str, req: SubmitReq):
     }
 
 
+@app.post("/portal/admin/reset")
+def portal_admin_reset():
+    """훈련 초기화 — 포털의 red/blue solve 기록을 비운다(range_control이 호출)."""
+    r, b = len(_SOLVES), len(_BLUE_SOLVES)
+    _SOLVES.clear(); _BLUE_SOLVES.clear()
+    return {"service": "challenge_portal", "cleared": {"red_teams": r, "blue_teams": b}}
+
+
 @app.get("/portal/scoreboard")
 def scoreboard():
     rows = []

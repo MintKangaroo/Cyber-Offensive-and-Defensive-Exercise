@@ -252,6 +252,24 @@ def get_audit(limit: int = 200, action: Optional[str] = None):
     return {"entries": [dict(r) for r in rows]}
 
 
+
+
+@app.post("/admin/reset")
+def admin_reset(authorization: str = Header(default="")):
+    """훈련 초기화 — config_service 상태를 비운다(instructor 인증). range_control이 오케스트레이션."""
+    require_role(authorization, {"instructor"})
+    conn = get_db()
+    cleared = {}
+    for t in ['patch_state', 'quarantine_state']:
+        try:
+            cleared[t] = conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+            conn.execute(f"DELETE FROM {t}")
+        except Exception:
+            cleared[t] = "n/a"
+    conn.commit(); conn.close()
+    return {"service": "config_service", "cleared": cleared}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8030)

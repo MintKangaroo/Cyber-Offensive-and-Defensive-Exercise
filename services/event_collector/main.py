@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header
 from starlette.websockets import WebSocketState
 
 import sys
@@ -24,6 +24,8 @@ from shared.event_schema import Event  # noqa: E402
 APP_DIR = Path(__file__).parent
 DB_PATH = APP_DIR / "events.db"
 SCORING_ENGINE_URL = "http://scoring_engine:8020"
+
+from shared.rbac import require_role  # noqa: E402
 
 app = FastAPI(title="Event Collector")
 
@@ -214,6 +216,24 @@ async def event_stream(websocket: WebSocket):
             await websocket.receive_text()  # 클라이언트로부터의 ping 등 무시
     except WebSocketDisconnect:
         _ws_clients.discard(websocket)
+
+
+
+
+@app.post("/admin/reset")
+def admin_reset(authorization: str = Header(default="")):
+    """훈련 초기화 — event_collector 상태를 비운다(instructor 인증). range_control이 오케스트레이션."""
+    require_role(authorization, {"instructor"})
+    conn = get_db()
+    cleared = {}
+    for t in ['events']:
+        try:
+            cleared[t] = conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+            conn.execute(f"DELETE FROM {t}")
+        except Exception:
+            cleared[t] = "n/a"
+    conn.commit(); conn.close()
+    return {"service": "event_collector", "cleared": cleared}
 
 
 if __name__ == "__main__":

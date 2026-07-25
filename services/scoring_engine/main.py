@@ -333,6 +333,24 @@ def reconcile(scenario_id: str = "default"):
     return {"scenario_id": scenario_id, "all_match": all_match, "detail": report}
 
 
+
+
+@app.post("/admin/reset")
+def admin_reset(authorization: str = Header(default="")):
+    """훈련 초기화 — scoring_engine 상태를 비운다(instructor 인증). range_control이 오케스트레이션."""
+    require_role(authorization, {"instructor"})
+    conn = get_db()
+    cleared = {}
+    for t in ['achievements', 'team_scores']:
+        try:
+            cleared[t] = conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+            conn.execute(f"DELETE FROM {t}")
+        except Exception:
+            cleared[t] = "n/a"
+    conn.commit(); conn.close()
+    return {"service": "scoring_engine", "cleared": cleared}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8020)

@@ -117,6 +117,21 @@ services:
   # NOC 모니터: 트윈 /health 폴링 + Recovery Watcher(04번 2절).
   # asset_compromised 이력 + 취약점 patched + 3회 연속 정상 -> asset_recovered(+50) 발행.
   # 트윈 상태를 폴링해야 하므로 각 twin_* 네트워크와 range_control 모두에 연결.
+  range_control:
+    build: { context: ., dockerfile: services/range_control/Dockerfile }
+    container_name: range_control
+    ports: ["8055:8055"]
+    environment:
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - SCORING_ENGINE_URL=http://scoring_engine:8020
+      - CONFIG_SERVICE_URL=http://config_service:8030
+      - SIEM_API_URL=http://siem_api:8040
+      - CHALLENGE_PORTAL_URL=http://challenge_portal:8060
+      - EDR_BACKEND_URL=http://edr_backend:8080
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-dev-instructor-token}
+    depends_on: [event_collector, scoring_engine, config_service, challenge_portal]
+    networks: [range_control]
+
   challenge_portal:
     build: { context: ., dockerfile: services/challenge_portal/Dockerfile }
     container_name: challenge_portal

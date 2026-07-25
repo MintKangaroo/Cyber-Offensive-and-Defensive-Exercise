@@ -14,3 +14,12 @@ dist/
 challenges/*/*/deploy/*.jsonl
 challenges/*/*/deploy/*.pcap
 challenges/*/*/deploy/*.log
+
+# 챌린지 deploy 생성 아티팩트 전부(생성기 .py만 커밋, 산출물은 온디맨드)
+challenges/*/*/deploy/*.jsonl
+challenges/*/*/deploy/*.pcap
+challenges/*/*/deploy/*.log
+challenges/*/*/deploy/*.txt
+challenges/*/*/deploy/*.bin
+challenges/*/*/deploy/*.csv
+challenges/*/*/deploy/*.zip
