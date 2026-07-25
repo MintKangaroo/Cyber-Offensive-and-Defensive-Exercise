@@ -117,6 +117,15 @@ services:
   # NOC 모니터: 트윈 /health 폴링 + Recovery Watcher(04번 2절).
   # asset_compromised 이력 + 취약점 patched + 3회 연속 정상 -> asset_recovered(+50) 발행.
   # 트윈 상태를 폴링해야 하므로 각 twin_* 네트워크와 range_control 모두에 연결.
+  challenge_portal:
+    build: { context: ., dockerfile: services/challenge_portal/Dockerfile }
+    container_name: challenge_portal
+    ports: ["8060:8060"]
+    environment:
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+    depends_on: [event_collector]
+    networks: [range_control]
+
   noc_monitor:
     build: { context: ., dockerfile: services/noc_monitor/Dockerfile }
     container_name: noc_monitor
