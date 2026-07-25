@@ -4,8 +4,12 @@ import type { NormalizedEvent, Alert, SourceHealthEntry, Stats, AttackCoverage }
 // 백엔드 호스트는 페이지를 로드한 호스트를 따른다(WSL IP·Tailscale·localhost 모두 대응).
 const H = typeof window !== "undefined" ? window.location.hostname : "localhost";
 const SIEM_API = import.meta.env.VITE_SIEM_API_URL ?? `http://${H}:8040`;
-const WS_ALERTS_URL = SIEM_API.replace(/^http/, "ws") + "/ws/alerts";
-const WS_LOGS_URL = SIEM_API.replace(/^http/, "ws") + "/ws/logs";
+// same-origin 상대경로(/api/…, 프로덕션 gateway) 대응 ws(s) URL 빌더.
+const _ws = (path: string) => SIEM_API.startsWith("/")
+  ? `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${SIEM_API}${path}`
+  : SIEM_API.replace(/^http/, "ws") + path;
+const WS_ALERTS_URL = _ws("/ws/alerts");
+const WS_LOGS_URL = _ws("/ws/logs");
 
 async function j<T>(url: string): Promise<T> {
   const r = await fetch(url);

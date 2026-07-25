@@ -12,7 +12,10 @@ const EVENT_COLLECTOR = import.meta.env.VITE_EVENT_COLLECTOR_URL ?? `http://${H}
 const SCORING_ENGINE = import.meta.env.VITE_SCORING_ENGINE_URL ?? `http://${H}:8020`;
 const CONFIG_SERVICE = import.meta.env.VITE_CONFIG_SERVICE_URL ?? `http://${H}:8030`;
 const INSTRUCTOR_API = import.meta.env.VITE_INSTRUCTOR_API_URL ?? `http://${H}:8050`;
-const WS_URL = EVENT_COLLECTOR.replace(/^http/, "ws") + "/ws";
+// same-origin 상대경로(/api/…, 프로덕션 gateway)면 window.location에서 ws(s) 절대 URL 구성.
+const WS_URL = EVENT_COLLECTOR.startsWith("/")
+  ? `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${EVENT_COLLECTOR}/ws`
+  : EVENT_COLLECTOR.replace(/^http/, "ws") + "/ws";
 
 async function j<T>(url: string, init?: RequestInit): Promise<T> {
   const r = await fetch(url, init);

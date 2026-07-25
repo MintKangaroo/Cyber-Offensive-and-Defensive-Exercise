@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 ### Added
+- **P0-1 단일 진입점/프로덕션 배포**: `gateway`(nginx) 서비스 — 5개 대시보드를 프로덕션 빌드해
+  서브경로(/ops·/red·/blue·/blue/siem·/blue/edr)로 정적 서빙 + `/api/*` 백엔드 프록시 + self-signed
+  TLS 자동 생성 + http→https. 랜딩(역할 선택). `docker-compose.prod.yml`(fail-fast·OBSERVER_READ_ENFORCE).
+  프론트는 same-origin `/api/<svc>`로 연결(포트 하드코딩 제거, 상대 WS 지원). 스모크 35/35 유지.
 - **P0-3 영속성**: event/scoring/config/siem/edr/instructor/noc/portal/range_control 상태를 named
   볼륨(`DATA_DIR=/data`)으로 백업 → force-recreate/crash-replace 생존. 크래시복구 스모크
   (`SMOKE_CRASH_RECOVERY=1`) 추가.

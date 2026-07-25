@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
+  base: process.env.VITE_BASE || "/",   // 프로덕션 gateway 서브경로(/ops, /red 등)
   plugins: [react()],
   server: {
     host: true,   // 0.0.0.0 바인딩 — WSL2/Tailscale/원격에서 접속 가능하게

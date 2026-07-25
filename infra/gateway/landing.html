@@ -1,0 +1,23 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cyber Range — 진입</title><style>
+*{margin:0;box-sizing:border-box;font-family:ui-monospace,Menlo,monospace}
+body{min-height:100vh;background:#0A0E1A;color:#E8EDF5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2rem;padding:2rem}
+h1{font-size:1.6rem;letter-spacing:.15em;color:#22D3EE}.sub{color:#6B7A99;font-size:.8rem;letter-spacing:.1em}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1rem;max-width:840px;width:100%}
+a.card{display:block;text-decoration:none;border:1px solid #1E2A3F;border-radius:12px;padding:1.4rem;background:#111725;transition:.15s}
+a.card:hover{transform:translateY(-2px)}
+.role{font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.4rem}
+.name{font-size:1.1rem;color:#E8EDF5}.desc{font-size:.75rem;color:#6B7A99;margin-top:.4rem;line-height:1.4}
+.red{border-color:#FB7185}.red .role{color:#FB7185}.blue{border-color:#22D3EE}.blue .role{color:#22D3EE}
+.ops{border-color:#F5A623}.ops .role{color:#F5A623}
+</style></head><body>
+<div style="text-align:center"><h1>🛡️ CYBER RANGE PLATFORM</h1><div class="sub">역할을 선택해 진입하세요 · TRAINING ENVIRONMENT</div></div>
+<div class="grid">
+  <a class="card red" href="/red/"><div class="role">🔴 Red Team</div><div class="name">Red Portal</div><div class="desc">챌린지 풀이·아티팩트·플래그 제출</div></a>
+  <a class="card blue" href="/blue/"><div class="role">🔵 Blue Team</div><div class="name">Blue Portal</div><div class="desc">인시던트·패치·탐지 규칙</div></a>
+  <a class="card blue" href="/blue/edr/"><div class="role">🔵 Blue</div><div class="name">EDR 콘솔</div><div class="desc">프로세스 격리·kill</div></a>
+  <a class="card blue" href="/blue/siem/"><div class="role">🔵 Blue</div><div class="name">SIEM 콘솔</div><div class="desc">로그 검색·탐지·헌팅</div></a>
+  <a class="card ops" href="/ops/"><div class="role">🎓 Ops</div><div class="name">Live Fire</div><div class="desc">상황판·점수·교관 통제·관전</div></a>
+</div>
+<div class="sub" style="font-size:.68rem">⚠️ 의도적으로 취약한 훈련 환경 — 인터넷에 노출하지 마세요 (SECURITY.md)</div>
+</body></html>

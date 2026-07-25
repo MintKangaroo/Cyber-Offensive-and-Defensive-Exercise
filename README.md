@@ -456,29 +456,37 @@ bash scripts/smoke_test.sh
 
 ### 2) 대시보드 실행
 
-역할별로 접속하는 대시보드가 다릅니다. **포트가 서로 다르니 주의**:
+#### 🚀 프로덕션 — 단일 진입점 한 줄 (권장, P0-1)
+`gateway`가 5개 대시보드를 **프로덕션 빌드해 정적 서빙**하고 `/api/*`를 백엔드로 프록시합니다.
+포트를 외울 필요 없이 **한 주소(https)로 역할별 진입**합니다.
+```bash
+cp .env.example .env && ./scripts/gen_secrets.sh        # 토큰/시크릿 생성(프로덕션 필수)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# → https://<host>/  (self-signed TLS 자동 생성; 실인증서는 TLS_CERT_PATH/KEY_PATH로 주입)
+```
+| 경로 | 대시보드 | 역할 |
+|---|---|---|
+| `/` | 랜딩(역할 선택) | 전체 |
+| `/ops/` | Live Fire | 🎓 운영/관전 |
+| `/red/` | Red Portal | 🔴 Red |
+| `/blue/` | Blue Portal | 🔵 Blue |
+| `/blue/siem/` · `/blue/edr/` | SIEM · EDR 콘솔 | 🔵 Blue |
 
-| 역할 | 대시보드 | 포트 | 실행 |
-|---|---|---|---|
-| 🔴 **Red(공격)** | **Red Portal** — 챌린지 목록·아티팩트·플래그 제출 | **5176** | `cd dashboards/redportal && npm install && npm run dev` |
-| 🔵 **Blue(방어)** | **Blue Portal** — 인시던트·패치·탐지규칙 제출 | **5177** | `cd dashboards/blueportal && npm install && npm run dev` |
-| 🔵 Blue | EDR 콘솔 — 프로세스 격리/kill | 5173 | `cd services/edr/console && npm install && npm run dev` |
-| 🔵 Blue | SIEM 콘솔 — 로그 검색·탐지 | 5175 | `cd dashboards/siem && npm install && npm run dev` |
-| 🎓 운영/관전 | Live Fire — 상황판·점수·시나리오 | 5174 | `cd dashboards/livefire && npm install && npm run dev` |
+<p align="center"><img src="docs/images/gateway-landing.png" alt="단일 진입점 랜딩" width="760"/><br/>
+<em>https://host/ — 역할 선택 랜딩(gateway). 프론트는 포트 하드코딩 없이 same-origin <code>/api/*</code>로 연결.</em></p>
 
-**Red/Blue Portal은 백엔드가 필요합니다** — `challenge_portal`(포트 8060): 챌린지 카탈로그·아티팩트
-생성·서버측 채점·스코어보드. `docker compose up -d challenge_portal` 또는
-`INSTRUCTOR_TOKEN=$INSTRUCTOR_TOKEN uvicorn services.challenge_portal.main:app --host 0.0.0.0 --port 8060`.
-(Live Fire 헤더의 `🚩 RED PORTAL` / `🛡️ BLUE PORTAL` 버튼으로 바로 이동 가능.)
+> 프로덕션 프로파일은 토큰 미설정 시 **부팅 실패**(fail-fast)하고 `OBSERVER_READ_ENFORCE=true`로
+> read 접근까지 인증을 강제합니다. 실측: `https://host/red/` 가 gateway `/api/portal` 프록시로
+> 챌린지를 렌더(연결에러 0), http→https 301 리다이렉트, 스모크 35/35 유지.
 
-> **원격 접속(WSL2 / Tailscale)**: 모든 dev 서버·백엔드는 `host: true`(0.0.0.0)로 바인딩되고,
-> 프론트는 **접속한 호스트 기준**으로 백엔드에 연결합니다(`window.location.hostname`). 따라서
-> `http://<WSL_IP 또는 Tailscale_IP>:<포트>/` 로 열면 대시보드·백엔드가 같은 호스트로 자동 연결됩니다.
-> 백엔드 CORS도 IPv4·`*.ts.net`(Tailscale)을 허용합니다. `localhost` 로 안 열리면(특히 WSL2→Windows)
-> 실행 시 출력되는 `Network:` 주소를 쓰세요.
->
-> 데이터는 코어 스택이 떠 있어야 채워집니다 — `docker compose up -d` 로 Event(8010)·Scoring(8020)·
-> Config(8030)·SIEM(8040)·EDR 등을 먼저 기동. 백엔드 URL은 `VITE_*_URL` 환경변수로 재정의 가능.
+#### 🛠️ 개발 — vite dev 서버 (핫리로드)
+개발 시에는 각 앱을 dev 서버로 띄웁니다(포트 EDR 5173 / LiveFire 5174 / SIEM 5175 / Red 5176 / Blue 5177):
+```bash
+cd dashboards/redportal && npm install && npm run dev    # 나머지 앱도 동일(각 디렉터리)
+```
+> 원격 접속(WSL2/Tailscale): dev 서버·백엔드는 `host:true`(0.0.0.0) 바인딩, 프론트는
+> `window.location.hostname` 기준으로 백엔드에 연결. `localhost` 가 안 열리면 실행 시 출력되는
+> `Network:` 주소(WSL/Tailscale IP)를 쓰세요. 데이터는 `docker compose up -d`로 코어를 먼저 띄워야 채워집니다.
 
 ### 3) 챌린지 검증 (예시)
 ```bash

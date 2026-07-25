@@ -1,0 +1,36 @@
+# 프로덕션 프로파일 (P0-1) — 단일 진입점 gateway + 빌드 산출물 서빙 + prod 보안 기본값.
+# 사용: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# 접속: https://<host>/  (self-signed TLS 자동 생성). dev(현행 vite)는 이 파일 없이.
+services:
+  gateway:
+    build: { context: ., dockerfile: infra/gateway/Dockerfile }
+    container_name: gateway
+    ports:
+      - "8000:80"
+      - "8443:443"
+    environment:
+      - GATEWAY_CN=${GATEWAY_CN:-cyber-range.local}
+      # 프로덕션 fail-fast: 토큰 미설정이면 부팅 실패(gen_secrets.sh 실행 유도)
+      - REQUIRE_TOKEN=${INSTRUCTOR_TOKEN:?prod requires INSTRUCTOR_TOKEN — run ./scripts/gen_secrets.sh}
+    volumes:
+      - gateway_certs:/certs
+      # 실인증서 주입(선택): 호스트 ./certs 를 마운트하고 TLS_CERT_PATH/KEY_PATH 지정
+    depends_on:
+      - event_collector
+      - scoring_engine
+      - config_service
+      - siem_api
+      - edr_backend
+      - instructor_api
+      - challenge_portal
+      - range_control
+    networks: [range_control]
+
+  # --- prod 보안 기본값: 관전자 read 게이트 ON (read도 인증 요구) ---
+  scoring_engine:
+    environment: [ "OBSERVER_READ_ENFORCE=true" ]
+  edr_backend:
+    environment: [ "OBSERVER_READ_ENFORCE=true" ]
+
+volumes:
+  gateway_certs: {}
