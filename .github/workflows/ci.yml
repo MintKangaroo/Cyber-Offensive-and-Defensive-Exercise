@@ -44,7 +44,28 @@ jobs:
         run: bash scripts/validate_challenges.sh
 
   # ---------------------------------------------------------------------------
-  # 3) 통합 스모크 — 실제 docker 스택을 띄우고 E2E 경로를 검증(격리·복구 포함).
+  # 3) 프론트엔드 — LiveFire 대시보드 유닛테스트(vitest) + 프로덕션 빌드.
+  #    ProcessImpact 순수 로직(심각도 매핑/계기값 보간/게이지) 회귀 방지.
+  # ---------------------------------------------------------------------------
+  dashboard:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboards/livefire
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install deps
+        run: npm ci
+      - name: Unit tests (vitest)
+        run: npm test
+      - name: Production build
+        run: npm run build
+
+  # ---------------------------------------------------------------------------
+  # 4) 통합 스모크 — 실제 docker 스택을 띄우고 E2E 경로를 검증(격리·복구 포함).
   #    override 파일이 없어 edr는 8080에 뜨며, smoke_test.sh가 포트를 자동 감지한다.
   # ---------------------------------------------------------------------------
   integration:

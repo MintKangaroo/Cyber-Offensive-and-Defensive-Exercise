@@ -13,9 +13,9 @@ import type { AssetState, RangeEvent } from "../../api/types";
  * 별도 백엔드 없이 기존 이벤트 스트림만으로 동작(자기완결형).
  */
 
-type Severity = "nominal" | "degraded" | "critical" | "restoring";
+export type Severity = "nominal" | "degraded" | "critical" | "restoring";
 
-interface Sector {
+export interface Sector {
   asset: string;
   label: string;      // 섹터명
   metric: string;     // 물리 지표명
@@ -27,7 +27,7 @@ interface Sector {
 }
 
 // OT 물리 섹터만(사내망=IT는 물리 프로세스 지표가 없어 제외).
-const SECTORS: Sector[] = [
+export const SECTORS: Sector[] = [
   { asset: "power_plant", label: "전력망 SCADA", metric: "계통 주파수", unit: "Hz",
     nominal: 60.0, critical: 57.2, nominalMsg: "터빈 동기 · 계통 안정", criticalMsg: "보호계전 트립 · 주파수 붕괴" },
   { asset: "refinery_plant", label: "정유 DCS/SIS", metric: "반응기 압력", unit: "bar",
@@ -50,7 +50,7 @@ const SECTORS: Sector[] = [
     nominal: 100, critical: 10, nominalMsg: "커맨드 인증 · 링크 정상", criticalMsg: "커맨드 위조 · 자세 이상" },
 ];
 
-function severityOf(state: AssetState | undefined): Severity {
+export function severityOf(state: AssetState | undefined): Severity {
   switch (state) {
     case "compromised": return "critical";
     case "under_attack": return "degraded";
@@ -67,13 +67,13 @@ const SEV_STYLE: Record<Severity, { bar: string; text: string; badge: string; ta
 };
 
 /** 정상→사보타주 사이 판독값을 심각도에 따라 보간해 계기값을 만든다. */
-function reading(s: Sector, sev: Severity): number {
+export function reading(s: Sector, sev: Severity): number {
   const frac = sev === "critical" ? 1 : sev === "degraded" ? 0.55 : sev === "restoring" ? 0.25 : 0;
   return s.nominal + (s.critical - s.nominal) * frac;
 }
 
 /** 0(정상)~100(사보타주) 척도의 임팩트 게이지 폭. */
-function impactPct(sev: Severity): number {
+export function impactPct(sev: Severity): number {
   return sev === "critical" ? 100 : sev === "degraded" ? 55 : sev === "restoring" ? 25 : 4;
 }
 
