@@ -79,8 +79,9 @@ scripts/teardown_match.sh match_a     # 정리(코어 disconnect + 프로젝트 
 1. **P1(완료)**: Match 레지스트리 + scenario_id 파티션 + 팀별 HMAC 플래그 + RBAC + 교관 UI.
 2. **P2(완료)**: 매치별 트윈 셋 물리 배포(deploy_match.sh) — 프로젝트 격리 + internal 네트워크 +
    동적 포트 + MATCH_SCENARIO_ID 이벤트 태깅. cross-match/egress 차단·이벤트 격리 실측.
-3. **P3(로드맵)**: 매치별 서브도메인(vhost), 관전자 지연 큐(공개정보 N초 지연), 매치별
-   CHALLENGE_SECRET 회전, 매치별 트윈 셋 전체(11섹터) 확장.
+3. **P3(진행)**: ✅ 관전자 지연 큐(`/events/delayed`, Live Fire observer 30s 지연) · ✅ 매치별 플래그
+   회전(포털 match_id → 복합 팀키 `match::team`, 같은 팀도 매치마다 다른 플래그·cross-match 거부 실측).
+   🔷 남음: 매치별 서브도메인(vhost), 매치 트윈 셋 11섹터 전체 확장.
 
 ## 관련
 - 초기화·베이스라인: [../services/range_control/README.md](../services/range_control/README.md) (P1 #10)

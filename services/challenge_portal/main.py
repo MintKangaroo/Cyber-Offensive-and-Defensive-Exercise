@@ -135,12 +135,20 @@ def _load_module(path: Path, name: str):
     return mod
 
 
+def _effective_team(team_id: str, match_id: Optional[str]) -> str:
+    """매치별 플래그 회전(P3) — match_id가 있으면 팀 키를 매치로 네임스페이스한다.
+    그레이더는 HMAC(SECRET, f"{ID}:{team}")로 플래그를 만들므로, team을 "match::team"으로 주면
+    같은 팀이라도 매치마다 플래그가 달라진다(그레이더/시크릿 변경 없이 매치별 회전)."""
+    return f"{match_id}::{team_id}" if match_id else team_id
+
+
 # ---------------------------------------------------------------------------
 # 모델
 # ---------------------------------------------------------------------------
 class SubmitReq(BaseModel):
     team_id: str
     fields: dict[str, Any] = {}
+    match_id: Optional[str] = None    # 매치별 플래그 회전(P3)
 
 
 # ---------------------------------------------------------------------------
@@ -176,8 +184,9 @@ def get_challenge(cid: str, team_id: Optional[str] = None):
 
 
 @app.get("/portal/challenges/{cid}/artifact")
-def get_artifact(cid: str, team_id: str = "default"):
-    """팀별 동적 아티팩트 생성 후 다운로드. (분석형 챌린지 전용)"""
+def get_artifact(cid: str, team_id: str = "default", match_id: Optional[str] = None):
+    """팀별 동적 아티팩트 생성 후 다운로드. (분석형 챌린지 전용)
+    match_id가 있으면 매치별 플래그 회전을 위해 복합 팀키로 생성한다."""
     e = CATALOG.get(cid)
     if not e:
         raise HTTPException(404, "challenge not found")
@@ -188,9 +197,9 @@ def get_artifact(cid: str, team_id: str = "default"):
     gen = deploy / "generate_artifact.py"
     if not gen.exists():
         gen = deploy / "generate_datasets.py"
-    # 팀별 생성(cwd=deploy, team_id 인자)
-    rc = subprocess.run([sys.executable, str(gen.resolve()), team_id], cwd=str(deploy),
-                        capture_output=True, text=True)
+    # 팀별(+매치별) 생성(cwd=deploy, 복합 팀키 인자)
+    rc = subprocess.run([sys.executable, str(gen.resolve()), _effective_team(team_id, match_id)],
+                        cwd=str(deploy), capture_output=True, text=True)
     if rc.returncode != 0:
         raise HTTPException(500, f"아티팩트 생성 실패: {rc.stderr[:200]}")
     # 산출 아티팩트 파일 찾기(challenge.yaml artifacts 우선, 없으면 deploy의 .jsonl 등)
@@ -225,7 +234,9 @@ async def submit(cid: str, req: SubmitReq):
     if not hasattr(gmod, "grade_red"):
         raise HTTPException(500, "grader에 grade_red 없음")
 
-    submission = {"team_id": req.team_id, **(req.fields or {})}
+    # 매치별 플래그 회전: 채점용 팀키는 복합키(match::team), 스코어보드 기록도 동일 키로 격리.
+    eff_team = _effective_team(req.team_id, req.match_id)
+    submission = {"team_id": eff_team, **(req.fields or {})}
     context = {"challenge_dir": e["dir"]}
     try:
         result = gmod.grade_red(submission, context)
@@ -236,9 +247,9 @@ async def submit(cid: str, req: SubmitReq):
     got = int(getattr(result, "points", 0))
     detail = str(getattr(result, "detail", ""))
 
-    already = cid in _SOLVES.get(req.team_id, {})
+    already = cid in _SOLVES.get(eff_team, {})
     if passed and not already:
-        _SOLVES.setdefault(req.team_id, {})[cid] = {"points": e["points_red"], "at": time.time()}
+        _SOLVES.setdefault(eff_team, {})[cid] = {"points": e["points_red"], "at": time.time()}
         await _emit_solve(req.team_id, e)
 
     return {
