@@ -446,6 +446,200 @@ services:
     entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/defense_network && cd /var/log/siem/defense_network && zeek -i eth0 local"]
     depends_on: [defense_network]
 
+
+  # --- 신규 8섹터 Suricata/Zeek 사이드카 (26번 문서 패턴, 트윈 netns 공유) ---
+  ref_suricata:
+    image: jasonish/suricata:latest
+    container_name: ref_suricata
+    network_mode: "service:refinery_plant"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
+      - ./infra/suricata/custom.rules:/etc/suricata/rules/custom.rules:ro
+      - siem_logs:/var/log/siem
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/refinery_plant && suricata -c /etc/suricata/suricata.yaml -l /var/log/siem/refinery_plant -i eth0"]
+    depends_on: [refinery_plant]
+
+  ref_zeek:
+    image: zeek/zeek:latest
+    container_name: ref_zeek
+    network_mode: "service:refinery_plant"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/zeek/local.zeek:/usr/local/zeek/share/zeek/site/local.zeek:ro
+      - siem_logs:/var/log/siem
+    working_dir: /var/log/siem/refinery_plant
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/refinery_plant && cd /var/log/siem/refinery_plant && zeek -i eth0 local"]
+    depends_on: [refinery_plant]
+
+  fac_suricata:
+    image: jasonish/suricata:latest
+    container_name: fac_suricata
+    network_mode: "service:smart_factory"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
+      - ./infra/suricata/custom.rules:/etc/suricata/rules/custom.rules:ro
+      - siem_logs:/var/log/siem
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/smart_factory && suricata -c /etc/suricata/suricata.yaml -l /var/log/siem/smart_factory -i eth0"]
+    depends_on: [smart_factory]
+
+  fac_zeek:
+    image: zeek/zeek:latest
+    container_name: fac_zeek
+    network_mode: "service:smart_factory"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/zeek/local.zeek:/usr/local/zeek/share/zeek/site/local.zeek:ro
+      - siem_logs:/var/log/siem
+    working_dir: /var/log/siem/smart_factory
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/smart_factory && cd /var/log/siem/smart_factory && zeek -i eth0 local"]
+    depends_on: [smart_factory]
+
+  wtr_suricata:
+    image: jasonish/suricata:latest
+    container_name: wtr_suricata
+    network_mode: "service:water_utility"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
+      - ./infra/suricata/custom.rules:/etc/suricata/rules/custom.rules:ro
+      - siem_logs:/var/log/siem
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/water_utility && suricata -c /etc/suricata/suricata.yaml -l /var/log/siem/water_utility -i eth0"]
+    depends_on: [water_utility]
+
+  wtr_zeek:
+    image: zeek/zeek:latest
+    container_name: wtr_zeek
+    network_mode: "service:water_utility"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/zeek/local.zeek:/usr/local/zeek/share/zeek/site/local.zeek:ro
+      - siem_logs:/var/log/siem
+    working_dir: /var/log/siem/water_utility
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/water_utility && cd /var/log/siem/water_utility && zeek -i eth0 local"]
+    depends_on: [water_utility]
+
+  lng_suricata:
+    image: jasonish/suricata:latest
+    container_name: lng_suricata
+    network_mode: "service:lng_terminal"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
+      - ./infra/suricata/custom.rules:/etc/suricata/rules/custom.rules:ro
+      - siem_logs:/var/log/siem
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/lng_terminal && suricata -c /etc/suricata/suricata.yaml -l /var/log/siem/lng_terminal -i eth0"]
+    depends_on: [lng_terminal]
+
+  lng_zeek:
+    image: zeek/zeek:latest
+    container_name: lng_zeek
+    network_mode: "service:lng_terminal"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/zeek/local.zeek:/usr/local/zeek/share/zeek/site/local.zeek:ro
+      - siem_logs:/var/log/siem
+    working_dir: /var/log/siem/lng_terminal
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/lng_terminal && cd /var/log/siem/lng_terminal && zeek -i eth0 local"]
+    depends_on: [lng_terminal]
+
+  rwy_suricata:
+    image: jasonish/suricata:latest
+    container_name: rwy_suricata
+    network_mode: "service:railway_signaling"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
+      - ./infra/suricata/custom.rules:/etc/suricata/rules/custom.rules:ro
+      - siem_logs:/var/log/siem
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/railway_signaling && suricata -c /etc/suricata/suricata.yaml -l /var/log/siem/railway_signaling -i eth0"]
+    depends_on: [railway_signaling]
+
+  rwy_zeek:
+    image: zeek/zeek:latest
+    container_name: rwy_zeek
+    network_mode: "service:railway_signaling"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/zeek/local.zeek:/usr/local/zeek/share/zeek/site/local.zeek:ro
+      - siem_logs:/var/log/siem
+    working_dir: /var/log/siem/railway_signaling
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/railway_signaling && cd /var/log/siem/railway_signaling && zeek -i eth0 local"]
+    depends_on: [railway_signaling]
+
+  air_suricata:
+    image: jasonish/suricata:latest
+    container_name: air_suricata
+    network_mode: "service:airport_ot"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
+      - ./infra/suricata/custom.rules:/etc/suricata/rules/custom.rules:ro
+      - siem_logs:/var/log/siem
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/airport_ot && suricata -c /etc/suricata/suricata.yaml -l /var/log/siem/airport_ot -i eth0"]
+    depends_on: [airport_ot]
+
+  air_zeek:
+    image: zeek/zeek:latest
+    container_name: air_zeek
+    network_mode: "service:airport_ot"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/zeek/local.zeek:/usr/local/zeek/share/zeek/site/local.zeek:ro
+      - siem_logs:/var/log/siem
+    working_dir: /var/log/siem/airport_ot
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/airport_ot && cd /var/log/siem/airport_ot && zeek -i eth0 local"]
+    depends_on: [airport_ot]
+
+  dcx_suricata:
+    image: jasonish/suricata:latest
+    container_name: dcx_suricata
+    network_mode: "service:datacenter_bms"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
+      - ./infra/suricata/custom.rules:/etc/suricata/rules/custom.rules:ro
+      - siem_logs:/var/log/siem
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/datacenter_bms && suricata -c /etc/suricata/suricata.yaml -l /var/log/siem/datacenter_bms -i eth0"]
+    depends_on: [datacenter_bms]
+
+  dcx_zeek:
+    image: zeek/zeek:latest
+    container_name: dcx_zeek
+    network_mode: "service:datacenter_bms"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/zeek/local.zeek:/usr/local/zeek/share/zeek/site/local.zeek:ro
+      - siem_logs:/var/log/siem
+    working_dir: /var/log/siem/datacenter_bms
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/datacenter_bms && cd /var/log/siem/datacenter_bms && zeek -i eth0 local"]
+    depends_on: [datacenter_bms]
+
+  hsp_suricata:
+    image: jasonish/suricata:latest
+    container_name: hsp_suricata
+    network_mode: "service:hospital_ot"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
+      - ./infra/suricata/custom.rules:/etc/suricata/rules/custom.rules:ro
+      - siem_logs:/var/log/siem
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/hospital_ot && suricata -c /etc/suricata/suricata.yaml -l /var/log/siem/hospital_ot -i eth0"]
+    depends_on: [hospital_ot]
+
+  hsp_zeek:
+    image: zeek/zeek:latest
+    container_name: hsp_zeek
+    network_mode: "service:hospital_ot"
+    cap_add: ["NET_ADMIN", "NET_RAW"]
+    volumes:
+      - ./infra/zeek/local.zeek:/usr/local/zeek/share/zeek/site/local.zeek:ro
+      - siem_logs:/var/log/siem
+    working_dir: /var/log/siem/hospital_ot
+    entrypoint: ["sh", "-c", "mkdir -p /var/log/siem/hospital_ot && cd /var/log/siem/hospital_ot && zeek -i eth0 local"]
+    depends_on: [hospital_ot]
+
 networks:
   # 트윈 격리 네트워크(로드맵 F ★★★): internal:true 로 인터넷 egress 차단.
   # 각 트윈은 자기 네트워크에만 있고 코어 서비스(event_collector/config_service/edr_backend)만

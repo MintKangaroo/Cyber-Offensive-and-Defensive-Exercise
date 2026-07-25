@@ -69,7 +69,7 @@ flowchart TB
     end
 
     subgraph Sensors["📡 네트워크 센서"]
-        SUR["Suricata ×3"]; ZK["Zeek ×3"]; PF["pfSense syslog"]
+        SUR["Suricata ×11"]; ZK["Zeek ×11"]; PF["pfSense syslog"]
     end
 
     RT -->|익스플로잇| Twins
@@ -185,6 +185,11 @@ patched/vulnerable 상태를 한 번에 판정합니다.
 > access log / Config 무중단 패치 / 격리·킬스위치 / 이벤트 발행 계약을 그대로 상속합니다.
 > **11개 섹터 모두 per-twin nginx 게이트웨이 + `internal` 네트워크로 격리**되어(로드맵 F 패리티),
 > 컨테이너 실측 기준 섹터간 lateral·인터넷 egress가 차단되고 트윈→코어 통신만 허용됩니다.
+> **11개 섹터 전부 Suricata + Zeek 사이드카**(총 22개)가 각 트윈의 netns를 공유(`network_mode:
+> service:<twin>`)해 격리 네트워크 내부 트래픽을 관측합니다 — 격리를 깨지 않고(사이드카는 트윈
+> netns 안에 존재), 호스트 sudo 없이 docker 데몬이 `NET_ADMIN`/`NET_RAW`를 부여. 신규 섹터 실측:
+> `eve.json`(Suricata HTTP/flow)·`conn.log`(Zeek, 트윈→코어 8030 연결까지 포착)이 `siem_logs`
+> 볼륨에 쌓이고 SIEM이 자산별로 tail.
 
 ### 핵심 3종
 
