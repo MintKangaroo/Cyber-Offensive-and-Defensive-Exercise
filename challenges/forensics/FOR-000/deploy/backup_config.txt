@@ -1,6 +1,0 @@
-# backup.conf (더미, 훈련용)
-backup_server=backup01.internal.dummy
-service_account=DUMMY\svc_backup
-password=B@ckup_5131a79444!
-path=\\backup01\shares\daily
-schedule=daily@02:00
