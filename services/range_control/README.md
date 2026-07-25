@@ -41,6 +41,14 @@ curl -X POST $RC/ranges/match_A/reset -H "$AUTH" -d '{}'       # 다음 판 위�
 curl -X POST $RC/ranges/match_A/verify-baseline -H "$AUTH"     # 다시 passed:true 확인
 ```
 
+
+## ⚠️ verify-baseline과 SIEM 비동기 탐지
+`verify-baseline`은 취약 여부를 재려고 `safe_probe`로 트윈을 찌르는데, 이 트래픽을 **SIEM이
+비동기로 탐지**해 `blue_detection_success` 이벤트를 (검증 종료 후) 늦게 발행할 수 있다. verify는
+probe 후 settle delay를 두고 event_collector+scoring을 정리하지만, 완벽한 0을 보장하진 않는다.
+**운영 권장 흐름**: `reset` → (수 초 대기) → `reset` 한 번 더 → 훈련 시작. 즉 **reset을 최종 정리
+액션으로** 쓰고, verify-baseline은 "health + 전 취약점 open"을 확인하는 용도로 본다.
+
 ## 설계 노트
 - **선언적 baseline**: 각 자산의 초기 DB seed·서비스 상태·패치 상태·계정/토큰은 컨테이너 이미지와
   seed로 관리되고, 런타임 변경분(이벤트/점수/패치/solve)만 reset이 되돌린다. 완전한 파일 해시·

@@ -262,7 +262,10 @@ def verify_baseline(range_id: str, authorization: str = Header(default="")):
     # 3) safe_probe 전수 — baseline은 전부 VULNERABLE(패치 0)
     probe = safe_probe.run(emit=False)["summary"]
     all_vulnerable = probe["patched"] == 0
-    # 4) probe가 취약 엔드포인트를 찔러 만든 이벤트(→ scoring 소비)를 정리해 클린 유지.
+    # 4) probe가 취약 엔드포인트를 찔러 만든 이벤트(트윈 access-log → SIEM 비동기 탐지 →
+    #    blue_detection_success, scoring 소비)를 정리. SIEM 탐지가 비동기라 잠깐 flush를 기다린 뒤
+    #    event_collector + scoring을 리셋해 클린 유지.
+    time.sleep(3)
     for url in (f"{EVENT}/admin/reset", f"{SCORING}/admin/reset"):
         try:
             requests.post(url, headers=_hdr(), json={}, timeout=5)
