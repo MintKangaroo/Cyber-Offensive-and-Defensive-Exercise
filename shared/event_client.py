@@ -13,6 +13,10 @@ import requests
 
 EVENT_COLLECTOR_URL = os.environ.get("EVENT_COLLECTOR_URL", "http://event_collector:8010")
 _TIMEOUT = 1.5
+# 매치별 트윈 셋(P3): 이 트윈이 발행하는 이벤트의 기본 파티션 키. per-match 배포 시
+# MATCH_SCENARIO_ID=match_x 를 주면 scenario_id 미지정 호출이 전부 자동으로 매치에 태깅된다
+# (코어 3섹터처럼 호출부마다 scenario_id를 안 넘겨도 매치별 이벤트/점수 격리가 적용됨).
+_DEFAULT_SCENARIO = os.environ.get("MATCH_SCENARIO_ID", "default")
 
 
 def emit_event(
@@ -23,7 +27,7 @@ def emit_event(
     vuln_id: str | None = None,
     phase: str | None = None,
     team_id: str = "default",
-    scenario_id: str = "default",
+    scenario_id: str | None = None,
     metadata: dict | None = None,
     trace_id: str | None = None,
     matched_event_id: str | None = None,
@@ -35,7 +39,7 @@ def emit_event(
         "timestamp": time.time(),
         "actor": actor,
         "team_id": team_id,
-        "scenario_id": scenario_id,
+        "scenario_id": scenario_id if scenario_id is not None else _DEFAULT_SCENARIO,
         "target_asset": target_asset,
         "vuln_id": vuln_id,
         "phase": phase,

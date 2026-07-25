@@ -15,10 +15,11 @@ CORE_NET="cyber-range-platform_range_control"   # 코어가 붙어있는 네트�
 CORE_SVCS=(event_collector config_service edr_backend siem_api)
 COMPOSE="$(dirname "$0")/../infra/match/docker-compose.match.yml"
 
-echo "▶ 매치 트윈 셋 배포: $MATCH (scenario=$MATCH, ports $((BASE+1))~$((BASE+8)) = 정유/팩토리/수도/LNG/철도/공항/데이터센터/병원)"
+echo "▶ 매치 트윈 셋 배포: $MATCH (scenario=$MATCH, ports $((BASE+1))~$((BASE+11)) = 11섹터 전체)"
 MATCH_SCENARIO_ID="$MATCH" \
   REF_PORT=$((BASE+1)) FAC_PORT=$((BASE+2)) WTR_PORT=$((BASE+3)) LNG_PORT=$((BASE+4)) \
   RWY_PORT=$((BASE+5)) AIR_PORT=$((BASE+6)) DCX_PORT=$((BASE+7)) HSP_PORT=$((BASE+8)) \
+  GS_PORT=$((BASE+9)) PP_PORT=$((BASE+10)) DN_PORT=$((BASE+11)) \
   docker compose -p "$PROJECT" -f "$COMPOSE" up -d --build
 
 TWINNET="${PROJECT}_twinnet"
@@ -31,7 +32,7 @@ done
 if [ -n "${INSTRUCTOR_TOKEN:-}" ]; then
   curl -s -X POST "http://localhost:8055/matches" \
     -H "Authorization: Bearer $INSTRUCTOR_TOKEN" -H 'Content-Type: application/json' \
-    -d "{\"range_id\":\"range_1\",\"match_id\":\"$MATCH\",\"twin_set\":[\"refinery_plant\",\"smart_factory\",\"water_utility\",\"lng_terminal\",\"railway_signaling\",\"airport_ot\",\"datacenter_bms\",\"hospital_ot\"],\"scenario_id\":\"$MATCH\"}" >/dev/null \
-    && echo "▶ range_control에 매치 등록됨(8 OT 섹터)" || echo "▶ (range_control 등록 skip)"
+    -d "{\"range_id\":\"range_1\",\"match_id\":\"$MATCH\",\"twin_set\":[\"refinery_plant\",\"smart_factory\",\"water_utility\",\"lng_terminal\",\"railway_signaling\",\"airport_ot\",\"datacenter_bms\",\"hospital_ot\",\"ground_station\",\"power_plant\",\"defense_network\"],\"scenario_id\":\"$MATCH\"}" >/dev/null \
+    && echo "▶ range_control에 매치 등록됨(11섹터)" || echo "▶ (range_control 등록 skip)"
 fi
-echo "✅ $MATCH 배포 완료 — 8 OT 섹터 트윈: http://<HOST>:$((BASE+1))~$((BASE+8))"
+echo "✅ $MATCH 배포 완료 — 11섹터 트윈: http://<HOST>:$((BASE+1))~$((BASE+11))"

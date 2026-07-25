@@ -1,9 +1,7 @@
-# 매치별 트윈 셋 (P2/P3) — 전 OT 섹터(8개) 완전 물리 격리
-# ---------------------------------------------------------------------------
-# 한 Match 전용 트윈 인스턴스를 별도 docker compose 프로젝트(-p match_<id>)로 띄운다.
-# twinnet(internal:true)로 egress·cross-match 차단, gateway는 edge로 오프셋 포트 게시.
-# 코어는 scripts/deploy_match.sh 가 매치 twinnet에 connect(트윈→코어만 허용).
-# 포트: gateway 별 ${<PRE>_PORT}. scenario_id는 MATCH_SCENARIO_ID.
+# 매치별 트윈 셋 (P2/P3) — 11섹터 전체 완전 물리 격리
+# 별도 compose 프로젝트(-p match_<id>)로 트윈 인스턴스 복제. twinnet(internal)로 egress·cross-match
+# 차단, gateway는 edge로 오프셋 포트 게시. 코어는 deploy_match.sh가 twinnet에 connect.
+# MATCH_SCENARIO_ID로 이벤트 태깅(코어3섹터는 event_client 기본 scenario가 env로 해결).
 services:
   refinery_plant:
     build: { context: ../.., dockerfile: services/refinery_plant/Dockerfile }
@@ -35,6 +33,18 @@ services:
     networks: [twinnet]
   hospital_ot:
     build: { context: ../.., dockerfile: services/hospital_ot/Dockerfile }
+    environment: [ "MATCH_SCENARIO_ID=${MATCH_SCENARIO_ID:-default}" ]
+    networks: [twinnet]
+  ground_station:
+    build: { context: ../.., dockerfile: services/ground_station/Dockerfile }
+    environment: [ "MATCH_SCENARIO_ID=${MATCH_SCENARIO_ID:-default}" ]
+    networks: [twinnet]
+  power_plant:
+    build: { context: ../.., dockerfile: services/power_plant/Dockerfile }
+    environment: [ "MATCH_SCENARIO_ID=${MATCH_SCENARIO_ID:-default}" ]
+    networks: [twinnet]
+  defense_network:
+    build: { context: ../.., dockerfile: services/defense_network/Dockerfile }
     environment: [ "MATCH_SCENARIO_ID=${MATCH_SCENARIO_ID:-default}" ]
     networks: [twinnet]
 
@@ -86,7 +96,25 @@ services:
     volumes: [ ../twin_gateway/hsp.conf:/etc/nginx/conf.d/default.conf:ro ]
     depends_on: [hospital_ot]
     networks: [twinnet, edge]
+  gs_gw:
+    image: nginx:alpine
+    ports: [ "${GS_PORT:-8309}:8001" ]
+    volumes: [ ../twin_gateway/gs.conf:/etc/nginx/conf.d/default.conf:ro ]
+    depends_on: [ground_station]
+    networks: [twinnet, edge]
+  pp_gw:
+    image: nginx:alpine
+    ports: [ "${PP_PORT:-8310}:8002" ]
+    volumes: [ ../twin_gateway/pp.conf:/etc/nginx/conf.d/default.conf:ro ]
+    depends_on: [power_plant]
+    networks: [twinnet, edge]
+  dn_gw:
+    image: nginx:alpine
+    ports: [ "${DN_PORT:-8311}:8003" ]
+    volumes: [ ../twin_gateway/dn.conf:/etc/nginx/conf.d/default.conf:ro ]
+    depends_on: [defense_network]
+    networks: [twinnet, edge]
 
 networks:
-  twinnet: { driver: bridge, internal: true }   # egress·cross-match 차단(코어는 스크립트가 connect)
-  edge: { driver: bridge }                        # 게이트웨이 포트 게시용
+  twinnet: { driver: bridge, internal: true }
+  edge: { driver: bridge }

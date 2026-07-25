@@ -81,9 +81,9 @@ scripts/teardown_match.sh match_a     # 정리(코어 disconnect + 프로젝트 
    동적 포트 + MATCH_SCENARIO_ID 이벤트 태깅. cross-match/egress 차단·이벤트 격리 실측.
 3. **P3(진행)**: ✅ 관전자 지연 큐(`/events/delayed`, Live Fire observer 30s 지연) · ✅ 매치별 플래그
    회전(포털 match_id → 복합 팀키 `match::team`, 같은 팀도 매치마다 다른 플래그·cross-match 거부 실측).
-   ✅ 매치 트윈 셋 **8 OT 섹터 전체**(정유~병원, deploy_match.sh 포트 base+1~+8) — 8섹터 배포·이벤트
-   태깅·egress 차단 실측. 🔷 남음: 매치별 서브도메인(vhost), 코어 3섹터(위성/발전소/사내망)는 커스텀
-   main이라 MATCH_SCENARIO_ID 추가 후 편입 가능.
+   ✅ 매치 트윈 셋 **11섹터 전체**(8 OT + 코어3, deploy_match.sh 포트 base+1~+11) — 11/11 up·이벤트
+   태깅·egress 차단 실측. 코어3섹터는 event_client 기본 scenario를 MATCH_SCENARIO_ID env로 해결
+   (호출부 무변경). 🔷 남음: 매치별 서브도메인(vhost) — 동적 포트로 대체 가능하여 우선순위 낮음.
 
 ## 관련
 - 초기화·베이스라인: [../services/range_control/README.md](../services/range_control/README.md) (P1 #10)
