@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useRangeStore } from "./store/rangeStore";
-import { useEventStream, fetchRecentEvents } from "./api/client";
+import { useEventStream, fetchRecentEvents, fetchDelayedEvents } from "./api/client";
+
+const OBSERVER_DELAY_SEC = 30;   // 관전자 공개정보 지연(P3)
 import { AssetMap } from "./components/AssetMap/AssetMap";
 import { EventTimeline } from "./components/Timeline/EventTimeline";
 import { ScoreBoard } from "./components/Score/ScoreBoard";
@@ -49,7 +51,11 @@ export default function App() {
 
   const { unlock, playCriticalAlert } = useAlertSound(soundEnabled);
 
+  const isObserver = role === "observer";
+
+  // 관전자는 실시간 WS 이벤트를 무시하고(정보 누출 방지) 지연 피드를 폴링한다.
   const { connected } = useEventStream((e) => {
+    if (isObserver) return;
     pushEvent(e);
     // critical 신호(유출/목표달성)에만 반응 — 모든 이벤트에 울리면 워룸 몰입감을 오히려 해침
     if (["flag_exfiltrated", "red_objective_success", "asset_compromised"].includes(e.event_type)) {
@@ -58,13 +64,19 @@ export default function App() {
   });
 
   useEffect(() => {
+    if (isObserver) {
+      // 관전자: N초 지연 이벤트만 주기적으로 로드
+      const load = () => fetchDelayedEvents(OBSERVER_DELAY_SEC, 200)
+        .then((r) => setInitialEvents(r.events)).catch(() => {});
+      load();
+      const t = setInterval(load, 3000);
+      return () => clearInterval(t);
+    }
     fetchRecentEvents(200)
       .then((r) => setInitialEvents(r.events))
-      .catch(() => {
-        /* Event Collector 아직 기동 전이어도 화면은 뜨게 */
-      });
+      .catch(() => { /* Event Collector 기동 전이어도 화면은 뜨게 */ });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isObserver]);
 
   // 07번 문서 2절: 역할별 노출 범위. 실제 치팅 방지는 백엔드 인증이 담당하고,
   // 여기서는 UX 상 불필요한 정보를 안 보여주는 수준(보조 수단).
@@ -109,10 +121,17 @@ export default function App() {
           {soundEnabled ? "🔊 sound on" : "🔇 sound off"}
         </button>
         <RoleSwitcher />
-        <div className="flex items-center gap-1.5 text-[11px] font-mono text-[#6B7A99] ml-2">
-          <span className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-[#34D399]" : "bg-[#6B7A99]"}`} />
-          {connected ? "live" : "reconnecting…"}
-        </div>
+        {isObserver ? (
+          <div className="flex items-center gap-1.5 text-[11px] font-mono text-[#F5A623] ml-2" title="관전자는 공개정보를 지연 표시받습니다(실시간 정보 누출 방지)">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#F5A623]" />
+            ⏱ 관전 지연 {OBSERVER_DELAY_SEC}s
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 text-[11px] font-mono text-[#6B7A99] ml-2">
+            <span className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-[#34D399]" : "bg-[#6B7A99]"}`} />
+            {connected ? "live" : "reconnecting…"}
+          </div>
+        )}
       </header>
 
       <div className="flex-1 flex min-h-0">

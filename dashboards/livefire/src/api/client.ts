@@ -40,6 +40,11 @@ export async function fetchRecentEvents(limit = 200): Promise<{ events: RangeEve
   return j(`${EVENT_COLLECTOR}/events?limit=${limit}`);
 }
 
+/** 관전자용 지연 이벤트(P3) — delaySec 만큼 지난 이벤트만. 실시간 정보 누출 방지. */
+export async function fetchDelayedEvents(delaySec = 30, limit = 200): Promise<{ events: RangeEvent[] }> {
+  return j(`${EVENT_COLLECTOR}/events/delayed?delay_sec=${delaySec}&limit=${limit}`);
+}
+
 // ---- Instructor 액션(전부 사유 필수, 백엔드가 400으로 강제) ----
 export async function scenarioStart(scenarioId: string, teamIds: string[], reason: string, token: string) {
   return j(`${INSTRUCTOR_API}/instructor/scenario/start`, {

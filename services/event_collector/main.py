@@ -185,6 +185,26 @@ def list_events(limit: int = 100, target_asset: Optional[str] = None, team_id: O
     return {"events": rows}
 
 
+@app.get("/events/delayed")
+def list_events_delayed(delay_sec: float = 30.0, limit: int = 100,
+                        scenario_id: Optional[str] = None):
+    """관전자용 지연 이벤트 스트림(P3) — 최소 delay_sec 만큼 지난 이벤트만 노출한다.
+    관전자가 실시간 정보를 팀에 흘리지 못하게(공개정보 지연 표시). scenario_id로 매치 스코프 가능."""
+    import time as _t
+    cutoff = _t.time() - max(0.0, delay_sec)
+    conn = get_db()
+    query = "SELECT * FROM events WHERE timestamp <= ?"
+    params: list = [cutoff]
+    if scenario_id:
+        query += " AND scenario_id = ?"
+        params.append(scenario_id)
+    query += " ORDER BY timestamp DESC LIMIT ?"
+    params.append(limit)
+    rows = [dict(r) for r in conn.execute(query, params).fetchall()]
+    conn.close()
+    return {"events": rows, "delay_sec": delay_sec}
+
+
 @app.get("/replay/events")
 def replay_events(scenario_id: str = "default", time_from: Optional[float] = None,
                   time_to: Optional[float] = None, team_id: Optional[str] = None):
