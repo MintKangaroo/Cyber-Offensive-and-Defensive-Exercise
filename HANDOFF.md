@@ -783,9 +783,23 @@ SIEM 규칙 4종/웹 취약점 3종/AI 보안 인시던트 5종).
 >    **sudo 불필요**(cap_add를 docker 데몬이 부여). refinery 실측: eve.json 156줄(Suricata HTTP 174)·
 >    conn.log 32KB(Zeek, 트윈→config_service 8030 연결 포착)이 siem_logs 볼륨에 적재 확인 후 teardown.
 >    SIEM은 이미 TWIN_ASSETS 11개로 tail 배선 완결.
-> - **CI**: 3잡(unit 79 / challenges 61 / integration 전체 docker 스모크) 전부 GitHub에서 **success** 재확인.
-> - **다음 착수 후보(신규)**: 신규 섹터 SIEM 탐지 규칙 심화(BACnet/FF 네트워크 규칙), Process Impact를
->   실 이벤트 리플레이로 캡처한 워룸 스크린샷, blue 자동검증 스케줄러(주기적 재검증 데몬화).
+> 이어서 **추가 3건**도 완료(같은 세션, "완성까지 계속 진행" 지시):
+> 5. **blue 자동 재검증 데몬**(`safe_probe.watch()`, CLI `--watch <초>`/`--max-iterations`) — 주기적
+>    재검증 루프. 패치 반영 즉시 blue_patch_verified 발행 + 직전 대비 신규패치/회귀 델타 실시간 보고.
+>    연결불가는 회귀 오탐 안 하도록 probe된 것만 판정. 유닛 +2(전이/유한반복) → **79→81**.
+> 6. **DET-007/008 blue 탐지 챌린지**(BACnet/Foundation Fieldbus) — red 아티팩트(ICS-008/009)와
+>    프로토콜 짝. 진짜 SIEM DetectionEngine 채점(detection_solve): attack 탐지+normal 무오탐+no-op 거부.
+>    단일조건은 정상 트래픽에 오탐(DET-007 2건/DET-008 3건 실측) → AND 결합 필수 트랩 유효성 검증.
+>    **챌린지 61→63, 탐지 8→10**. `validate_challenges.sh` 63 전체 통과(아티팩트 39/탐지 10/스키마 14).
+> 7. **Process Impact E2E 실데이터 검증**(`data-testid="process-impact"`) — event_collector 기동→OT 6섹터
+>    사보타주/복구 이벤트 주입→빌드 대시보드 서빙→playwright(docker, --network host)로 실제 React
+>    컴포넌트 렌더 캡처. 사보타주 배지 3·복구중 1이 실이벤트에서 파생(주입 phase까지 전파) assert.
+>    README 스크린샷을 합성 프리뷰→실백엔드 렌더 캡처로 교체.
+> - **CI**: 3잡(unit **81** / challenges **63** / integration 전체 docker 스모크) 전부 GitHub에서 **success**.
+> - **BACnet/FF 완전 커버**: red 아티팩트(ICS-008/009) + blue 탐지(DET-007/008) 양면 완성.
+> - **다음 착수 후보(잔여)**: (문서화된 백로그·자연스러운 프로토콜 짝은 모두 소진) 필요 시 — 신규 섹터
+>   twin 취약점 심화(현재 섹터당 3종), 추가 OT 프로토콜(EtherNet/IP·CIP·MQTT-SN) red+blue 짝,
+>   ProcessImpact 프론트 유닛테스트(vitest 도입).
 
 ## 5. 상태 요약 한 줄
 
