@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from shared.rbac import require_role  # noqa: E402
 
 APP_DIR = Path(__file__).parent
-DB_PATH = APP_DIR / "config_service.db"
+DB_PATH = Path(os.environ.get("DATA_DIR", str(APP_DIR))) / "config_service.db"  # 볼륨 영속(P0-3)
 INSTRUCTOR_TOKEN = os.environ.get("INSTRUCTOR_TOKEN", "")  # 배포 시 반드시 설정, 기본값 미허용 정책은 배포 스크립트에서 강제
 
 app = FastAPI(title="Config Service")

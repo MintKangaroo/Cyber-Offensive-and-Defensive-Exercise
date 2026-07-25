@@ -52,7 +52,7 @@ HEALTH_TARGETS = {
     "challenge_portal": f"{PORTAL}/health", "edr_backend": f"{EDR}/health",
 }
 
-STATE_PATH = Path(os.environ.get("RANGE_STATE", "/tmp/range_baselines.json"))
+STATE_PATH = Path(os.environ.get("RANGE_STATE", str(Path(os.environ.get("DATA_DIR","/tmp"))/"range_baselines.json")))
 app = FastAPI(title="Range Control")
 app.add_middleware(
     CORSMiddleware, allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|(\d{1,3}\.){3}\d{1,3}|[\w-]+\.ts\.net)(:\d+)?",
@@ -115,7 +115,7 @@ class RangeReq(BaseModel):
 # per-match 이벤트 스트림·per-match 점수가 그대로 격리된다(GET /replay/events?scenario_id=,
 # GET /scores?scenario_id=). 플래그는 팀별 HMAC(team_id)로 이미 격리. Twin Set(팀별 트윈 인스턴스)
 # 물리 격리는 per-twin internal 네트워크 위에서 phased(문서 docs/MULTI-TENANT.md 참조).
-MATCHES_PATH = Path(os.environ.get("RANGE_MATCHES", "/tmp/range_matches.json"))
+MATCHES_PATH = Path(os.environ.get("RANGE_MATCHES", str(Path(os.environ.get("DATA_DIR","/tmp"))/"range_matches.json")))
 
 
 def _load_matches() -> dict:

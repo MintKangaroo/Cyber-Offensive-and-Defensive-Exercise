@@ -12,6 +12,10 @@ services:
   event_collector:
     build: { context: ., dockerfile: services/event_collector/Dockerfile }
     container_name: event_collector
+    volumes:
+      - ec_data:/data
+    environment:
+      - DATA_DIR=/data
     ports: ["8010:8010"]
     # 격리된 트윈들이 이벤트를 보낼 수 있도록 각 twin_* internal 네트워크에도 연결.
     networks: [range_control, twin_ground_station, twin_power_plant, twin_defense_network, twin_refinery_plant, twin_smart_factory, twin_water_utility, twin_lng_terminal, twin_railway_signaling, twin_airport_ot, twin_datacenter_bms, twin_hospital_ot]
@@ -19,6 +23,8 @@ services:
   scoring_engine:
     build: { context: ., dockerfile: services/scoring_engine/Dockerfile }
     container_name: scoring_engine
+    volumes:
+      - sc_data:/data
     ports: ["8020:8020"]
     environment:
       # /score/adjust(수동 점수조정) RBAC용. 토큰 미설정 시 dev 모드로 열리므로 반드시 주입.
@@ -28,23 +34,29 @@ services:
       - OBSERVER_TOKEN=${OBSERVER_TOKEN:-}
       # 관전자 read 게이트(기본 off = 공개). true 시 /scores 등 read에 유효 토큰 요구.
       - OBSERVER_READ_ENFORCE=${OBSERVER_READ_ENFORCE:-}
+      - DATA_DIR=/data
     networks: [range_control]
 
   config_service:
     build: { context: ., dockerfile: services/config_service/Dockerfile }
     container_name: config_service
+    volumes:
+      - cf_data:/data
     ports: ["8030:8030"]
     environment:
       - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-dev-instructor-token}
       - RED_TOKEN=${RED_TOKEN:-}
       - BLUE_TOKEN=${BLUE_TOKEN:-}
       - OBSERVER_TOKEN=${OBSERVER_TOKEN:-}
+      - DATA_DIR=/data
     # 격리된 트윈들이 패치 상태를 폴링할 수 있도록 각 twin_* 네트워크에도 연결.
     networks: [range_control, twin_ground_station, twin_power_plant, twin_defense_network, twin_refinery_plant, twin_smart_factory, twin_water_utility, twin_lng_terminal, twin_railway_signaling, twin_airport_ot, twin_datacenter_bms, twin_hospital_ot]
 
   edr_backend:
     build: { context: ., dockerfile: services/edr/Dockerfile }
     container_name: edr_backend
+    volumes:
+      - edr_data:/data
     ports: ["8080:8080"]
     environment:
       - CONFIG_SERVICE_URL=http://config_service:8030
@@ -54,6 +66,7 @@ services:
       - OBSERVER_TOKEN=${OBSERVER_TOKEN:-}
       # 관전자 read 게이트(기본 off = 공개). true 시 /edr/hosts 등 read에 유효 토큰 요구.
       - OBSERVER_READ_ENFORCE=${OBSERVER_READ_ENFORCE:-}
+      - DATA_DIR=/data
     depends_on: [config_service]
     # 격리된 트윈의 EDR 에이전트가 텔레메트리를 보낼 수 있도록 각 twin_* 네트워크에도 연결.
     networks: [range_control, twin_ground_station, twin_power_plant, twin_defense_network, twin_refinery_plant, twin_smart_factory, twin_water_utility, twin_lng_terminal, twin_railway_signaling, twin_airport_ot, twin_datacenter_bms, twin_hospital_ot]
@@ -71,7 +84,11 @@ services:
       - PUSH_TO_LIVEFIRE=true
       - SIEM_NOISE_ENABLED=false
       - SIEM_NOISE_EPS=2.0
+      - DATA_DIR=/data
+      - SIEM_DB_PATH=/data/siem.db
+      - SIEM_ALERT_DB_PATH=/data/siem_alerts.db
     volumes:
+      - si_data:/data
       - siem_logs:/var/log/siem:ro
     depends_on: [event_collector]
     networks: [range_control]
@@ -91,6 +108,8 @@ services:
   instructor_api:
     build: { context: ., dockerfile: services/instructor_api/Dockerfile }
     container_name: instructor_api
+    volumes:
+      - in_data:/data
     ports: ["8050:8050"]
     environment:
       - SCENARIO_ENGINE_URL=http://scenario_engine:8045
@@ -100,6 +119,7 @@ services:
       - RED_TOKEN=${RED_TOKEN:-}
       - BLUE_TOKEN=${BLUE_TOKEN:-}
       - OBSERVER_TOKEN=${OBSERVER_TOKEN:-}
+      - DATA_DIR=/data
     depends_on: [scenario_engine, scoring_engine, event_collector]
     networks: [range_control]
 
@@ -127,6 +147,8 @@ services:
   range_control:
     build: { context: ., dockerfile: services/range_control/Dockerfile }
     container_name: range_control
+    volumes:
+      - rc_data:/data
     ports: ["8055:8055"]
     environment:
       - EVENT_COLLECTOR_URL=http://event_collector:8010
@@ -136,28 +158,35 @@ services:
       - CHALLENGE_PORTAL_URL=http://challenge_portal:8060
       - EDR_BACKEND_URL=http://edr_backend:8080
       - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-dev-instructor-token}
+      - DATA_DIR=/data
     depends_on: [event_collector, scoring_engine, config_service, challenge_portal]
     networks: [range_control]
 
   challenge_portal:
     build: { context: ., dockerfile: services/challenge_portal/Dockerfile }
     container_name: challenge_portal
+    volumes:
+      - cp_data:/data
     ports: ["8060:8060"]
     environment:
       - EVENT_COLLECTOR_URL=http://event_collector:8010
       - CONFIG_SERVICE_URL=http://config_service:8030
       - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-dev-instructor-token}
+      - DATA_DIR=/data
     depends_on: [event_collector, config_service]
     networks: [range_control]
 
   noc_monitor:
     build: { context: ., dockerfile: services/noc_monitor/Dockerfile }
     container_name: noc_monitor
+    volumes:
+      - noc_data:/data
     ports: ["8070:8070"]
     environment:
       - CONFIG_SERVICE_URL=http://config_service:8030
       - EVENT_COLLECTOR_URL=http://event_collector:8010
       - EVENT_COLLECTOR_WS_URL=ws://event_collector:8010/ws
+      - DATA_DIR=/data
     depends_on: [event_collector, config_service, ground_station, power_plant, defense_network]
     networks: [range_control, twin_ground_station, twin_power_plant, twin_defense_network]
 
@@ -691,4 +720,13 @@ networks:
   range_control: { driver: bridge }
 
 volumes:
+  ec_data: {}
+  sc_data: {}
+  cf_data: {}
+  si_data: {}
+  edr_data: {}
+  in_data: {}
+  noc_data: {}
+  cp_data: {}
+  rc_data: {}
   siem_logs:

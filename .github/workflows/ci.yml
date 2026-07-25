@@ -94,7 +94,7 @@ jobs:
           echo "services did not become healthy in time"; exit 1
 
       - name: Integration smoke test (with recovery)
-        run: SMOKE_RECOVERY=1 bash scripts/smoke_test.sh
+        run: SMOKE_RECOVERY=1 SMOKE_CRASH_RECOVERY=1 bash scripts/smoke_test.sh
 
       - name: Dump container logs on failure
         if: failure()

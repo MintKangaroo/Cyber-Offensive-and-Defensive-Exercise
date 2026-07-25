@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import json
 import os
 import subprocess
 import sys
@@ -42,8 +43,25 @@ app.add_middleware(
     allow_methods=["*"], allow_headers=["*"], allow_credentials=False,
 )
 
-# solve 상태(메모리): {team_id: {challenge_id: {"points":int, "at":float}}}
+# solve 상태: {team_id: {challenge_id: {"points":int, "at":float}}}. 볼륨 json으로 영속(P0-3).
 _SOLVES: dict[str, dict[str, dict]] = {}
+_SOLVES_PATH = Path(os.environ.get("DATA_DIR", "/tmp")) / "portal_solves.json"
+
+
+def _persist_solves() -> None:
+    try:
+        _SOLVES_PATH.write_text(json.dumps({"red": _SOLVES, "blue": _BLUE_SOLVES}))
+    except OSError:
+        pass
+
+
+def _load_solves() -> None:
+    try:
+        d = json.loads(_SOLVES_PATH.read_text())
+        _SOLVES.update(d.get("red", {}))
+        _BLUE_SOLVES.update(d.get("blue", {}))
+    except (OSError, ValueError):
+        pass
 
 # ---------------------------------------------------------------------------
 # 팀 레지스트리 — 자유입력 대신 미리 정의된 팀을 드롭다운으로(오타로 점수판 갈라짐 방지).
@@ -250,6 +268,7 @@ async def submit(cid: str, req: SubmitReq):
     already = cid in _SOLVES.get(eff_team, {})
     if passed and not already:
         _SOLVES.setdefault(eff_team, {})[cid] = {"points": e["points_red"], "at": time.time()}
+        _persist_solves()
         await _emit_solve(req.team_id, e)
 
     return {
@@ -266,6 +285,7 @@ def portal_admin_reset():
     """훈련 초기화 — 포털의 red/blue solve 기록을 비운다(range_control이 호출)."""
     r, b = len(_SOLVES), len(_BLUE_SOLVES)
     _SOLVES.clear(); _BLUE_SOLVES.clear()
+    _persist_solves()
     return {"service": "challenge_portal", "cleared": {"red_teams": r, "blue_teams": b}}
 
 
@@ -437,6 +457,7 @@ async def blue_submit(cid: str, req: BlueSubmitReq):
     already = cid in _BLUE_SOLVES.get(req.team_id, {})
     if passed and not already:
         _BLUE_SOLVES.setdefault(req.team_id, {})[cid] = {"points": e["points_blue"], "at": time.time()}
+        _persist_solves()
         await _emit_blue_solve(req.team_id, e)
     return {
         "passed": passed,
@@ -528,6 +549,9 @@ async def _emit_blue_solve(team_id: str, e: dict) -> None:
             await client.post(f"{EVENT_COLLECTOR_URL}/events", json=ev)
     except httpx.HTTPError:
         pass
+
+
+_load_solves()  # 볼륨에 저장된 solve 복원(P0-3)
 
 
 if __name__ == "__main__":

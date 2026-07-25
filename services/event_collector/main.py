@@ -7,6 +7,7 @@ Event Collector (제안서 3장/7장 대응)
 - 저장 후 Scoring Engine에 비동기로 전달 (실패해도 이벤트 저장 자체는 성공 처리)
 """
 
+import os
 import sqlite3
 import json
 import asyncio
@@ -22,7 +23,7 @@ sys.path.append(str(Path(__file__).parent.parent.parent))  # repo root (shared/ 
 from shared.event_schema import Event  # noqa: E402
 
 APP_DIR = Path(__file__).parent
-DB_PATH = APP_DIR / "events.db"
+DB_PATH = Path(os.environ.get("DATA_DIR", str(APP_DIR))) / "events.db"  # 볼륨 마운트로 영속(P0-3)
 SCORING_ENGINE_URL = "http://scoring_engine:8020"
 
 from shared.rbac import require_role  # noqa: E402

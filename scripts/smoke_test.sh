@@ -253,6 +253,19 @@ else
 fi
 
 # -----------------------------------------------------------------------------
+# 크래시 복구(볼륨 영속, P0-3). 기본 스킵. SMOKE_CRASH_RECOVERY=1 로 활성화.
+if [ "${SMOKE_CRASH_RECOVERY:-0}" = "1" ]; then
+  echo; echo "── 크래시 복구 (볼륨 영속) ──"
+  ceid="crash-$(date +%s)-$$"
+  c -X POST "http://localhost:8010/events" -H 'Content-Type: application/json' -d "{\"event_id\":\"$ceid\",\"event_type\":\"asset_compromised\",\"timestamp\":$(date +%s),\"actor\":\"red\",\"team_id\":\"smoke\",\"scenario_id\":\"default\",\"target_asset\":\"power_plant\",\"vuln_id\":\"PP-001\",\"phase\":\"objective\",\"metadata\":{}}" >/dev/null 2>&1
+  # force-recreate = 새 컨테이너로 교체(크래시-교체 시뮬). 볼륨이 없으면 이벤트가 사라진다.
+  docker compose up -d --force-recreate --no-build event_collector >/dev/null 2>&1
+  for i in $(seq 1 15); do curl -sf http://localhost:8010/health >/dev/null 2>&1 && break; sleep 1; done
+  surv=$(c "http://localhost:8010/events?limit=200" | grep -c "$ceid")
+  [ "${surv:-0}" -ge 1 ] && ok "크래시 복구 — force-recreate 후 이벤트 생존(볼륨 영속)" || bad "크래시 복구 — 이벤트 소실(볼륨 미적용?)"
+fi
+
+# -----------------------------------------------------------------------------
 echo
 echo "=================================================================="
 echo " 결과:  PASS=$PASS   FAIL=$FAIL   (총 $((PASS+FAIL)))"

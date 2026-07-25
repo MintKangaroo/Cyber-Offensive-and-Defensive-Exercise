@@ -6,6 +6,7 @@ Scoring Engine (제안서 10장 "점수 체계" 대응)
 않고, Blue가 같은 패치를 여러 번 검증해도 중복 채점되지 않습니다.
 """
 
+import os
 import sys
 import sqlite3
 import math
@@ -20,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from shared.rbac import require_role, require_read  # noqa: E402
 
 APP_DIR = Path(__file__).parent
-DB_PATH = APP_DIR / "scores.db"
+DB_PATH = Path(os.environ.get("DATA_DIR", str(APP_DIR))) / "scores.db"  # 볼륨 영속(P0-3)
 
 app = FastAPI(title="Scoring Engine")
 

@@ -6,6 +6,7 @@ Health Poller
 단일 구현으로 두 목적을 만족시켜 중복을 피한다.
 """
 from __future__ import annotations
+import os
 import asyncio
 import time
 import sqlite3
@@ -15,7 +16,7 @@ from typing import Callable, Awaitable, Optional
 
 import httpx
 
-DB_PATH = Path(__file__).parent / "health_history.db"
+DB_PATH = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent))) / "health_history.db"  # 볼륨 영속(P0-3)
 POLL_INTERVAL_SEC = 5
 HISTORY_WINDOW_SEC = 3600     # 1시간 업타임% 계산 윈도우
 

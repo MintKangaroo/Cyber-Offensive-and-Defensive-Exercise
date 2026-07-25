@@ -5,12 +5,13 @@ config_service의 audit_log(patch/quarantine/killswitch 전용)와는 별개로,
 scenario/event/score 액션을 append-only로 기록한다. 대시보드는 두 소스를
 시간순으로 병합해서 보여준다(24번 문서 6절).
 """
+import os
 import sqlite3
 import time
 import uuid
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent / "instructor_audit.db"
+DB_PATH = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent))) / "instructor_audit.db"  # 볼륨 영속(P0-3)
 
 
 def _get_db() -> sqlite3.Connection:

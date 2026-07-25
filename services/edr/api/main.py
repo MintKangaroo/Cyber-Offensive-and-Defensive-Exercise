@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 from shared.rbac import require_role, require_read  # noqa: E402
 
 APP_DIR = Path(__file__).parent
-DB_PATH = APP_DIR / "edr.db"
+DB_PATH = Path(os.environ.get("DATA_DIR", str(APP_DIR))) / "edr.db"  # 볼륨 영속(P0-3)
 CONFIG_SERVICE_URL = os.environ.get("CONFIG_SERVICE_URL", "http://config_service:8030")
 INSTRUCTOR_TOKEN = os.environ.get("INSTRUCTOR_TOKEN", "")
 STALE_HOST_SEC = 30   # 이 시간 이상 스냅샷이 없으면 offline 처리
