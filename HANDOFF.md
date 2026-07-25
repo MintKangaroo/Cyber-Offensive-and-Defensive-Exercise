@@ -765,6 +765,28 @@ SIEM 규칙 4종/웹 취약점 3종/AI 보안 인시던트 5종).
 > - **다음 착수 후보**: 신규 섹터 Suricata/Zeek 센서 사이드카(격리 후 netns 공유 재설계 필요),
 >   Foundation Fieldbus/BACnet 챌린지, LiveFire 대시보드에 ICS 사보타주 임팩트 시각화.
 
+---
+### [세션 인계 — 후속 후보 4건 전부 완료]
+> 위 "다음 착수 후보" 항목을 이번 세션에 **전부 구현·실검증·커밋**했다. (netns 재설계·sudo 우려는 실측 결과 불필요로 판명)
+> 1. **BACnet/Foundation Fieldbus 챌린지**(ICS-008/009) — 검증된 ICS-002~007 트래픽분석 패턴 그대로.
+>    팀별 HMAC 동적, artifact_solve PASS + 빈제출 거부 + 팀간 유니크. **챌린지 59→61, 7대→9대 OT 프로토콜**.
+>    `validate_challenges.sh` 61 전체 통과(아티팩트 39/탐지 8/스키마 14).
+> 2. **LiveFire Process Impact 패널**(`dashboards/livefire/src/components/ProcessImpact/`) — 자산 상태를
+>    10개 OT 섹터 물리 결과(계통 트립/SIS 해제/CRAC 냉방 오버라이드 등)로 번역. rangeStore.assetStates만
+>    사용하는 자기완결형. `tsc -b && vite build` 통과. README에 스크린샷.
+> 3. **섹터별 blue 자동 패치검증**(`shared/safe_probe.py`) — CHECKS_BY_ASSET 레지스트리(11섹터×44),
+>    `run(asset, emit)` API + CLI `--asset/--summary/--json/--no-emit`. status()가 _RESULTS에 구조화 캡처,
+>    _EMIT_ENABLED로 발행 억제. **실측 기반**(플래그 신뢰 아님)으로 blue_patch_verified 발행.
+>    `tests/unit/test_safe_probe.py`(7) requests 모킹으로 docker 없이 검증. **유닛 72→79**.
+> 4. **신규 8섹터 Suricata/Zeek 사이드카**(docker-compose, 16개→총 22개) — 코어와 동일
+>    `network_mode: "service:<twin>"` netns 공유. **격리 재설계 불필요**(사이드카가 트윈 netns 안에 존재),
+>    **sudo 불필요**(cap_add를 docker 데몬이 부여). refinery 실측: eve.json 156줄(Suricata HTTP 174)·
+>    conn.log 32KB(Zeek, 트윈→config_service 8030 연결 포착)이 siem_logs 볼륨에 적재 확인 후 teardown.
+>    SIEM은 이미 TWIN_ASSETS 11개로 tail 배선 완결.
+> - **CI**: 3잡(unit 79 / challenges 61 / integration 전체 docker 스모크) 전부 GitHub에서 **success** 재확인.
+> - **다음 착수 후보(신규)**: 신규 섹터 SIEM 탐지 규칙 심화(BACnet/FF 네트워크 규칙), Process Impact를
+>   실 이벤트 리플레이로 캡처한 워룸 스크린샷, blue 자동검증 스케줄러(주기적 재검증 데몬화).
+
 ## 5. 상태 요약 한 줄
 
 M0 병합 / M1 **Docker 재검증** / **M2(EDR)** / **M3(시나리오)** / **M4(EDR 콘솔)** / **M5(SIEM 인제스천+탐지4종+LiveFire)** / **M6(대시보드/AAR)** 라이브 검증 완료 → **M0~M6 전 마일스톤 Docker 실검증 완료** / **P1-1 복구판정+MTTR 배선 완료(noc_monitor 배포, MTTR 실측)** / **P1-3 트윈 네트워크 격리 완료(per-twin nginx 게이트웨이, lateral·egress 차단 실측)** / **P1-2 유닛테스트 43개+GitHub Actions CI 완료** / **P2 C-QA docker 게이트 실검증(배포형 6종 full docker QA PASS, run_all 포트자동추출+아티팩트 감지 수정)** / **P3 RBAC(역할별 토큰, edr isolate 무검증 갭 차단)** / **P2b 아티팩트 exploit 계약 통일(artifact_solve, NET/FOR/REV 6종 solve+grade 실검증)** / **유닛 테스트 58 pass** / **통합 스모크 테스트 `scripts/smoke_test.sh` 35/35 PASS(+복구=38/38)** / **전체 48개 챌린지 C-QA PASS**(서비스형 9 docker + 아티팩트형 31 artifact_solve + 탐지형 8 detection_solve) / **insane 티어 6종 신규 완료·전부 C-QA PASS**(REV-009 핸들러테이블VM / FOR-009 안티포렌식3단 / NET-009 OT사보타주 Modbus / AI-009 전이회피 로그분석 / DET-009 APT low-and-slow 헌팅 / WEB-009 WAF우회+블라인드SQLi full-docker) → **6개 전 분야 easy~insane 곡선 완성(각 8문제)** / 버그 14건 수정(QA2 + 시나리오 라우팅1 + 콘솔 vite-env/CORS2 + SIEM timestamp/가드/죽은규칙3 + AAR 히트맵/상관키2 + 대시보드 vite-env/백엔드 CORS2 + 복구 scenario전파/AAR MTTR metadata2) / USAGE.md / **다음: 옵저버 read 엔드포인트 세분화, AI 분야 확충(실 ML/docker), 빈 medium/hard 칸 채우기(REV/FOR/NET medium 등).**
