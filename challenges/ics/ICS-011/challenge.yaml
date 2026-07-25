@@ -1,0 +1,22 @@
+challenge:
+  id: "ICS-011"
+  title: "S7comm 안전 DB 무단 쓰기 분석 - Safety DB Write"
+  category: "ics"
+  difficulty: "hard"
+  points: { red: 140, blue: 0 }
+  mitre: [T0836, T0855]
+  description: |
+    s7_traffic.jsonl은 스마트팩토리 S7 통신망의 합성 S7comm 트래픽 로그다. 정상 엔지니어링
+    스테이션의 READ_VAR 폴링 사이에, 무단 호스트가 안전 데이터블록(DB 62)에 WRITE_VAR를 주입해
+    안전 로직 변수를 조작한 사보타주가 숨어 있다. 정상 엔지니어링 스테이션이 아닌 출발지에서
+    DB 62에 WRITE_VAR를 내린 프레임을 찾아 공격자 IP를 식별하고, note(base64) 토큰을 공격자 IP로
+    XOR 복호해 flag를 도출하라.
+  red_task:
+    goal: "안전 DB(62) S7 WRITE_VAR의 공격자 IP 식별 → note 토큰 XOR 복호 → flag"
+    submit_fields: ["attacker_ip", "flag"]
+  scoring:
+    red_verify: "flag_match"
+  artifacts: ["s7_traffic.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 S7comm 로그(실트래픽/실장비 무관). IP/토큰/플래그는 팀별 더미값."

@@ -1,0 +1,10 @@
+- id: DET-010
+  title: "EtherNet/IP CIP unauthorized SetAttribute to safety assembly"
+  severity: 5
+  mitre: [T0836, T0855]
+  source_type: twin
+  kind: match
+  match:
+    raw.cip_service: 16
+    raw.cip_class: 4
+    raw.cip_instance: 101

@@ -1,0 +1,9 @@
+- id: DET-012
+  title: "MQTT Sparkplug DCMD to pump actuator control"
+  severity: 4
+  mitre: [T0855, T0831]
+  source_type: twin
+  kind: match
+  match:
+    raw.message_type: "DCMD"
+    raw.metric: "~Pump/Control"

@@ -1,0 +1,22 @@
+challenge:
+  id: "ICS-010"
+  title: "EtherNet/IP CIP 무단 제어 분석 - Safety Assembly Tamper"
+  category: "ics"
+  difficulty: "hard"
+  points: { red: 140, blue: 0 }
+  mitre: [T0836, T0855, T0831]
+  description: |
+    enip_traffic.jsonl은 스마트팩토리 셀의 합성 EtherNet/IP(CIP) 트래픽 로그다. 정상 PLC의
+    주기적 GetAttributeSingle(0x0e) 폴링 사이에, 무단 호스트가 안전 출력 어셈블리(Assembly
+    class 0x04, instance 101)에 SetAttributeSingle(0x10) write를 주입해 안전출력을 강제한
+    사보타주가 숨어 있다. 정상 PLC가 아닌 출발지에서 안전 어셈블리에 SetAttributeSingle write를
+    내린 프레임을 찾아 공격자 IP를 식별하고, note(base64) 토큰을 공격자 IP로 XOR 복호해 flag를 도출하라.
+  red_task:
+    goal: "안전 어셈블리 CIP SetAttribute write의 공격자 IP 식별 → note 토큰 XOR 복호 → flag"
+    submit_fields: ["attacker_ip", "flag"]
+  scoring:
+    red_verify: "flag_match"
+  artifacts: ["enip_traffic.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 EtherNet/IP CIP 로그(실트래픽/실장비 무관). IP/토큰/플래그는 팀별 더미값."

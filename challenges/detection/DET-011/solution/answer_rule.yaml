@@ -1,0 +1,10 @@
+- id: DET-011
+  title: "S7comm unauthorized WRITE_VAR to safety DB 62"
+  severity: 5
+  mitre: [T0836, T0855]
+  source_type: twin
+  kind: match
+  match:
+    raw.s7_function: "WRITE_VAR"
+    raw.area: "DB"
+    raw.db_number: 62

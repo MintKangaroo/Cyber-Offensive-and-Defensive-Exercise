@@ -4,7 +4,7 @@
 > 데이터센터 · 병원** 등 **11개 ICS/OT 섹터**를 모사한 디지털 트윈 위에서
 > Red(공격) · Blue(방어) · 관전자 · 교관이 함께 훈련하는 **풀스택 사이버 레인지**입니다.
 > 취약 서비스 트윈(**44종**), EDR, SIEM, 시나리오 엔진, 실시간 대시보드, 자동 채점(AAR),
-> 그리고 7개 분야 **63개 CTF 챌린지**를 하나의 `docker compose`로 기동합니다.
+> 그리고 7개 분야 **69개 CTF 챌린지**를 하나의 `docker compose`로 기동합니다.
 
 <p align="center">
   <img src="docs/images/livefire-overview.png" alt="Live Fire Range 대시보드" width="900"/>
@@ -20,7 +20,7 @@
 - [주요 화면 (스크린샷)](#주요-화면-스크린샷)
 - [핵심 기능](#핵심-기능)
 - [트윈 취약 서비스 (44종)](#트윈-취약-서비스-44종)
-- [챌린지 카탈로그 (63종)](#챌린지-카탈로그-63종)
+- [챌린지 카탈로그 (69종)](#챌린지-카탈로그-69종)
 - [빠른 시작](#빠른-시작)
 - [검증 · 품질 게이트](#검증--품질-게이트)
 - [RBAC (역할 기반 접근제어)](#rbac-역할-기반-접근제어)
@@ -143,7 +143,7 @@ SIEM 8040 · Scenario 8045 · Instructor 8050 · NOC 8070 · EDR 8080 · AAR 809
 | **점수/AAR** | 이벤트 → 자동 채점(Red 목표 / Blue 탐지·복구). MTTD/MTTR·탐지율·오탐률·ATT&CK 히트맵·**PDF 리포트** 자동 생성. |
 | **복구 판정** | NOC Monitor가 트윈 헬스를 폴링, 침해→패치→복구를 판정해 MTTR 산출·Blue 가점. |
 | **RBAC** | instructor/red/blue/observer 역할별 토큰. 방어 액션은 instructor·blue, 조작은 instructor, **관전자는 읽기 전용**. |
-| **63 챌린지** | 7개 분야 × easy~insane. 팀별 동적 플래그(HMAC)로 답 공유 방지. 전부 자동 QA 통과. |
+| **69 챌린지** | 7개 분야 × easy~insane. 팀별 동적 플래그(HMAC)로 답 공유 방지. 전부 자동 QA 통과. |
 
 ---
 
@@ -297,7 +297,7 @@ patched/vulnerable 상태를 한 번에 판정합니다.
 
 ---
 
-## 챌린지 카탈로그 (63종)
+## 챌린지 카탈로그 (69종)
 
 web·forensics·network·reversing·detection·ai 6개 분야가 모두 **easy → medium → hard → insane** 난이도 곡선을 갖추고 있습니다.
 표기: `점수(Red/Blue)`. 팀마다 플래그·정답이 HMAC으로 달라 답 공유가 불가능합니다.
@@ -365,7 +365,7 @@ web·forensics·network·reversing·detection·ai 6개 분야가 모두 **easy �
 </details>
 
 <details>
-<summary><b>🕵️ Detection (10) — Blue 전용, 진짜 SIEM 엔진이 채점</b></summary>
+<summary><b>🕵️ Detection (13) — Blue 전용, 진짜 SIEM 엔진이 채점</b></summary>
 
 | ID | 제목 | 난이도 | ATT&CK | 점수 |
 |---|---|---|---|---|
@@ -376,13 +376,17 @@ web·forensics·network·reversing·detection·ai 6개 분야가 모두 **easy �
 | DET-005 | Log4Shell(JNDI) 인젝션 탐지 | medium | T1190 | 0/80 |
 | DET-006 | DNS DGA 탐지 — 대량 도메인 조회 | medium | T1568.002 | 0/90 |
 | DET-007 | BACnet 무단 WriteProperty(냉방 오버라이드) 탐지 | medium | T0855,T0836 | 0/80 |
+| DET-010 | EtherNet/IP CIP 안전 어셈블리 무단 SetAttribute 탐지 | medium | T0836,T0855 | 0/80 |
+| DET-011 | S7comm 안전 DB(62) 무단 WRITE_VAR 탐지 | medium | T0836,T0855 | 0/80 |
+| DET-012 | MQTT Sparkplug B 무단 액추에이터 DCMD 탐지 | medium | T0855,T0831 | 0/80 |
 | DET-004 | C2 비콘 주기성 탐지 | hard | T1071 | 0/90 |
 | DET-008 | Foundation Fieldbus MODE_BLK O/S(제어루프 정지) 탐지 | hard | T0836,T0855,T0831 | 0/90 |
 | DET-009 | APT Low-and-Slow 비콘 헌팅(노이즈 90%) | insane | T1071.004,T1029 | 0/200 |
 
-> **DET-007/008(ICS 탐지)**: BACnet/Foundation Fieldbus 사보타주를 blue가 match 규칙으로 탐지.
-> 단일 조건(service만/param만)은 정상 트래픽에 오탐하도록 데이터셋을 설계 — AND 결합이 실제로
-> 필요함을 검증(트랩 유효성 실측). red 아티팩트(ICS-008/009)와 프로토콜 짝을 이룬다.
+> **DET-007/008/010/011/012(ICS 탐지)**: BACnet/Foundation Fieldbus/EtherNet-IP·CIP/S7comm/
+> MQTT-Sparkplug 사보타주를 blue가 match 규칙으로 탐지. 단일 조건은 정상 트래픽에 오탐하도록
+> 데이터셋을 설계 — AND 결합이 실제로 필요함을 검증(트랩 유효성 실측). red 아티팩트(ICS-008~012)와
+> 프로토콜 짝을 이룬다.
 </details>
 
 <details>
@@ -405,7 +409,7 @@ web·forensics·network·reversing·detection·ai 6개 분야가 모두 **easy �
 > 로 L∞ 예산 안에서 오분류를 유도하는 실제 ML 보안 챌린지입니다.
 
 <details>
-<summary><b>🏭 ICS/OT (10) — OT 프로토콜 기반 (서비스형 2 + 트래픽분석형 8)</b></summary>
+<summary><b>🏭 ICS/OT (13) — OT 프로토콜 기반 (서비스형 2 + 트래픽분석형 11)</b></summary>
 
 | ID | 제목 | 난이도 | ATT&CK | 게이트 | 점수 |
 |---|---|---|---|---|---|
@@ -417,13 +421,17 @@ web·forensics·network·reversing·detection·ai 6개 분야가 모두 **easy �
 | ICS-005 | Profinet DCP 스푸핑 분석 — Station Identity Spoof | medium | T0842,T0830 | artifact | 120/0 |
 | ICS-007 | HART 명령 주입 분석 — Transmitter Range Tamper | medium | T0836,T0855 | artifact | 120/0 |
 | ICS-008 | BACnet 무단 WriteProperty 분석 — Priority Override | medium | T0855,T0836 | artifact | 120/0 |
+| ICS-012 | MQTT Sparkplug B 무단 액추에이터 명령 — DCMD Injection | medium | T0855,T0831 | artifact | 120/0 |
 | ICS-006 | IEC 61850 GOOSE 위조 분석 — Spoofed Trip | hard | T0832,T0855 | artifact | 130/0 |
 | ICS-009 | Foundation Fieldbus 블록 MODE 조작 — PID OOS Sabotage | hard | T0836,T0855,T0831 | artifact | 140/0 |
+| ICS-010 | EtherNet/IP CIP 무단 제어 — Safety Assembly Tamper | hard | T0836,T0855,T0831 | artifact | 140/0 |
+| ICS-011 | S7comm 안전 DB 무단 쓰기 — Safety DB Write | hard | T0836,T0855 | artifact | 140/0 |
 
 > **서비스형**(ICS-000/001): Modbus/OPC UA를 흉내낸 서비스를 docker로 배포하고 실제 익스플로잇으로
-> 플래그 획득. **트래픽분석형**(ICS-002~009): 합성 Modbus/DNP3/IEC 104/Profinet/IEC 61850/HART/BACnet/
-> Foundation Fieldbus 로그에서 안전계통에 대한 무단 제어·신원 스푸핑·블록 정지(사보타주)를 상관
-> 분석으로 찾아 공격자 식별 + 은닉 토큰 복호. **9대 OT 프로토콜 커버**. 전부 팀별 HMAC 동적 플래그.
+> 플래그 획득. **트래픽분석형**(ICS-002~012): 합성 Modbus/DNP3/IEC 104/Profinet/IEC 61850/HART/BACnet/
+> Foundation Fieldbus/EtherNet-IP·CIP/S7comm/MQTT-Sparkplug 로그에서 안전계통에 대한 무단 제어·신원
+> 스푸핑·블록 정지·액추에이터 명령(사보타주)을 상관 분석으로 찾아 공격자 식별 + 은닉 토큰 복호.
+> **12대 OT 프로토콜 커버**. 전부 팀별 HMAC 동적 플래그.
 </details>
 
 ---
@@ -475,7 +483,7 @@ python3 infra/challenge_qa/run_all.py --challenge NET-007
 - **유닛 테스트 72개** (`python -m pytest tests/`) — 계약 검증 + 지금까지 잡은 버그의 회귀 테스트.
 - **통합 스모크 35/35** (`scripts/smoke_test.sh`) — 헬스 → 트윈공격 → SIEM 인제스천 → 점수 →
   시나리오 → EDR 탐지 → AAR/PDF → 네트워크 격리까지 E2E.
-- **C-QA 파이프라인** (`infra/challenge_qa/run_all.py`) — 챌린지 타입별 올바른 게이트로 63종 전부 검증:
+- **C-QA 파이프라인** (`infra/challenge_qa/run_all.py`) — 챌린지 타입별 올바른 게이트로 69종 전부 검증:
   - **서비스형(docker)**: `deploy_up → intended_solve → blank_submit → flag_determinism → teardown`
   - **아티팩트형**: `artifact_solve` (생성 → 시그니처 분기 solve → 채점 + 빈제출 거부)
   - **탐지형(DET)**: `detection_solve` (데이터셋 생성 → **진짜 SIEM DetectionEngine** 채점 + no-op 규칙 거부)

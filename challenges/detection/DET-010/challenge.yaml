@@ -1,0 +1,22 @@
+challenge:
+  id: "DET-010"
+  title: "EtherNet/IP CIP 안전 어셈블리 무단 SetAttribute 탐지"
+  category: "detection"
+  difficulty: "medium"
+  points: { red: 0, blue: 80 }
+  mitre: [T0836, T0855]
+  description: |
+    EtherNet/IP CIP 로그(attack_log.jsonl)에서 사보타주를 탐지하는 규칙을 작성하라. 정상 트래픽
+    (normal_log.jsonl)에는 각 조건을 하나씩만 충족하는 유사 요청이 섞여 있어 — 단일 조건 규칙은
+    오탐한다. 판별 조건을 모두 AND로 결합해야 한다. 우리 SIEM 엔진이 규칙을 실제로 태워 채점한다.
+  blue_task:
+    goal: "cip_service=16(SetAttributeSingle) AND cip_class=4 AND cip_instance=101 동시 매칭"
+    success_criteria: |
+      (1) attack_log.jsonl(사보타주)에 알림 발생
+      (2) normal_log.jsonl(유사 정상)에는 오탐 없음
+  scoring:
+    blue_verify: "alert_dataset_check"
+  artifacts: ["attack_log.jsonl", "normal_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 EtherNet/IP CIP 로그 데이터셋만 사용. 실제 장비/트래픽 없음."
