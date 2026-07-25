@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { scenarioStart, scenarioEnd, scoreAdjust, fetchAudit, usePolling } from "../../api/client";
 import { useRangeStore } from "../../store/rangeStore";
+import { RangeControlPanel } from "./RangeControlPanel";
 
 function timeAgo(ts: number): string {
   const sec = Math.max(0, Date.now() / 1000 - ts);
@@ -149,6 +150,9 @@ export function InstructorConsole() {
       {status && (
         <div className="px-3 py-2 font-mono text-[11px] text-[#6B7A99] border-b border-[#1E2A3F]">{status}</div>
       )}
+
+      {/* Range Control — #9 Match · #10 Reset · #11 Safety (range_control 8055) */}
+      <RangeControlPanel token={token} reason={reason} />
 
       <div className="px-3 py-2 text-[10px] uppercase tracking-widest text-[#6B7A99]">Audit Log</div>
       <AuditLogView />
