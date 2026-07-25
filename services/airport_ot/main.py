@@ -46,6 +46,22 @@ def fuelfarm_valve(patched, p, emit):
     return {"valve": p.get("valve", "FV-3"), "action": p.get("action", "close"), "status": "valve command sent"}
 
 
+
+def air_jetbridge(patched, p, emit):
+    if patched and p.get("authorization") != "Bearer gate-op":
+        deny(401, "jet bridge control requires gate operator auth")
+    if not patched:
+        emit({"note": "unauthenticated jet bridge control"})
+    return {"status": "ok", "vuln": "AIR-004"}
+
+def air_fids(patched, p, emit):
+    if patched and p.get("authorization") != "Bearer fids-cms":
+        deny(403, "FIDS message requires CMS auth")
+    if not patched:
+        emit({"note": "flight information display content injection"})
+    return {"status": "ok", "vuln": "AIR-005"}
+
+
 VULNS = [
     Vuln("AIR-001", "/api/runway/lighting", "POST", "Runway lighting control",
          "red_objective_success", "objective", runway_lighting),
@@ -53,6 +69,10 @@ VULNS = [
          "flag_exfiltrated", "data_exfiltration", bhs_route),
     Vuln("AIR-003", "/api/fuelfarm/valve", "POST", "Fuel farm valve unauth",
          "red_attack_started", "lateral_movement", fuelfarm_valve),
+    Vuln("AIR-004", "/api/jetbridge/control", "POST", "Jet bridge control",
+         "red_objective_success", "objective", air_jetbridge),
+    Vuln("AIR-005", "/api/fids/message", "POST", "FIDS content injection",
+         "red_attack_started", "lateral_movement", air_fids),
 ]
 
 app = make_ics_twin("airport_ot", "Airport BHS/Runway/Fuel Twin", VULNS)

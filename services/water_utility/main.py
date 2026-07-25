@@ -46,6 +46,22 @@ def hmi_login(patched, p, emit):
     return deny(401, "invalid credentials")
 
 
+
+def wtr_setpoint(patched, p, emit):
+    if patched and p.get("authorization") != "Bearer scada-op":
+        deny(401, "reservoir setpoint change requires operator auth")
+    if not patched:
+        emit({"note": "unauthenticated reservoir level setpoint tamper"})
+    return {"status": "ok", "vuln": "WTR-004"}
+
+def wtr_report_ssrf(patched, p, emit):
+    if patched and p.get("authorization") != "Bearer report-svc":
+        deny(400, "fetch URL blocked (allowlist)")
+    if not patched:
+        emit({"note": "report fetch SSRF to internal metadata"})
+    return {"status": "ok", "vuln": "WTR-005"}
+
+
 VULNS = [
     Vuln("WTR-001", "/api/dosing/chlorine", "POST", "Chlorine dosing tamper",
          "red_objective_success", "objective", chlorine_dosing),
@@ -53,6 +69,10 @@ VULNS = [
          "red_attack_started", "lateral_movement", pump_control),
     Vuln("WTR-003", "/api/hmi/login", "POST", "SCADA HMI default creds",
          "red_attack_started", "initial_access", hmi_login),
+    Vuln("WTR-004", "/api/tank/setpoint", "POST", "Reservoir setpoint tamper",
+         "red_objective_success", "objective", wtr_setpoint),
+    Vuln("WTR-005", "/api/report/fetch", "POST", "Report fetch SSRF",
+         "red_attack_started", "lateral_movement", wtr_report_ssrf),
 ]
 
 app = make_ics_twin("water_utility", "Water Treatment SCADA Twin", VULNS)

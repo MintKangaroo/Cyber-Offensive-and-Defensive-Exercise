@@ -3,7 +3,7 @@
 > **위성 지상국 · 전력망(SCADA) · 사내망 + 정유/석유화학 · 스마트팩토리 · 수도 · LNG · 철도 · 공항 ·
 > 데이터센터 · 병원** 등 **11개 ICS/OT 섹터**를 모사한 디지털 트윈 위에서
 > Red(공격) · Blue(방어) · 관전자 · 교관이 함께 훈련하는 **풀스택 사이버 레인지**입니다.
-> 취약 서비스 트윈(**44종**), EDR, SIEM, 시나리오 엔진, 실시간 대시보드, 자동 채점(AAR),
+> 취약 서비스 트윈(**60종**), EDR, SIEM, 시나리오 엔진, 실시간 대시보드, 자동 채점(AAR),
 > 그리고 7개 분야 **69개 CTF 챌린지**를 하나의 `docker compose`로 기동합니다.
 
 <p align="center">
@@ -19,7 +19,7 @@
 - [아키텍처](#아키텍처)
 - [주요 화면 (스크린샷)](#주요-화면-스크린샷)
 - [핵심 기능](#핵심-기능)
-- [트윈 취약 서비스 (44종)](#트윈-취약-서비스-44종)
+- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종)
 - [챌린지 카탈로그 (69종)](#챌린지-카탈로그-69종)
 - [빠른 시작](#빠른-시작)
 - [검증 · 품질 게이트](#검증--품질-게이트)
@@ -136,7 +136,7 @@ SIEM 8040 · Scenario 8045 · Instructor 8050 · NOC 8070 · EDR 8080 · AAR 809
 
 | 영역 | 내용 |
 |---|---|
-| **디지털 트윈** | **11개 ICS/OT 섹터**(위성·전력·사내망 + 정유·스마트팩토리·수도·LNG·철도·공항·데이터센터·병원)에 **취약 서비스 44종**(SQLi/IDOR/RCE/명령주입/SSRF/XXE/LDAP + OPC UA·Modbus·HART·SIS·ESD·Profinet 등 OT 프로토콜)을 내장하고 텔레메트리·access log를 발생. **11개 섹터 전부 per-twin 네트워크 격리**(nginx 게이트웨이 + internal 네트워크)로 lateral·egress 차단. |
+| **디지털 트윈** | **11개 ICS/OT 섹터**(위성·전력·사내망 + 정유·스마트팩토리·수도·LNG·철도·공항·데이터센터·병원)에 **취약 서비스 60종**(SQLi/IDOR/RCE/명령주입/SSRF/XXE/LDAP + OPC UA·Modbus·HART·SIS·ESD·Profinet 등 OT 프로토콜)을 내장하고 텔레메트리·access log를 발생. **11개 섹터 전부 per-twin 네트워크 격리**(nginx 게이트웨이 + internal 네트워크)로 lateral·egress 차단. |
 | **EDR** | 프로세스 스냅샷 수집 → 리버스쉘·웹서버발 셸 생성 등 행위 탐지 → 호스트 격리/프로세스 kill(감사 로그). |
 | **SIEM** | 인제스천(11개 트윈 로그·Suricata·Zeek·pfSense syslog) → 정규화 → 규칙(match/threshold/sequence/periodicity, **ICS/OT 섹터 규칙 19종**: match 16 + 섹터 킬체인 sequence 2 + OT 다중취약점 threshold 1) 탐지 → Live Fire 점수 연동. ATT&CK 커버리지 매핑. |
 | **시나리오 엔진** | 코드로 정의된 킬체인 시나리오(순서 강제, chain bonus). **14개 시나리오** 로드 — **11개 섹터 전부 전용 킬체인** + 크로스오버 3(**IT→OT 피벗** 포함: 사내망 발판→자격증명 탈취→정유 OPC UA 정찰→SIS 사보타주로 Purdue 경계를 넘는 멀티에셋 킬체인). |
@@ -147,10 +147,10 @@ SIEM 8040 · Scenario 8045 · Instructor 8050 · NOC 8070 · EDR 8080 · AAR 809
 
 ---
 
-## 트윈 취약 서비스 (44종)
+## 트윈 취약 서비스 (60종)
 
 11개 ICS/OT 섹터 트윈에 내장된 취약 서비스 목록입니다. 각 취약점은 `PATCH_<ID>=true` 환경변수 또는
-교관 콘솔의 무중단 패치 토글로 개별 비활성화되며, `python3 shared/safe_probe.py` 로 44종 전부의
+교관 콘솔의 무중단 패치 토글로 개별 비활성화되며, `python3 shared/safe_probe.py` 로 60종 전부의
 patched/vulnerable 상태를 한 번에 판정합니다.
 
 > **섹터별 blue 자동 패치검증**: `--asset <섹터>` 로 특정 섹터만 재검증(blue 팀이 자기 담당 섹터만),
@@ -293,7 +293,7 @@ patched/vulnerable 상태를 한 번에 판정합니다.
 | HSP-003 | Infusion Pump Unauth | CWE-306 | T0855 | `POST /api/device/infusion` |
 
 > 신규 24종은 모두 팀별 무중단 패치 토글 + Safe Probe 판정을 지원하며, 실제 docker 기동 후
-> `python3 shared/safe_probe.py` 에서 **44종 전부 VULNERABLE** 로 확인됩니다.
+> `python3 shared/safe_probe.py` 에서 **60종 전부 VULNERABLE** 로 확인됩니다.
 
 ---
 

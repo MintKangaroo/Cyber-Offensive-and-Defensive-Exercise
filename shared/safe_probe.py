@@ -218,6 +218,23 @@ SECTOR_PROBES = [
     ("http://localhost:8208", "GET", "/api/pacs/study", {"id": "ST-1001"}, 401, "HSP-001", "hospital_ot", "HSP-001 PACS Study IDOR"),
     ("http://localhost:8208", "GET", "/api/his/patient", {"id": "' OR '1'='1"}, 404, "HSP-002", "hospital_ot", "HSP-002 HIS Patient SQLi"),
     ("http://localhost:8208", "POST", "/api/device/infusion", {"rate": 999}, 401, "HSP-003", "hospital_ot", "HSP-003 Infusion Pump Unauth"),
+
+    ("http://localhost:8201", "POST", "/api/modbus/coil-write", {}, 401, "REF-004", "refinery_plant", "REF-004 Modbus coil write (pump/valve)"),
+    ("http://localhost:8201", "GET", "/api/historian/export", {"id": "1"}, 403, "REF-005", "refinery_plant", "REF-005 Historian export path traversal"),
+    ("http://localhost:8202", "POST", "/api/robot/estop-override", {}, 403, "FAC-004", "smart_factory", "FAC-004 Robot E-stop override"),
+    ("http://localhost:8202", "GET", "/api/recipe/get", {"id": "1"}, 404, "FAC-005", "smart_factory", "FAC-005 MES recipe SQL injection"),
+    ("http://localhost:8203", "POST", "/api/tank/setpoint", {}, 401, "WTR-004", "water_utility", "WTR-004 Reservoir setpoint tamper"),
+    ("http://localhost:8203", "POST", "/api/report/fetch", {}, 400, "WTR-005", "water_utility", "WTR-005 Report fetch SSRF"),
+    ("http://localhost:8204", "POST", "/api/tank/gauge", {}, 401, "LNG-004", "lng_terminal", "LNG-004 LNG tank gauge spoof"),
+    ("http://localhost:8204", "POST", "/api/compressor/firmware", {}, 403, "LNG-005", "lng_terminal", "LNG-005 BOG compressor firmware upload"),
+    ("http://localhost:8205", "POST", "/api/balise/telegram", {}, 401, "RWY-004", "railway_signaling", "RWY-004 Balise telegram write"),
+    ("http://localhost:8205", "GET", "/api/timetable/get", {"id": "1"}, 401, "RWY-005", "railway_signaling", "RWY-005 Timetable IDOR"),
+    ("http://localhost:8206", "POST", "/api/jetbridge/control", {}, 401, "AIR-004", "airport_ot", "AIR-004 Jet bridge control"),
+    ("http://localhost:8206", "POST", "/api/fids/message", {}, 403, "AIR-005", "airport_ot", "AIR-005 FIDS content injection"),
+    ("http://localhost:8207", "POST", "/api/generator/control", {}, 403, "DCX-004", "datacenter_bms", "DCX-004 Generator start/stop"),
+    ("http://localhost:8207", "POST", "/api/access/door", {}, 401, "DCX-005", "datacenter_bms", "DCX-005 Access control door unlock"),
+    ("http://localhost:8208", "POST", "/api/dicom/store", {}, 401, "HSP-004", "hospital_ot", "HSP-004 DICOM C-STORE overwrite"),
+    ("http://localhost:8208", "POST", "/api/nursecall/override", {}, 403, "HSP-005", "hospital_ot", "HSP-005 Nurse call override"),
 ]
 
 

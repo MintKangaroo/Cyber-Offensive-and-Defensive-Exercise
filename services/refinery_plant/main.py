@@ -46,6 +46,22 @@ def tank_gauge(patched, p, emit):
     return {"tank": p.get("tank", "T101"), "level_pct": p.get("level"), "status": "gauge updated"}
 
 
+
+def ref_modbus_coil(patched, p, emit):
+    if patched and p.get("authorization") != "Bearer eng-station":
+        deny(401, "engineering workstation auth required for Modbus write")
+    if not patched:
+        emit({"note": "unauthenticated Modbus coil write to pump/valve"})
+    return {"status": "ok", "vuln": "REF-004"}
+
+def ref_historian_export(patched, p, emit):
+    if patched and p.get("token") != "hist-signed":
+        deny(403, "export path must be within allowlist")
+    if not patched:
+        emit({"note": "historian export path traversal (arbitrary file read)"})
+    return {"status": "ok", "vuln": "REF-005"}
+
+
 VULNS = [
     Vuln("REF-001", "/api/opcua/read", "GET", "OPC UA anonymous read",
          "red_attack_started", "initial_access", opcua_read),
@@ -53,6 +69,10 @@ VULNS = [
          "red_objective_success", "objective", sis_bypass),
     Vuln("REF-003", "/api/tankfarm/gauge", "POST", "HART tank gauge spoof",
          "red_attack_started", "lateral_movement", tank_gauge),
+    Vuln("REF-004", "/api/modbus/coil-write", "POST", "Modbus coil write (pump/valve)",
+         "red_objective_success", "objective", ref_modbus_coil),
+    Vuln("REF-005", "/api/historian/export", "GET", "Historian export path traversal",
+         "red_attack_started", "data_exfiltration", ref_historian_export),
 ]
 
 app = make_ics_twin("refinery_plant", "Refinery/Petrochemical DCS/SIS Twin", VULNS)

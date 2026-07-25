@@ -47,6 +47,22 @@ def infusion_rate(patched, p, emit):
     return {"device": p.get("device", "PUMP-07"), "rate_mlh": p.get("rate"), "status": "rate applied"}
 
 
+
+def hsp_dicom_store(patched, p, emit):
+    if patched and p.get("authorization") != "Bearer pacs-ae":
+        deny(401, "DICOM store requires AE-title auth")
+    if not patched:
+        emit({"note": "DICOM C-STORE study overwrite"})
+    return {"status": "ok", "vuln": "HSP-004"}
+
+def hsp_nursecall(patched, p, emit):
+    if patched and p.get("authorization") != "Bearer clinical-eng":
+        deny(403, "nurse call override requires clinical eng auth")
+    if not patched:
+        emit({"note": "nurse call system override"})
+    return {"status": "ok", "vuln": "HSP-005"}
+
+
 VULNS = [
     Vuln("HSP-001", "/api/pacs/study", "GET", "PACS study IDOR",
          "flag_exfiltrated", "data_exfiltration", pacs_study),
@@ -54,6 +70,10 @@ VULNS = [
          "flag_exfiltrated", "data_exfiltration", his_patient),
     Vuln("HSP-003", "/api/device/infusion", "POST", "Infusion pump unauth",
          "red_objective_success", "objective", infusion_rate),
+    Vuln("HSP-004", "/api/dicom/store", "POST", "DICOM C-STORE overwrite",
+         "red_objective_success", "objective", hsp_dicom_store),
+    Vuln("HSP-005", "/api/nursecall/override", "POST", "Nurse call override",
+         "red_attack_started", "lateral_movement", hsp_nursecall),
 ]
 
 app = make_ics_twin("hospital_ot", "Hospital PACS/HIS/Medical Device Twin", VULNS)

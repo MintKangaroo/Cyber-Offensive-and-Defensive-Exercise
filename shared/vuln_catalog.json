@@ -285,6 +285,30 @@
       "description": "탱크 레벨 게이지 위조로 오버필 유도",
       "detection_hint": "",
       "patch_hint": "엔지니어링 워크스테이션 인증"
+    },
+    {
+      "id": "REF-004",
+      "name": "Modbus Coil Write",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0836"
+      ],
+      "endpoint": "POST /api/modbus/coil-write",
+      "description": "미인증 Modbus 코일 write(펌프/밸브 조작)",
+      "detection_hint": "엔지니어링 인증 없는 coil write",
+      "patch_hint": "엔지니어링 워크스테이션 인증 강제"
+    },
+    {
+      "id": "REF-005",
+      "name": "Historian Export Path Traversal",
+      "cwe": "CWE-22",
+      "mitre_attack": [
+        "T1005"
+      ],
+      "endpoint": "GET /api/historian/export",
+      "description": "히스토리안 export 경로 순회(임의 파일 읽기)",
+      "detection_hint": "export path에 ../ 포함",
+      "patch_hint": "경로 allowlist/정규화"
     }
   ],
   "smart_factory": [
@@ -323,6 +347,30 @@
       "description": "작업지시 조회 SQL 인젝션",
       "detection_hint": "",
       "patch_hint": "파라미터 바인딩"
+    },
+    {
+      "id": "FAC-004",
+      "name": "Robot E-stop Override",
+      "cwe": "CWE-284",
+      "mitre_attack": [
+        "T0838"
+      ],
+      "endpoint": "POST /api/robot/estop-override",
+      "description": "로봇 비상정지 무단 오버라이드",
+      "detection_hint": "승인 없는 estop override",
+      "patch_hint": "안전 PLC 4-eyes 승인"
+    },
+    {
+      "id": "FAC-005",
+      "name": "MES Recipe SQLi",
+      "cwe": "CWE-89",
+      "mitre_attack": [
+        "T0868"
+      ],
+      "endpoint": "GET /api/recipe/get",
+      "description": "MES 레시피 SQL 인젝션",
+      "detection_hint": "id 파라미터 인젝션",
+      "patch_hint": "파라미터화 쿼리"
     }
   ],
   "water_utility": [
@@ -361,6 +409,30 @@
       "description": "기본 자격증명 로그인",
       "detection_hint": "",
       "patch_hint": "초기 비밀번호 강제 변경"
+    },
+    {
+      "id": "WTR-004",
+      "name": "Reservoir Setpoint Tamper",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0836"
+      ],
+      "endpoint": "POST /api/tank/setpoint",
+      "description": "저수조 설정치 무단 변경",
+      "detection_hint": "미인증 setpoint 변경",
+      "patch_hint": "운영자 인증 강제"
+    },
+    {
+      "id": "WTR-005",
+      "name": "Report Fetch SSRF",
+      "cwe": "CWE-918",
+      "mitre_attack": [
+        "T0883"
+      ],
+      "endpoint": "POST /api/report/fetch",
+      "description": "리포트 fetch SSRF(내부 메타데이터)",
+      "detection_hint": "내부 URL fetch",
+      "patch_hint": "URL allowlist"
     }
   ],
   "lng_terminal": [
@@ -399,6 +471,30 @@
       "description": "화재/가스 알람 억제",
       "detection_hint": "",
       "patch_hint": "안전 엔지니어 승인"
+    },
+    {
+      "id": "LNG-004",
+      "name": "LNG Tank Gauge Spoof",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0855"
+      ],
+      "endpoint": "POST /api/tank/gauge",
+      "description": "LNG 탱크 게이지 위조(오버필 유도)",
+      "detection_hint": "미인증 게이지 write",
+      "patch_hint": "엔지니어링 인증"
+    },
+    {
+      "id": "LNG-005",
+      "name": "BOG Compressor Firmware Upload",
+      "cwe": "CWE-494",
+      "mitre_attack": [
+        "T0857"
+      ],
+      "endpoint": "POST /api/compressor/firmware",
+      "description": "서명 없는 압축기 펌웨어 업로드",
+      "detection_hint": "서명 미검증 펌웨어",
+      "patch_hint": "펌웨어 서명 검증"
     }
   ],
   "railway_signaling": [
@@ -437,6 +533,30 @@
       "description": "ATS 임의 명령",
       "detection_hint": "",
       "patch_hint": "명령 allowlist"
+    },
+    {
+      "id": "RWY-004",
+      "name": "Balise Telegram Write",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0836"
+      ],
+      "endpoint": "POST /api/balise/telegram",
+      "description": "미인증 발리스 텔레그램 write",
+      "detection_hint": "신호 인증 없는 telegram write",
+      "patch_hint": "신호 엔지니어링 인증"
+    },
+    {
+      "id": "RWY-005",
+      "name": "Timetable IDOR",
+      "cwe": "CWE-639",
+      "mitre_attack": [
+        "T0801"
+      ],
+      "endpoint": "GET /api/timetable/get",
+      "description": "시간표 IDOR(스케줄 노출)",
+      "detection_hint": "미인증 시간표 접근",
+      "patch_hint": "CTC 인증"
     }
   ],
   "airport_ot": [
@@ -475,6 +595,30 @@
       "description": "급유 밸브 무단 조작",
       "detection_hint": "",
       "patch_hint": "감독자 인증"
+    },
+    {
+      "id": "AIR-004",
+      "name": "Jet Bridge Control",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0855"
+      ],
+      "endpoint": "POST /api/jetbridge/control",
+      "description": "미인증 탑승교 제어",
+      "detection_hint": "게이트 인증 없는 제어",
+      "patch_hint": "게이트 운영자 인증"
+    },
+    {
+      "id": "AIR-005",
+      "name": "FIDS Content Injection",
+      "cwe": "CWE-284",
+      "mitre_attack": [
+        "T0856"
+      ],
+      "endpoint": "POST /api/fids/message",
+      "description": "운항정보표시(FIDS) 콘텐츠 주입",
+      "detection_hint": "CMS 인증 없는 메시지",
+      "patch_hint": "CMS 인증"
     }
   ],
   "datacenter_bms": [
@@ -513,6 +657,30 @@
       "description": "DCIM 원격 URL 조회(SSRF)",
       "detection_hint": "",
       "patch_hint": "내부/사설 차단"
+    },
+    {
+      "id": "DCX-004",
+      "name": "Generator Start/Stop",
+      "cwe": "CWE-284",
+      "mitre_attack": [
+        "T0855"
+      ],
+      "endpoint": "POST /api/generator/control",
+      "description": "미인증 발전기 기동/정지",
+      "detection_hint": "승인 없는 발전기 제어",
+      "patch_hint": "시설관리 승인"
+    },
+    {
+      "id": "DCX-005",
+      "name": "Access Door Unlock",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0855"
+      ],
+      "endpoint": "POST /api/access/door",
+      "description": "물리 출입통제 도어 해제",
+      "detection_hint": "미인증 도어 제어",
+      "patch_hint": "배지 인증"
     }
   ],
   "hospital_ot": [
@@ -550,6 +718,30 @@
       "endpoint": "POST /api/device/infusion",
       "description": "주입펌프 투여율 무단 변경",
       "detection_hint": "",
+      "patch_hint": "임상공학 인증"
+    },
+    {
+      "id": "HSP-004",
+      "name": "DICOM C-STORE Overwrite",
+      "cwe": "CWE-306",
+      "mitre_attack": [
+        "T0873"
+      ],
+      "endpoint": "POST /api/dicom/store",
+      "description": "DICOM C-STORE 스터디 덮어쓰기",
+      "detection_hint": "AE-title 인증 없는 store",
+      "patch_hint": "AE-title 인증"
+    },
+    {
+      "id": "HSP-005",
+      "name": "Nurse Call Override",
+      "cwe": "CWE-284",
+      "mitre_attack": [
+        "T0855"
+      ],
+      "endpoint": "POST /api/nursecall/override",
+      "description": "널스콜 시스템 오버라이드",
+      "detection_hint": "임상공학 인증 없는 override",
       "patch_hint": "임상공학 인증"
     }
   ]

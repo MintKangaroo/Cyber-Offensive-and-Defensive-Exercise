@@ -47,6 +47,22 @@ def mes_workorder(patched, p, emit):
     return {"id": wid, "workorder": WORKORDERS.get(str(wid))}
 
 
+
+def fac_robot_estop(patched, p, emit):
+    if patched and p.get("approver_token") != "safety-plc-approval":
+        deny(403, "robot E-stop override requires safety PLC approval")
+    if not patched:
+        emit({"note": "robot emergency-stop override without approval"})
+    return {"status": "ok", "vuln": "FAC-004"}
+
+def fac_recipe_sqli(patched, p, emit):
+    if patched and p.get("authorization") != "Bearer mes-token":
+        deny(404, "recipe not found (parameterized query)")
+    if not patched:
+        emit({"note": "MES recipe SQL injection"})
+    return {"status": "ok", "vuln": "FAC-005"}
+
+
 VULNS = [
     Vuln("FAC-001", "/api/plc/program-download", "POST", "PLC program download",
          "red_attack_started", "lateral_movement", plc_program_download),
@@ -54,6 +70,10 @@ VULNS = [
          "red_attack_started", "privilege_escalation", robot_exec),
     Vuln("FAC-003", "/api/mes/workorder", "GET", "MES work-order SQLi",
          "flag_exfiltrated", "data_exfiltration", mes_workorder),
+    Vuln("FAC-004", "/api/robot/estop-override", "POST", "Robot E-stop override",
+         "red_objective_success", "objective", fac_robot_estop),
+    Vuln("FAC-005", "/api/recipe/get", "GET", "MES recipe SQL injection",
+         "red_attack_started", "lateral_movement", fac_recipe_sqli),
 ]
 
 app = make_ics_twin("smart_factory", "Smart Factory PLC/Robot/MES Twin", VULNS)

@@ -50,6 +50,22 @@ def dcim_fetch(patched, p, emit):
     return {"url": url, "title": "external asset metadata"}
 
 
+
+def dcx_generator(patched, p, emit):
+    if patched and p.get("approver_token") != "facilities-approval":
+        deny(403, "generator control requires facilities approval")
+    if not patched:
+        emit({"note": "unauthenticated generator start/stop"})
+    return {"status": "ok", "vuln": "DCX-004"}
+
+def dcx_door(patched, p, emit):
+    if patched and p.get("authorization") != "Bearer pacs-badge":
+        deny(401, "door control requires badge auth")
+    if not patched:
+        emit({"note": "physical access control door unlock"})
+    return {"status": "ok", "vuln": "DCX-005"}
+
+
 VULNS = [
     Vuln("DCX-001", "/api/crac/setpoint", "POST", "CRAC setpoint tamper",
          "red_objective_success", "objective", crac_setpoint),
@@ -57,6 +73,10 @@ VULNS = [
          "red_objective_success", "objective", ups_command),
     Vuln("DCX-003", "/api/dcim/fetch", "POST", "DCIM SSRF",
          "red_attack_started", "lateral_movement", dcim_fetch),
+    Vuln("DCX-004", "/api/generator/control", "POST", "Generator start/stop",
+         "red_objective_success", "objective", dcx_generator),
+    Vuln("DCX-005", "/api/access/door", "POST", "Access control door unlock",
+         "red_attack_started", "lateral_movement", dcx_door),
 ]
 
 app = make_ics_twin("datacenter_bms", "Data Center UPS/CRAC/DCIM Twin", VULNS)

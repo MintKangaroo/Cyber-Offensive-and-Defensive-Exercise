@@ -41,6 +41,22 @@ def ats_command(patched, p, emit):
     return {"command": cmd, "status": "ATS command dispatched"}
 
 
+
+def rwy_balise(patched, p, emit):
+    if patched and p.get("authorization") != "Bearer signaling-eng":
+        deny(401, "balise telegram write requires signaling auth")
+    if not patched:
+        emit({"note": "unauthenticated balise telegram write"})
+    return {"status": "ok", "vuln": "RWY-004"}
+
+def rwy_timetable_idor(patched, p, emit):
+    if patched and p.get("authorization") != "Bearer ctc-token":
+        deny(401, "timetable access requires CTC auth")
+    if not patched:
+        emit({"note": "timetable IDOR (schedule disclosure)"})
+    return {"status": "ok", "vuln": "RWY-005"}
+
+
 VULNS = [
     Vuln("RWY-001", "/api/signal/set", "POST", "Signal aspect override",
          "red_objective_success", "objective", signal_set),
@@ -48,6 +64,10 @@ VULNS = [
          "red_objective_success", "objective", interlocking_override),
     Vuln("RWY-003", "/api/ats/command", "POST", "ATS command injection",
          "red_attack_started", "privilege_escalation", ats_command),
+    Vuln("RWY-004", "/api/balise/telegram", "POST", "Balise telegram write",
+         "red_objective_success", "objective", rwy_balise),
+    Vuln("RWY-005", "/api/timetable/get", "GET", "Timetable IDOR",
+         "red_attack_started", "data_exfiltration", rwy_timetable_idor),
 ]
 
 app = make_ics_twin("railway_signaling", "Railway Signaling/ATS Twin", VULNS)

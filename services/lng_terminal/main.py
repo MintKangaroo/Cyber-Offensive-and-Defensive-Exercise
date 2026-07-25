@@ -40,6 +40,22 @@ def firegas_suppress(patched, p, emit):
     return {"zone": p.get("zone", "TANK-AREA"), "firegas_alarm": "suppressed"}
 
 
+
+def lng_tank_gauge(patched, p, emit):
+    if patched and p.get("authorization") != "Bearer eng-station":
+        deny(401, "HART tank gauge write requires engineering auth")
+    if not patched:
+        emit({"note": "LNG tank gauge spoof (overfill risk)"})
+    return {"status": "ok", "vuln": "LNG-004"}
+
+def lng_compressor_fw(patched, p, emit):
+    if patched and p.get("signature") != "vendor-signed":
+        deny(403, "firmware image signature invalid")
+    if not patched:
+        emit({"note": "unsigned BOG compressor firmware upload"})
+    return {"status": "ok", "vuln": "LNG-005"}
+
+
 VULNS = [
     Vuln("LNG-001", "/api/esd/trigger", "POST", "ESD trigger/bypass unauth",
          "red_objective_success", "objective", esd_trigger),
@@ -47,6 +63,10 @@ VULNS = [
          "red_attack_started", "lateral_movement", bog_compressor),
     Vuln("LNG-003", "/api/firegas/suppress", "POST", "Fire&Gas alarm suppress",
          "red_objective_success", "objective", firegas_suppress),
+    Vuln("LNG-004", "/api/tank/gauge", "POST", "LNG tank gauge spoof",
+         "red_attack_started", "lateral_movement", lng_tank_gauge),
+    Vuln("LNG-005", "/api/compressor/firmware", "POST", "BOG compressor firmware upload",
+         "red_objective_success", "objective", lng_compressor_fw),
 ]
 
 app = make_ics_twin("lng_terminal", "LNG Terminal ESD/BOG Twin", VULNS)

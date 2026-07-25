@@ -52,9 +52,9 @@ def mock_requests(monkeypatch):
     return calls, status_holder
 
 
-def test_registry_covers_44_unique_vulns():
+def test_registry_covers_all_unique_vulns():
     total = sum(len(v) for v in safe_probe.CHECKS_BY_ASSET.values())
-    assert total == 44, f"체크 수 {total} ≠ 44"
+    assert total == 60, f"체크 수 {total} ≠ 60"
     # 11섹터 전부 존재
     assert set(safe_probe.ASSET_ORDER) <= set(safe_probe.CHECKS_BY_ASSET)
     assert len(safe_probe.ASSET_ORDER) == 11
@@ -62,23 +62,24 @@ def test_registry_covers_44_unique_vulns():
 
 def test_sector_probe_specs_unique_ids():
     ids = [spec[5] for spec in safe_probe.SECTOR_PROBES]
-    assert len(ids) == len(set(ids)) == 24
+    assert len(ids) == len(set(ids)) == 40
 
 
 def test_sector_check_classifies_by_status(mock_requests):
     _, holder = mock_requests
-    holder["status"] = 401  # refinery: REF-001(401)·REF-003(401)=patched, REF-002(403)=vulnerable
+    # refinery(5): REF-001(401 GET)·REF-003(401)·REF-004(401)=patched, REF-002(403)·REF-005(403)=vulnerable
+    holder["status"] = 401
     out = safe_probe.run(asset="refinery_plant", emit=False)
     s = out["summary"]
-    assert s["total"] == 3
-    assert s["patched"] == 2 and s["vulnerable"] == 1
-    assert s["by_asset"]["refinery_plant"] == {"patched": 2, "total": 3}
+    assert s["total"] == 5
+    assert s["patched"] == 3 and s["vulnerable"] == 2
+    assert s["by_asset"]["refinery_plant"] == {"patched": 3, "total": 5}
 
 
 def test_asset_filter_scopes_single_sector(mock_requests):
     out = safe_probe.run(asset="water_utility", emit=False)
     assert set(r["asset"] for r in out["results"]) == {"water_utility"}
-    assert out["summary"]["total"] == 3
+    assert out["summary"]["total"] == 5
 
 
 def test_emit_suppressed_with_no_emit(mock_requests):
@@ -90,9 +91,9 @@ def test_emit_suppressed_with_no_emit(mock_requests):
 
 def test_emit_fires_when_enabled(mock_requests):
     calls, holder = mock_requests
-    holder["status"] = 401  # REF-001·REF-003 patched → 2건 발행
+    holder["status"] = 401  # REF-001·REF-003·REF-004 patched → 3건 발행
     safe_probe.run(asset="refinery_plant", emit=True)
-    assert len(calls["emit_posts"]) == 2
+    assert len(calls["emit_posts"]) == 3
 
 
 def test_full_run_covers_all_assets(mock_requests):
@@ -100,7 +101,7 @@ def test_full_run_covers_all_assets(mock_requests):
     holder["status"] = 200
     holder["json"] = {"results": []}  # GS-001 등 200+빈결과 계열 patched 경로
     out = safe_probe.run(emit=False)
-    assert out["summary"]["total"] == 44
+    assert out["summary"]["total"] == 60
     assert set(out["summary"]["by_asset"]) == set(safe_probe.ASSET_ORDER)
 
 
@@ -133,6 +134,6 @@ def test_watch_reports_newly_patched_delta(mock_requests):
             holder["status"] = 401  # 다음 사이클: REF-001·REF-003 patched로 전이
 
     safe_probe.watch(interval=0, asset="refinery_plant", emit=False, iterations=2, on_cycle=cb)
-    assert seen[0][2] == 0                      # 1사이클: 0 patched
-    assert seen[1][2] == 2                      # 2사이클: 2 patched
-    assert seen[1][1] == ["REF-001", "REF-003"] # 신규패치 델타로 보고
+    assert seen[0][2] == 0                                  # 1사이클: 0 patched
+    assert seen[1][2] == 3                                  # 2사이클: 3 patched(REF-001·003·004)
+    assert seen[1][1] == ["REF-001", "REF-003", "REF-004"]  # 신규패치 델타로 보고
