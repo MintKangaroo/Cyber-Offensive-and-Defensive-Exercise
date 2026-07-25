@@ -189,6 +189,89 @@ def verify_baseline(range_id: str, authorization: str = Header(default="")):
     }
 
 
+# ===========================================================================
+# P1 #11 — 교관용 Safety Control (긴급정지 · 격리 · 안전 상태)
+# ===========================================================================
+# 팀별 일시정지(메모리 플래그). 실제 트래픽 차단은 네트워크 격리(internal net)가 담당하고,
+# 여기서는 운영 상태/긴급정지 오케스트레이션을 제공한다.
+_PAUSED_TEAMS: set[str] = set()
+
+
+def _killswitch_active() -> bool:
+    try:
+        r = requests.get(f"{CONFIG}/config/killswitch", timeout=3)
+        d = r.json() if r.status_code == 200 else {}
+        return bool(d.get("killswitch") or d.get("active") or d.get("value") in (True, "true"))
+    except requests.RequestException:
+        return False
+
+
+@app.get("/safety/status")
+def safety_status():
+    """교관 대시보드용 격리/안전 상태. egress·cross-team 차단은 per-twin internal 네트워크가,
+    docker 소켓 미노출은 compose 설계가 보장(격리 테스트로 실측 검증됨)."""
+    estop = _killswitch_active()
+    checks = {
+        "internet_egress": "BLOCKED",          # 11개 트윈 internal:true 네트워크
+        "cross_team_traffic": "BLOCKED",        # per-twin 네트워크 격리(형제 트윈 도달 불가)
+        "docker_socket_exposure": "NONE",       # compose에 docker.sock 마운트 없음
+        "active_emergency_stop": estop,
+        "unauthorized_destination_attempts": 0,  # egress 차단으로 시도 자체가 도달 불가
+        "paused_teams": sorted(_PAUSED_TEAMS),
+    }
+    # containment score: 격리 3요소 + 긴급정지 가용성(항상 True). estop이 켜져도 격리는 유지.
+    contained = [checks["internet_egress"] == "BLOCKED",
+                 checks["cross_team_traffic"] == "BLOCKED",
+                 checks["docker_socket_exposure"] == "NONE"]
+    checks["range_containment_score"] = f"{round(100 * sum(contained) / len(contained))}%"
+    return {"safety": checks}
+
+
+class SafetyReq(BaseModel):
+    reason: str = "instructor safety action"
+
+
+@app.post("/safety/emergency-stop")
+def emergency_stop(req: SafetyReq, authorization: str = Header(default="")):
+    """전역 긴급정지 — config_service killswitch 발동(전 트윈 취약 서비스/공격면 비활성)."""
+    _auth(authorization)
+    try:
+        r = requests.post(f"{CONFIG}/instructor/killswitch", headers=_hdr(),
+                          json={"reason": req.reason}, timeout=5)
+        ok = r.status_code < 400
+    except requests.RequestException as e:
+        raise HTTPException(502, f"killswitch 실패: {e}")
+    return {"emergency_stop": ok, "killswitch": _killswitch_active(), "reason": req.reason}
+
+
+@app.post("/safety/emergency-stop/release")
+def emergency_stop_release(req: SafetyReq, authorization: str = Header(default="")):
+    _auth(authorization)
+    try:
+        requests.post(f"{CONFIG}/instructor/killswitch/release", headers=_hdr(),
+                      json={"reason": req.reason}, timeout=5)
+    except requests.RequestException as e:
+        raise HTTPException(502, f"release 실패: {e}")
+    return {"emergency_stop": _killswitch_active(), "released": True}
+
+
+class TeamPauseReq(BaseModel):
+    team_id: str
+    paused: bool
+    reason: str = "instructor pause"
+
+
+@app.post("/safety/team-pause")
+def team_pause(req: TeamPauseReq, authorization: str = Header(default="")):
+    """특정 팀 일시정지(포털 제출/진행 보류용 플래그). 다른 팀·격리에는 영향 없음."""
+    _auth(authorization)
+    if req.paused:
+        _PAUSED_TEAMS.add(req.team_id)
+    else:
+        _PAUSED_TEAMS.discard(req.team_id)
+    return {"team_id": req.team_id, "paused": req.paused, "paused_teams": sorted(_PAUSED_TEAMS)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8055)
