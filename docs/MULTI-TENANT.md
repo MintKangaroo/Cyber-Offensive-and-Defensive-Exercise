@@ -59,8 +59,8 @@ curl -X POST localhost:8055/matches -H "Authorization: Bearer $INSTRUCTOR_TOKEN"
 교관이 호스트에서 실행(range_control 서비스는 docker 소켓 미노출, #11 준수):
 ```bash
 export INSTRUCTOR_TOKEN=...            # range_control 등록용(선택)
-scripts/deploy_match.sh match_a 8300  # 정유8301/팩토리8302/수도8303, scenario=match_a
-scripts/deploy_match.sh match_b 8400  # 8401~8403, scenario=match_b
+scripts/deploy_match.sh match_a 8300  # 8 OT섹터 8301~8308, scenario=match_a
+scripts/deploy_match.sh match_b 8400  # 8401~8408, scenario=match_b
 scripts/teardown_match.sh match_a     # 정리(코어 disconnect + 프로젝트 down)
 ```
 구조: 별도 compose 프로젝트(`-p match_a`, `infra/match/docker-compose.match.yml`)로 트윈 인스턴스
@@ -81,7 +81,9 @@ scripts/teardown_match.sh match_a     # 정리(코어 disconnect + 프로젝트 
    동적 포트 + MATCH_SCENARIO_ID 이벤트 태깅. cross-match/egress 차단·이벤트 격리 실측.
 3. **P3(진행)**: ✅ 관전자 지연 큐(`/events/delayed`, Live Fire observer 30s 지연) · ✅ 매치별 플래그
    회전(포털 match_id → 복합 팀키 `match::team`, 같은 팀도 매치마다 다른 플래그·cross-match 거부 실측).
-   🔷 남음: 매치별 서브도메인(vhost), 매치 트윈 셋 11섹터 전체 확장.
+   ✅ 매치 트윈 셋 **8 OT 섹터 전체**(정유~병원, deploy_match.sh 포트 base+1~+8) — 8섹터 배포·이벤트
+   태깅·egress 차단 실측. 🔷 남음: 매치별 서브도메인(vhost), 코어 3섹터(위성/발전소/사내망)는 커스텀
+   main이라 MATCH_SCENARIO_ID 추가 후 편입 가능.
 
 ## 관련
 - 초기화·베이스라인: [../services/range_control/README.md](../services/range_control/README.md) (P1 #10)
