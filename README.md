@@ -24,6 +24,7 @@
 - [빠른 시작](#빠른-시작)
 - [검증 · 품질 게이트](#검증--품질-게이트)
 - [RBAC (역할 기반 접근제어)](#rbac-역할-기반-접근제어)
+- [실전 운영 (다중 팀 · 초기화 · 안전 통제)](#실전-운영-다중-팀--초기화--안전-통제)
 - [저장소 구조](#저장소-구조)
 
 ---
@@ -88,8 +89,9 @@ flowchart TB
     Dashboards -.read.-> Defense
 ```
 
-**포트 요약**: 트윈 8001–8003(nginx 게이트웨이 경유) · Event 8010 · Scoring 8020 · Config 8030 ·
-SIEM 8040 · Scenario 8045 · Instructor 8050 · NOC 8070 · EDR 8080 · AAR 8090 · 대시보드 5173–5175.
+**포트 요약**: 트윈 8001–8003·8201–8208(nginx 게이트웨이 경유) · Event 8010 · Scoring 8020 · Config 8030 ·
+SIEM 8040 · Scenario 8045 · Instructor 8050 · **Range Control 8055** · **Challenge Portal 8060** · NOC 8070 ·
+EDR 8080 · AAR 8090 · **Match vhost 8088** · 대시보드 5173–5177(EDR/LiveFire/SIEM/**RedPortal**/**BluePortal**).
 
 ---
 
@@ -143,6 +145,7 @@ SIEM 8040 · Scenario 8045 · Instructor 8050 · NOC 8070 · EDR 8080 · AAR 809
 | **점수/AAR** | 이벤트 → 자동 채점(Red 목표 / Blue 탐지·복구). MTTD/MTTR·탐지율·오탐률·ATT&CK 히트맵·**PDF 리포트** 자동 생성. |
 | **복구 판정** | NOC Monitor가 트윈 헬스를 폴링, 침해→패치→복구를 판정해 MTTR 산출·Blue 가점. |
 | **RBAC** | instructor/red/blue/observer 역할별 토큰. 방어 액션은 instructor·blue, 조작은 instructor, **관전자는 읽기 전용**. |
+| **실전 운영(Range Control)** | **다중 팀 테넌트 격리**(Range→Match→Team→TwinSet, 매치별 물리 트윈 셋·플래그 회전) · **재현 가능 초기화**(snapshot/reset/drift/verify-baseline) · **교관 안전 통제**(긴급정지·격리 상태). → [실전 운영 섹션](#실전-운영-다중-팀--초기화--안전-통제) |
 | **69 챌린지** | 7개 분야 × easy~insane. 팀별 동적 플래그(HMAC)로 답 공유 방지. 전부 자동 QA 통과. |
 
 ---
@@ -525,6 +528,60 @@ python3 infra/challenge_qa/run_all.py --challenge NET-007
 > \* **관전자 read 게이트**: `OBSERVER_READ_ENFORCE=true` 일 때만 read 엔드포인트가 "인증된
 > 아무 역할(관전자 이상)"을 요구합니다. 기본(off)은 대시보드 편의를 위해 공개이며, 이 플래그로
 > 대회 운영 시 관전 접근을 통제할 수 있습니다.
+
+---
+
+## 실전 운영 (다중 팀 · 초기화 · 안전 통제)
+
+실전 대회 운영을 위한 P1 운영 기능. **`range_control` 서비스(8055)** 가 오케스트레이션하며, 교관
+콘솔(Live Fire INSTRUCTOR)에 UI로 노출됩니다. 상세: [docs/MULTI-TENANT.md](docs/MULTI-TENANT.md) ·
+[services/range_control/README.md](services/range_control/README.md).
+
+### #9 다중 팀 테넌트 격리 — Range → Match → Team → Twin Set
+```
+Range ─ Match A ─ {Red A, Blue A, Twin Set A}   (scenario_id=match_a)
+      └ Match B ─ {Red B, Blue B, Twin Set B}   (scenario_id=match_b)
+```
+모든 데이터에 `range_id·match_id·team_id`. **Match 레지스트리**(`/matches`)가 SoT.
+
+| 격리 축 | 구현 | 실측 |
+|---|---|---|
+| 이벤트/점수 | `scenario_id` 파티션 (`/replay/events?scenario_id=` · `/scores?scenario_id=`) | 매치별 분리 ✓ |
+| 플래그 | 팀별 HMAC + **매치별 회전**(포털 `match_id`→복합키 `match::team`) | 매치마다 다름·cross-match 거부 ✓ |
+| 네트워크(물리) | **매치별 트윈 셋**: 별도 compose 프로젝트로 11섹터 트윈 인스턴스 복제 | cross-match `gaierror`·egress `OSError` 차단 ✓ |
+| 포트/도메인 | 동적 포트(base+1~+11) + **vhost**(`match_proxy` 8088, `<match>.<sector>.range.local`) | 11섹터 라우팅 ✓ |
+| 관전자 | 공개정보 **지연 큐**(`/events/delayed`, Live Fire observer 30s) | 실시간 이벤트 숨김 ✓ |
+
+```bash
+# 매치별 물리 트윈 셋 배포(교관, 호스트에서 — 서비스는 docker 소켓 미노출)
+scripts/deploy_match.sh match_a 8300   # 11섹터 8301~8311, scenario=match_a
+scripts/deploy_match.sh match_b 8400   # 8401~8411, scenario=match_b
+scripts/teardown_match.sh match_a
+```
+
+### #10 재현 가능 초기화 (Snapshot · Reset · Rollback)
+`Baseline Snapshot → 훈련 → Reset → Verify-Baseline` 사이클. 각 스테이트풀 서비스의
+`/admin/reset`(instructor)을 오케스트레이션(이벤트·점수·solve·패치 초기화).
+
+| 엔드포인트 | 설명 |
+|---|---|
+| `POST /ranges/{id}/snapshot` | 현재 상태를 baseline으로 저장 |
+| `POST /ranges/{id}/reset` | 이벤트·점수·solve·패치 초기화 |
+| `GET /ranges/{id}/drift` | baseline 대비 변화량 |
+| `POST /ranges/{id}/verify-baseline` | 전 서비스 health + safe_probe 전수 VULNERABLE + 이벤트 클린 → 통과해야 다음 훈련 시작 |
+
+### #11 교관 안전 통제 (Safety Control)
+`GET /safety/status` — 격리/안전 상태를 교관 대시보드에 표시:
+
+```
+Safety Status                          containment 100%
+├─ Internet egress:      BLOCKED       (11 트윈 internal 네트워크)
+├─ Cross-team traffic:   BLOCKED       (per-twin/매치 네트워크 격리)
+├─ Docker socket:        NONE          (compose 미마운트)
+├─ Active emergency stop: false
+└─ Unauthorized dst:     0
+```
+`POST /safety/emergency-stop [/release]` 전역 긴급정지(killswitch) · `POST /safety/team-pause` 특정 팀 정지.
 
 ---
 
