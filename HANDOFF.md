@@ -797,9 +797,23 @@ SIEM 규칙 4종/웹 취약점 3종/AI 보안 인시던트 5종).
 >    README 스크린샷을 합성 프리뷰→실백엔드 렌더 캡처로 교체.
 > - **CI**: 3잡(unit **81** / challenges **63** / integration 전체 docker 스모크) 전부 GitHub에서 **success**.
 > - **BACnet/FF 완전 커버**: red 아티팩트(ICS-008/009) + blue 탐지(DET-007/008) 양면 완성.
-> - **다음 착수 후보(잔여)**: (문서화된 백로그·자연스러운 프로토콜 짝은 모두 소진) 필요 시 — 신규 섹터
->   twin 취약점 심화(현재 섹터당 3종), 추가 OT 프로토콜(EtherNet/IP·CIP·MQTT-SN) red+blue 짝,
->   ProcessImpact 프론트 유닛테스트(vitest 도입).
+
+---
+### [세션 인계 — 잔여 후보 3건도 전부 완료]
+> "남은 작업 전부 진행" 지시로 위 "잔여 후보"까지 모두 구현·실검증·커밋:
+> 8. **EtherNet/IP·S7comm·MQTT Sparkplug red+blue 6종**(ICS-010/011/012 + DET-010/011/012) — 검증된
+>    트래픽분석/탐지 패턴 그대로. 생성기(scratchpad)로 스탬핑, artifact_solve/detection_solve 전부 통과 +
+>    팀유니크 + 트랩 유효성(단일조건 오탐) 실측. **챌린지 63→69, OT 프로토콜 9→12, 탐지 8→13**.
+> 9. **ProcessImpact 프론트 vitest**(11) — severityOf/reading/impactPct/SECTORS export 후 순수 로직 검증
+>    (node 환경, jsdom 불필요). vitest devDep + lockfile + **CI에 dashboard 잡 추가**(npm ci→test→build).
+>    프론트 zero-test 갭 해소. 이제 **CI 4잡**(unit/challenges/dashboard/integration).
+> 10. **신규 8섹터 트윈 취약점 심화**(각 3→5, 트윈 **44→60**) — 섹터별 2종 추가(Modbus coil/Historian
+>    traversal/로봇 estop/MES SQLi/setpoint/SSRF/게이지/firmware/balise/IDOR/탑승교/FIDS/발전기/도어/
+>    DICOM/널스콜). ics_twin 팩토리 계약 상속. safe_probe SECTOR_PROBES 24→40, vuln_catalog 60.
+>    실측(refinery): 5종 라이브 VULNERABLE + PATCH 게이팅 401·토큰 200·access-log vuln_id 발행 확인.
+> - **CI**: 4잡(unit **81** / challenges **69** / dashboard **11 vitest** / integration docker) 전부 success.
+> - **다음 착수 후보(잔여)**: (요청 범위 전부 소진) 필요 시 — 추가 프로토콜(CC-Link·EtherCAT·PROFIsafe),
+>   ICS 크로스오버 시나리오(신규 프로토콜 경유 IT→OT), 섹터 트윈 취약점 코어 완전 패리티(5→7).
 
 ## 5. 상태 요약 한 줄
 
