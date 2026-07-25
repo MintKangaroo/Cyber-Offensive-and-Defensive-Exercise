@@ -101,6 +101,18 @@ SIEM 8040 · Scenario 8045 · Instructor 8050 · NOC 8070 · EDR 8080 · AAR 809
 
 ![Live Fire](docs/images/livefire-overview.png)
 
+### 🏭 Process Impact — ICS 사보타주 물리 임팩트
+추상적 자산 상태(compromised/recovered)를 **각 OT 섹터의 실제 물리 결과**로 번역합니다 —
+"계통 주파수 붕괴 57.2Hz / SIS 인터록 해제 · 반응기 과압 / CRAC 냉방 오버라이드 · 흡기 41℃"처럼.
+심각도(정상·교란·사보타주·복구중)를 색상 게이지와 계기값으로 표시해, 사보타주가 물리 세계에
+무엇을 의미하는지 직관적으로 전달합니다. 기존 이벤트 스트림만으로 동작(추가 백엔드 없음).
+
+<p align="center">
+  <img src="docs/images/livefire-process-impact.png" alt="Process Impact 패널" width="360"/>
+  <br/><em>Process Impact — 전력망 트립 · 정유 SIS 해제 · 데이터센터 냉방 오버라이드가 사보타주로,
+  철도는 블루팀 복구중으로 표시된 예시</em>
+</p>
+
 ### 🖥️ EDR 콘솔 — 침해 대응
 호스트 인벤토리(온라인 상태), 프로세스 트리 탐색, 실시간 탐지 알림(리버스쉘/웹서버-셸 생성),
 그리고 **호스트 격리(Isolate) / 프로세스 종료(Kill)** 원클릭 대응.

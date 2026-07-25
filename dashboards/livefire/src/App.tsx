@@ -6,6 +6,7 @@ import { EventTimeline } from "./components/Timeline/EventTimeline";
 import { ScoreBoard } from "./components/Score/ScoreBoard";
 import { PatchMatrix } from "./components/PatchStatus/PatchMatrix";
 import { FlagList } from "./components/FlagTracker/FlagList";
+import { ProcessImpact } from "./components/ProcessImpact/ProcessImpact";
 import { InstructorConsole } from "./components/Instructor/InstructorConsole";
 import { useAlertSound } from "./hooks/useAlertSound";
 import type { Role } from "./api/types";
@@ -109,6 +110,9 @@ export default function App() {
 
         <aside className="w-80 flex flex-col overflow-y-auto shrink-0">
           <ScoreBoard />
+          <div className="border-t border-[#1E2A3F]">
+            <ProcessImpact />
+          </div>
           {showPatchAndFlag && (
             <>
               <div className="border-t border-[#1E2A3F]">
