@@ -117,6 +117,13 @@ services:
   # NOC 모니터: 트윈 /health 폴링 + Recovery Watcher(04번 2절).
   # asset_compromised 이력 + 취약점 patched + 3회 연속 정상 -> asset_recovered(+50) 발행.
   # 트윈 상태를 폴링해야 하므로 각 twin_* 네트워크와 range_control 모두에 연결.
+  match_proxy:
+    image: nginx:alpine
+    container_name: match_proxy
+    ports: ["8088:8088"]
+    volumes: [ ./infra/match/match_proxy.conf:/etc/nginx/conf.d/default.conf:ro ]
+    networks: [range_control]
+
   range_control:
     build: { context: ., dockerfile: services/range_control/Dockerfile }
     container_name: range_control

@@ -8,6 +8,8 @@ TWINNET="${PROJECT}_twinnet"
 CORE_SVCS=(event_collector config_service edr_backend siem_api)
 COMPOSE="$(dirname "$0")/../infra/match/docker-compose.match.yml"
 
+echo "▶ match_proxy를 ${PROJECT}_edge 에서 disconnect"
+docker network disconnect "${PROJECT}_edge" match_proxy 2>/dev/null || true
 echo "▶ 코어를 $TWINNET 에서 disconnect"
 for svc in "${CORE_SVCS[@]}"; do
   docker network disconnect "$TWINNET" "$svc" 2>/dev/null && echo "  disconnected $svc" || true

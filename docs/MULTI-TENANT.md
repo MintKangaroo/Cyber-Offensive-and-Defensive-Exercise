@@ -41,7 +41,7 @@ Range (물리/논리 훈련장)
 | **관전자 공개정보 지연** | ✅ 구현(P3) | `/events/delayed?delay_sec=N` — N초 지난 이벤트만. Live Fire observer 역할이 30s 지연 피드 폴링 + 헤더 표시. RBAC observer 게이트 |
 | **매치별 트윈 셋(물리 격리)** | ✅ 구현(P2) | `scripts/deploy_match.sh` — 별도 compose 프로젝트로 트윈 인스턴스 복제, 매치별 internal 네트워크 → cross-match 도달 차단·egress 차단(실측) |
 | **팀별 동적 포트** | ✅ 구현(P2) | 배포 시 port_base 오프셋(match_a 8301~, match_b 8401~). 매치별 이벤트는 `MATCH_SCENARIO_ID`로 scenario 파티션(실측) |
-| **팀별 서브도메인** | 🔷 로드맵 | 동적 포트는 구현. 서브도메인(리버스프록시 vhost)은 후속 |
+| **팀별 서브도메인** | ✅ 구현(P3) | `match_proxy`(8088): Host `<match>.<sector>.range.local` → 해당 매치 게이트웨이 라우팅(실측 11섹터) |
 
 ## 지금 바로 다중 매치 운영하는 법 (공유 트윈 셋)
 가장 단순·안전한 운영 모델은 **매치별 scenario_id 분리 + 공유 트윈 셋**입니다.
@@ -75,15 +75,23 @@ scripts/teardown_match.sh match_a     # 정리(코어 disconnect + 프로젝트 
 - 코어 도달: match_a 트윈 → event_collector 허용 ✓
 - 이벤트 파티션: match_a 공격 → `scenario_id=match_a`, match_b → `scenario_id=match_b` ✓
 
+## 매치 vhost (P3, 구현됨)
+포트 오프셋 대신 도메인으로 접근. `match_proxy`(8088)가 Host 앞 두 라벨을 <match>.<sector>로 파싱해
+해당 매치 게이트웨이 컨테이너로 라우팅(배포 스크립트가 match_proxy를 매치 edge에 connect).
+```bash
+# 와일드카드 DNS 또는 /etc/hosts: *.range.local → <HOST>. 이후:
+curl -H "Host: match_a.ref.range.local" http://<HOST>:8088/health   # match_a 정유
+# sector: ref/fac/wtr/lng/rwy/air/dcx/hsp/gs/pp/dn
+```
+
 ## Phased 로드맵
 1. **P1(완료)**: Match 레지스트리 + scenario_id 파티션 + 팀별 HMAC 플래그 + RBAC + 교관 UI.
 2. **P2(완료)**: 매치별 트윈 셋 물리 배포(deploy_match.sh) — 프로젝트 격리 + internal 네트워크 +
    동적 포트 + MATCH_SCENARIO_ID 이벤트 태깅. cross-match/egress 차단·이벤트 격리 실측.
 3. **P3(진행)**: ✅ 관전자 지연 큐(`/events/delayed`, Live Fire observer 30s 지연) · ✅ 매치별 플래그
    회전(포털 match_id → 복합 팀키 `match::team`, 같은 팀도 매치마다 다른 플래그·cross-match 거부 실측).
-   ✅ 매치 트윈 셋 **11섹터 전체**(8 OT + 코어3, deploy_match.sh 포트 base+1~+11) — 11/11 up·이벤트
-   태깅·egress 차단 실측. 코어3섹터는 event_client 기본 scenario를 MATCH_SCENARIO_ID env로 해결
-   (호출부 무변경). 🔷 남음: 매치별 서브도메인(vhost) — 동적 포트로 대체 가능하여 우선순위 낮음.
+   ✅ 매치 트윈 셋 **11섹터 전체**(8 OT + 코어3, base+1~+11) · ✅ **매치별 서브도메인(vhost)**
+   (`match_proxy` 8088, Host `<match>.<sector>.range.local` 라우팅 실측). **→ P3 완료.**
 
 ## 관련
 - 초기화·베이스라인: [../services/range_control/README.md](../services/range_control/README.md) (P1 #10)

@@ -28,6 +28,10 @@ for svc in "${CORE_SVCS[@]}"; do
   docker network connect "$TWINNET" "$svc" 2>/dev/null && echo "  connected $svc" || echo "  (이미 연결/없음) $svc"
 done
 
+EDGENET="${PROJECT}_edge"
+echo "▶ match_proxy를 매치 edge 네트워크($EDGENET)에 connect(vhost 라우팅)"
+docker network connect "$EDGENET" match_proxy 2>/dev/null && echo "  connected match_proxy" || echo "  (match_proxy 미실행/이미연결 — vhost skip)"
+
 # range_control에 매치 등록(포트 기록)
 if [ -n "${INSTRUCTOR_TOKEN:-}" ]; then
   curl -s -X POST "http://localhost:8055/matches" \
@@ -35,4 +39,4 @@ if [ -n "${INSTRUCTOR_TOKEN:-}" ]; then
     -d "{\"range_id\":\"range_1\",\"match_id\":\"$MATCH\",\"twin_set\":[\"refinery_plant\",\"smart_factory\",\"water_utility\",\"lng_terminal\",\"railway_signaling\",\"airport_ot\",\"datacenter_bms\",\"hospital_ot\",\"ground_station\",\"power_plant\",\"defense_network\"],\"scenario_id\":\"$MATCH\"}" >/dev/null \
     && echo "▶ range_control에 매치 등록됨(11섹터)" || echo "▶ (range_control 등록 skip)"
 fi
-echo "✅ $MATCH 배포 완료 — 11섹터 트윈: http://<HOST>:$((BASE+1))~$((BASE+11))"
+echo "✅ $MATCH 배포 완료 — 포트: http://<HOST>:$((BASE+1))~$((BASE+11)) · vhost: Host <$MATCH>.<sector>.range.local → :8088"
