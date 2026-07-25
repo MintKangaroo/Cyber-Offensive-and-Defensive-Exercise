@@ -452,6 +452,7 @@ bash scripts/smoke_test.sh
 ```
 
 ### 2) 대시보드 실행
+포트가 서로 다르니 주의: **EDR=5173 · Live Fire=5174 · SIEM=5175**.
 ```bash
 # EDR 콘솔
 cd services/edr/console && npm install && npm run dev      # http://localhost:5173
@@ -460,6 +461,14 @@ cd dashboards/livefire   && npm install && npm run dev      # http://localhost:5
 # SIEM 콘솔
 cd dashboards/siem       && npm install && npm run dev      # http://localhost:5175
 ```
+> 세 dev 서버는 `host: true`(0.0.0.0)로 바인딩되어, 실행 시 `Network: http://<IP>:<포트>/` 를 함께
+> 출력합니다. **WSL2에서 실행하고 Windows 브라우저로 접속한다면** `localhost:<포트>` 가 안 열릴 때
+> 그 **Network 주소(WSL IP)** 로 접속하세요. (대시보드가 "안 켜지는" 가장 흔한 원인이 이 localhost
+> 바인딩 문제입니다.)
+>
+> 페이지는 백엔드 없이도 렌더되지만 데이터는 비어 있고 헤더에 `reconnecting…` 이 뜹니다 — 실데이터를
+> 보려면 먼저 `docker compose up` 으로 코어 스택(Event 8010 등)을 띄워야 합니다. 백엔드 URL은
+> `VITE_EVENT_COLLECTOR_URL` 등 환경변수로 바꿀 수 있습니다(기본 `http://localhost:8010`).
 
 ### 3) 챌린지 검증 (예시)
 ```bash
