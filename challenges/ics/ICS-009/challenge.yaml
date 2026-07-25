@@ -1,0 +1,23 @@
+challenge:
+  id: "ICS-009"
+  title: "Foundation Fieldbus 블록 MODE 조작 분석 - PID OOS Sabotage"
+  category: "ics"
+  difficulty: "hard"
+  points: { red: 140, blue: 0 }
+  mitre: [T0836, T0855, T0831]
+  description: |
+    ff_h1_traffic.jsonl은 정유 플랜트 H1 필드버스 세그먼트의 합성 Foundation Fieldbus 트래픽
+    로그다. 정상 LAS(Link Active Scheduler, 링크주소 0x10)의 주기적 CD(Compel Data) 스케줄
+    사이에, 무단 호스트가 안전 관련 PID 제어 블록(FIC-201)에 MODE_BLK.TARGET을 O/S(Out of
+    Service)로 write 하는 SPDU를 주입해 제어 루프를 정지시킨 사보타주가 숨어 있다. 정상 LAS/DCS가
+    아닌 링크주소에서 PID 블록에 MODE_BLK write(O/S)를 내린 프레임을 찾아 공격자 링크주소를
+    식별하고, note(base64) 토큰을 공격자 링크주소로 XOR 복호해 flag를 도출하라.
+  red_task:
+    goal: "PID 블록 MODE_BLK O/S write의 공격자 FF 링크주소 식별 → note 토큰 XOR 복호 → flag"
+    submit_fields: ["attacker_addr", "flag"]
+  scoring:
+    red_verify: "flag_match"
+  artifacts: ["ff_h1_traffic.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 Foundation Fieldbus H1 로그(실트래픽/실장비 무관). 주소/토큰/플래그는 팀별 더미값."
