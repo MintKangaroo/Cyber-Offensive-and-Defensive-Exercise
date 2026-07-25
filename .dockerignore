@@ -1,0 +1,4 @@
+
+# 런타임 sqlite(이벤트/점수) — 이미지 baked-in 방지
+*.db
+**/events.db
