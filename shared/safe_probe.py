@@ -23,8 +23,15 @@ DN = "http://localhost:8003"
 EVENT_COLLECTOR = os.environ.get("EVENT_COLLECTOR_URL", "http://localhost:8010")
 TEAM_ID = os.environ.get("TEAM_ID", "default")
 
+# 구조화 결과 캡처(프로그램 API/요약/테스트용) — status()가 각 판정을 여기에 누적.
+# _EMIT_ENABLED=False면 blue_patch_verified 발행을 억제(재검증 dry-run·테스트 격리).
+_RESULTS: list[dict] = []
+_EMIT_ENABLED = True
+
 
 def report_patch_verified(vuln_id: str, target_asset: str):
+    if not _EMIT_ENABLED:
+        return
     event_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{TEAM_ID}:{target_asset}:{vuln_id}:patch_verified"))
     payload = {
         "event_id": event_id,
@@ -45,6 +52,8 @@ def report_patch_verified(vuln_id: str, target_asset: str):
 
 
 def status(name, ok, vuln_id=None, target_asset=None):
+    if vuln_id and target_asset:
+        _RESULTS.append({"name": name, "vuln_id": vuln_id, "asset": target_asset, "patched": bool(ok)})
     if ok and vuln_id and target_asset:
         report_patch_verified(vuln_id, target_asset)
     return f"[{'PATCHED' if ok else 'VULNERABLE':<10}] {name}"
@@ -224,18 +233,87 @@ def _sector_check(base, method, path, data, patched_status, vuln_id, asset, name
     return _run
 
 
+# ---------------------------------------------------------------------------
+# 섹터별 체크 레지스트리 — blue 팀이 "자기 섹터만" 재검증할 수 있게 자산 키로 그룹핑.
+# 핵심 3종(GS/PP/DN)은 개별 함수, 신규 8섹터는 SECTOR_PROBES에서 자산별로 자동 분류.
+# ---------------------------------------------------------------------------
+CHECKS_BY_ASSET: dict[str, list] = {
+    "ground_station": [check_gs_001_sqli, check_gs_002_hardcoded, check_gs_003_idor,
+                       check_gs_004_traversal, check_gs_005_debug, check_gs_006_ssrf, check_gs_007_xxe],
+    "power_plant": [check_pp_001_plc, check_pp_002_default_creds, check_pp_003_cmdi,
+                    check_pp_004_deserialize, check_pp_005_safety, check_pp_006_modbus, check_pp_007_firmware],
+    "defense_network": [check_dn_001_smb, check_dn_002_kerberoast, check_dn_003_backup,
+                        check_dn_004_relay, check_dn_005_ldap, check_dn_006_ssrf],
+}
+for _spec in SECTOR_PROBES:
+    CHECKS_BY_ASSET.setdefault(_spec[6], []).append(_sector_check(*_spec))
+
+# 안정적 자산 순서(핵심 3종 → 신규 8섹터).
+ASSET_ORDER = ["ground_station", "power_plant", "defense_network", "refinery_plant",
+               "smart_factory", "water_utility", "lng_terminal", "railway_signaling",
+               "airport_ot", "datacenter_bms", "hospital_ot"]
+
+
+def run(asset: str | None = None, emit: bool = True) -> dict:
+    """섹터 스코프 자동 패치검증. asset=None이면 전체 11섹터.
+    emit=False면 blue_patch_verified 발행을 억제(재검증 dry-run). 구조화 결과를 반환.
+
+    반환: {"results": [{name,vuln_id,asset,patched}...], "errors": [...],
+           "summary": {"total","patched","vulnerable","by_asset":{asset:{patched,total}}}}
+    """
+    global _EMIT_ENABLED
+    prev, _EMIT_ENABLED = _EMIT_ENABLED, emit
+    _RESULTS.clear()
+    errors: list[str] = []
+    assets = [asset] if asset else ASSET_ORDER
+    try:
+        for a in assets:
+            for check in CHECKS_BY_ASSET.get(a, []):
+                try:
+                    check()
+                except requests.exceptions.RequestException:
+                    errors.append(f"{a}:{getattr(check, '__name__', '?')} 연결 불가")
+    finally:
+        _EMIT_ENABLED = prev
+    results = list(_RESULTS)
+    by_asset: dict[str, dict] = {}
+    for r in results:
+        b = by_asset.setdefault(r["asset"], {"patched": 0, "total": 0})
+        b["total"] += 1
+        b["patched"] += int(r["patched"])
+    patched = sum(1 for r in results if r["patched"])
+    return {"results": results, "errors": errors,
+            "summary": {"total": len(results), "patched": patched,
+                        "vulnerable": len(results) - patched, "by_asset": by_asset}}
+
+
 if __name__ == "__main__":
-    checks = [
-        check_gs_001_sqli, check_gs_002_hardcoded, check_gs_003_idor,
-        check_gs_004_traversal, check_gs_005_debug, check_gs_006_ssrf, check_gs_007_xxe,
-        check_pp_001_plc, check_pp_002_default_creds, check_pp_003_cmdi,
-        check_pp_004_deserialize, check_pp_005_safety, check_pp_006_modbus, check_pp_007_firmware,
-        check_dn_001_smb, check_dn_002_kerberoast, check_dn_003_backup, check_dn_004_relay,
-        check_dn_005_ldap, check_dn_006_ssrf,
-    ] + [_sector_check(*args) for args in SECTOR_PROBES]
-    for check in checks:
-        try:
-            print(check())
-        except requests.exceptions.ConnectionError:
-            print(f"[ERROR     ] {check.__name__} - 서비스에 연결할 수 없음 (서비스가 실행 중인지 확인)")
+    import argparse
+    import json as _json
+
+    ap = argparse.ArgumentParser(description="섹터별 blue 자동 패치검증(Safe Probe)")
+    ap.add_argument("--asset", choices=ASSET_ORDER, help="특정 섹터만 재검증(미지정 시 전체)")
+    ap.add_argument("--no-emit", action="store_true", help="blue_patch_verified 발행 억제(dry-run)")
+    ap.add_argument("--summary", action="store_true", help="줄별 결과 대신 섹터 요약만 출력")
+    ap.add_argument("--json", action="store_true", help="JSON으로 출력(자동화/대시보드 연동용)")
+    args = ap.parse_args()
+
+    out = run(asset=args.asset, emit=not args.no_emit)
+
+    if args.json:
+        print(_json.dumps(out, ensure_ascii=False, indent=2))
+    else:
+        if not args.summary:
+            for r in out["results"]:
+                print(f"[{'PATCHED' if r['patched'] else 'VULNERABLE':<10}] {r['name']}")
+        s = out["summary"]
+        print("=" * 62)
+        for a in ASSET_ORDER:
+            b = s["by_asset"].get(a)
+            if b:
+                print(f"  {a:<18} 패치 {b['patched']}/{b['total']}")
+        print(f"  전체 {s['patched']}/{s['total']} patched · {s['vulnerable']} vulnerable")
+        for e in out["errors"]:
+            print(f"  [ERROR] {e}")
+        print("=" * 62)
 

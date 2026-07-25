@@ -152,6 +152,15 @@ SIEM 8040 · Scenario 8045 · Instructor 8050 · NOC 8070 · EDR 8080 · AAR 809
 교관 콘솔의 무중단 패치 토글로 개별 비활성화되며, `python3 shared/safe_probe.py` 로 44종 전부의
 patched/vulnerable 상태를 한 번에 판정합니다.
 
+> **섹터별 blue 자동 패치검증**: `--asset <섹터>` 로 특정 섹터만 재검증(blue 팀이 자기 담당 섹터만),
+> `--summary`/`--json` 으로 섹터별 패치율 집계, `--no-emit` 으로 발행 없는 dry-run. 패치가 실제로
+> 닫혔는지 엔드포인트를 능동 probe해 확인된 것만 `blue_patch_verified`(+50) 를 발행합니다(플래그
+> 신뢰가 아닌 실측 기반). 분류·필터·발행억제 로직은 유닛 테스트로 검증.
+> ```bash
+> python3 shared/safe_probe.py --asset refinery_plant --summary   # 정유 섹터만 재검증
+> python3 shared/safe_probe.py --json --no-emit                    # 전체 dry-run(자동화/대시보드용)
+> ```
+
 <p align="center">
   <img src="docs/images/edr-console-fleet.png" alt="EDR 콘솔 — 11개 ICS/OT 섹터 자산" width="900"/>
   <br/><em>EDR 콘솔 — 11개 ICS/OT 섹터 자산이 온라인으로 관측되는 모습</em>
