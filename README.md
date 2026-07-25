@@ -109,8 +109,9 @@ SIEM 8040 · Scenario 8045 · Instructor 8050 · NOC 8070 · EDR 8080 · AAR 809
 
 <p align="center">
   <img src="docs/images/livefire-process-impact.png" alt="Process Impact 패널" width="360"/>
-  <br/><em>Process Impact — 전력망 트립 · 정유 SIS 해제 · 데이터센터 냉방 오버라이드가 사보타주로,
-  철도는 블루팀 복구중으로 표시된 예시</em>
+  <br/><em>Process Impact(실제 event_collector 이벤트로 렌더) — 전력망 트립 · 정유 SIS 해제 ·
+  데이터센터 냉방 오버라이드가 사보타주로, 수도·LNG는 교란, 철도는 블루팀 복구중으로 표시.
+  각 이벤트의 phase(objective·data_exfiltration)까지 반영</em>
 </p>
 
 ### 🖥️ EDR 콘솔 — 침해 대응

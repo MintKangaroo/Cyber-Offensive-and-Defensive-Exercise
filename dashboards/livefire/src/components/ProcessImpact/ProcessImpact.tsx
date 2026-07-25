@@ -129,7 +129,7 @@ export function ProcessImpact() {
   const impacted = SECTORS.filter((s) => severityOf(assetStates[s.asset]) !== "nominal").length;
 
   return (
-    <div className="p-3 flex flex-col gap-2">
+    <div className="p-3 flex flex-col gap-2" data-testid="process-impact">
       <div className="flex items-center justify-between">
         <span className="text-[11px] uppercase tracking-widest text-[#6B7A99]">Process Impact</span>
         <span className="font-mono text-[10px] text-[#6B7A99]">
