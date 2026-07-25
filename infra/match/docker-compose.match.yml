@@ -1,0 +1,43 @@
+# 매치별 트윈 셋 (P2 완전 물리 격리)
+# ---------------------------------------------------------------------------
+# 한 Match 전용 트윈 인스턴스를 별도 docker compose 프로젝트(-p match_<id>)로 띄운다.
+# 프로젝트가 다르면 네트워크가 분리되므로 매치 간 트윈이 서로 도달 불가(cross-match 격리).
+# twinnet(internal:true)로 egress·cross-match 차단, gateway는 edge(bridge)로 offset 포트 게시.
+# 코어(event_collector/config/edr)는 배포 스크립트가 이 프로젝트의 twinnet에 connect(멀티홈)해
+# 트윈→코어만 허용. scripts/deploy_match.sh / teardown_match.sh 로 운용.
+services:
+  refinery_plant:
+    build: { context: ../.., dockerfile: services/refinery_plant/Dockerfile }
+    environment: [ "MATCH_SCENARIO_ID=${MATCH_SCENARIO_ID:-default}" ]
+    networks: [twinnet]
+  smart_factory:
+    build: { context: ../.., dockerfile: services/smart_factory/Dockerfile }
+    environment: [ "MATCH_SCENARIO_ID=${MATCH_SCENARIO_ID:-default}" ]
+    networks: [twinnet]
+  water_utility:
+    build: { context: ../.., dockerfile: services/water_utility/Dockerfile }
+    environment: [ "MATCH_SCENARIO_ID=${MATCH_SCENARIO_ID:-default}" ]
+    networks: [twinnet]
+
+  ref_gw:
+    image: nginx:alpine
+    ports: [ "${REF_PORT:-8301}:8201" ]
+    volumes: [ ../twin_gateway/ref.conf:/etc/nginx/conf.d/default.conf:ro ]
+    depends_on: [refinery_plant]
+    networks: [twinnet, edge]
+  fac_gw:
+    image: nginx:alpine
+    ports: [ "${FAC_PORT:-8302}:8202" ]
+    volumes: [ ../twin_gateway/fac.conf:/etc/nginx/conf.d/default.conf:ro ]
+    depends_on: [smart_factory]
+    networks: [twinnet, edge]
+  wtr_gw:
+    image: nginx:alpine
+    ports: [ "${WTR_PORT:-8303}:8203" ]
+    volumes: [ ../twin_gateway/wtr.conf:/etc/nginx/conf.d/default.conf:ro ]
+    depends_on: [water_utility]
+    networks: [twinnet, edge]
+
+networks:
+  twinnet: { driver: bridge, internal: true }   # egress·cross-match 차단(코어는 스크립트가 connect)
+  edge: { driver: bridge }                        # 게이트웨이 포트 게시용

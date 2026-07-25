@@ -39,8 +39,9 @@ Range (물리/논리 훈련장)
 | **인터넷 egress 차단** | ✅ 구현 | 11개 트윈 `internal:true` — 외부 도달 불가 |
 | **교관만 전체 Match 조회** | ✅ 구현 | `/matches`·`/safety/*`·`/admin/*` 전부 instructor 토큰(RBAC) 게이트 |
 | **관전자 공개정보 지연** | ⚙️ 부분 | RBAC observer 역할 존재. 지연 표시(delay buffer)는 대시보드 폴링 간격 조정으로 근사, 전용 지연 큐는 후속 |
-| **팀별 네트워크 namespace** | 🔷 로드맵 | 현재는 자산(트윈) 단위 격리. 팀별 트윈 인스턴스 복제(Twin Set) 시 팀별 netns로 확장 |
-| **팀별 동적 포트/도메인** | 🔷 로드맵 | 게이트웨이가 자산당 고정 포트. 매치별 트윈 셋 배포 시 포트/서브도메인 동적 할당 |
+| **매치별 트윈 셋(물리 격리)** | ✅ 구현(P2) | `scripts/deploy_match.sh` — 별도 compose 프로젝트로 트윈 인스턴스 복제, 매치별 internal 네트워크 → cross-match 도달 차단·egress 차단(실측) |
+| **팀별 동적 포트** | ✅ 구현(P2) | 배포 시 port_base 오프셋(match_a 8301~, match_b 8401~). 매치별 이벤트는 `MATCH_SCENARIO_ID`로 scenario 파티션(실측) |
+| **팀별 서브도메인** | 🔷 로드맵 | 동적 포트는 구현. 서브도메인(리버스프록시 vhost)은 후속 |
 
 ## 지금 바로 다중 매치 운영하는 법 (공유 트윈 셋)
 가장 단순·안전한 운영 모델은 **매치별 scenario_id 분리 + 공유 트윈 셋**입니다.
@@ -54,11 +55,32 @@ curl -X POST localhost:8055/matches -H "Authorization: Bearer $INSTRUCTOR_TOKEN"
 - 팀별 플래그는 HMAC(team_id)로 이미 유니크 → 트윈을 공유해도 답 공유 불가.
 - 팀 간 직접 트래픽·egress는 트윈 격리로 차단.
 
-## Phased 로드맵 — 완전 물리 격리(Twin Set per Match)
-1. **P1(완료)**: Match 레지스트리 + scenario_id 파티션(이벤트/점수/스트림) + 팀별 HMAC 플래그 + RBAC.
-2. **P2**: 매치별 트윈 셋 배포 — compose 오버레이/프로젝트 네임(`-p match_A`)로 트윈 인스턴스 복제,
-   매치별 `twin_<asset>_<match>` internal 네트워크 + 게이트웨이 동적 포트 할당.
-3. **P3**: 매치별 netns/서브도메인, 관전자 지연 큐(공개정보 N초 지연), 매치별 CHALLENGE_SECRET 회전.
+## 매치별 트윈 셋 물리 배포 (P2, 구현됨)
+교관이 호스트에서 실행(range_control 서비스는 docker 소켓 미노출, #11 준수):
+```bash
+export INSTRUCTOR_TOKEN=...            # range_control 등록용(선택)
+scripts/deploy_match.sh match_a 8300  # 정유8301/팩토리8302/수도8303, scenario=match_a
+scripts/deploy_match.sh match_b 8400  # 8401~8403, scenario=match_b
+scripts/teardown_match.sh match_a     # 정리(코어 disconnect + 프로젝트 down)
+```
+구조: 별도 compose 프로젝트(`-p match_a`, `infra/match/docker-compose.match.yml`)로 트윈 인스턴스
+복제. `twinnet`(internal:true)로 egress·cross-match 차단, 게이트웨이는 `edge`로 오프셋 포트 게시,
+코어(event_collector/config/edr/siem)는 스크립트가 매치 twinnet에 connect해 트윈→코어만 허용.
+트윈은 `MATCH_SCENARIO_ID`로 자기 매치 이벤트를 태깅 → per-match 이벤트/점수 완전 격리.
+
+**실측 검증**(match_a + match_b 동시 배포):
+- 포트 격리: 8301~8303 / 8401~8403 각각 200 ✓
+- cross-match 차단: match_a 트윈 → match_b 트윈 `gaierror`(도달 불가) ✓
+- egress 차단: match_a 트윈 → 8.8.8.8 `OSError` ✓
+- 코어 도달: match_a 트윈 → event_collector 허용 ✓
+- 이벤트 파티션: match_a 공격 → `scenario_id=match_a`, match_b → `scenario_id=match_b` ✓
+
+## Phased 로드맵
+1. **P1(완료)**: Match 레지스트리 + scenario_id 파티션 + 팀별 HMAC 플래그 + RBAC + 교관 UI.
+2. **P2(완료)**: 매치별 트윈 셋 물리 배포(deploy_match.sh) — 프로젝트 격리 + internal 네트워크 +
+   동적 포트 + MATCH_SCENARIO_ID 이벤트 태깅. cross-match/egress 차단·이벤트 격리 실측.
+3. **P3(로드맵)**: 매치별 서브도메인(vhost), 관전자 지연 큐(공개정보 N초 지연), 매치별
+   CHALLENGE_SECRET 회전, 매치별 트윈 셋 전체(11섹터) 확장.
 
 ## 관련
 - 초기화·베이스라인: [../services/range_control/README.md](../services/range_control/README.md) (P1 #10)

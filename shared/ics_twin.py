@@ -31,6 +31,11 @@ from shared.config_client import ConfigClient  # noqa: E402
 from shared.edr_agent import start_edr_agent  # noqa: E402
 from shared.siem_access_log import make_siem_access_middleware  # noqa: E402
 
+import os
+# per-match 배포 시 이 트윈이 발행하는 이벤트의 파티션 키(매치별 트윈 셋 = MATCH_SCENARIO_ID=match_X).
+# 미지정 시 "default"(공유 트윈 셋 모델). → per-match 이벤트/점수 격리의 마지막 조각.
+MATCH_SCENARIO_ID = os.environ.get("MATCH_SCENARIO_ID", "default")
+
 
 @dataclass
 class Vuln:
@@ -81,6 +86,7 @@ def make_ics_twin(asset_name: str, title: str, vulns: list[Vuln]) -> FastAPI:
                 event_type=getattr(EventType, v.event_type),
                 actor="red", target_asset=asset_name, vuln_id=v.id,
                 phase=getattr(RedPhase, v.phase), team_id=team_id,
+                scenario_id=MATCH_SCENARIO_ID,
                 trace_id=Event.session_trace_id(team_id, asset_name),
                 metadata=metadata or {},
             )
