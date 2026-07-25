@@ -1,0 +1,24 @@
+challenge:
+  id: "DET-007"
+  title: "BACnet 무단 WriteProperty(냉방 오버라이드) 탐지"
+  category: "detection"
+  difficulty: "medium"
+  points: { red: 0, blue: 80 }
+  mitre: [T0855, T0836]
+  description: |
+    데이터센터 건물자동화망(BAS) 로그(attack_log.jsonl)에서 냉방 제어 객체(analog-output)에 대한
+    BACnet WriteProperty(service 15) 사보타주를 탐지하는 규칙을 작성하라. 정상 트래픽
+    (normal_log.jsonl)에는 analog-output에 대한 ReadProperty(service 12)와, 조명(binary-output)에
+    대한 정상 WriteProperty가 섞여 있어 — service 하나만 또는 object_type 하나만 보면 오탐이 난다.
+    두 조건을 동시에 만족하는 요청만 잡아야 한다. 우리 SIEM 엔진이 규칙을 실제로 태워 채점한다.
+  blue_task:
+    goal: "bacnet_service=15 AND object_type=analog-output 동시 매칭 규칙 작성"
+    success_criteria: |
+      (1) attack_log.jsonl(냉방 객체 WriteProperty)에 알림 발생
+      (2) normal_log.jsonl(analog-output read + binary-output write)에는 오탐 없음
+  scoring:
+    blue_verify: "alert_dataset_check"
+  artifacts: ["attack_log.jsonl", "normal_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 BACnet/IP 로그 데이터셋만 사용. 실제 장비/트래픽 없음."

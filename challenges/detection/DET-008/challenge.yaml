@@ -1,0 +1,24 @@
+challenge:
+  id: "DET-008"
+  title: "Foundation Fieldbus MODE_BLK O/S(제어루프 정지) 탐지"
+  category: "detection"
+  difficulty: "hard"
+  points: { red: 0, blue: 90 }
+  mitre: [T0836, T0855, T0831]
+  description: |
+    정유 플랜트 H1 필드버스 로그(attack_log.jsonl)에서 안전 PID 제어 블록의 MODE_BLK.TARGET을
+    O/S(Out of Service)로 write 해 제어 루프를 정지시킨 사보타주를 탐지하는 규칙을 작성하라.
+    정상 트래픽(normal_log.jsonl)에는 setpoint(SP) write, MODE_BLK를 AUTO로 되돌리는 정상 운전
+    복귀, MODE_BLK read 가 섞여 있어 — param 하나 또는 op 하나만 보면 오탐이 난다. param·op·value
+    세 조건을 동시에 만족하는 프레임만 잡아야 한다. 우리 SIEM 엔진이 규칙을 실제로 태워 채점한다.
+  blue_task:
+    goal: "param=MODE_BLK AND op=write AND value=OOS 동시 매칭 규칙 작성"
+    success_criteria: |
+      (1) attack_log.jsonl(MODE_BLK=OOS write)에 알림 발생
+      (2) normal_log.jsonl(SP write / MODE_BLK=AUTO write / MODE_BLK read)에는 오탐 없음
+  scoring:
+    blue_verify: "alert_dataset_check"
+  artifacts: ["attack_log.jsonl", "normal_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 Foundation Fieldbus H1 로그 데이터셋만 사용. 실제 장비/트래픽 없음."

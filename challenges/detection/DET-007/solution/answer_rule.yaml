@@ -1,0 +1,11 @@
+# 냉방(analog-output) 객체에 대한 BACnet WriteProperty(service 15)만 잡는다.
+# 두 조건을 AND로 결합해야 정상 read(service 12)/조명 write(binary-output) 오탐을 피한다.
+- id: DET-007
+  title: "BACnet unauthorized WriteProperty to cooling analog-output"
+  severity: 4
+  mitre: [T0855, T0836]
+  source_type: twin
+  kind: match
+  match:
+    raw.bacnet_service: 15
+    raw.object_type: "analog-output"

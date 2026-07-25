@@ -1,0 +1,12 @@
+# 안전 블록의 MODE_BLK를 O/S(Out of Service)로 write 하는 프레임만 잡는다.
+# param·op·value 세 조건을 AND로 결합해야 SP write / AUTO·MAN 전환 / MODE_BLK read 오탐을 피한다.
+- id: DET-008
+  title: "Foundation Fieldbus MODE_BLK set to Out-of-Service (control loop halt)"
+  severity: 5
+  mitre: [T0836, T0855, T0831]
+  source_type: twin
+  kind: match
+  match:
+    raw.param: "MODE_BLK"
+    raw.op: "write"
+    raw.value: "OOS"
