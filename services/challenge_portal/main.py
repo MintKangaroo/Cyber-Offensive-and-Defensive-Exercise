@@ -45,6 +45,36 @@ app.add_middleware(
 # solve 상태(메모리): {team_id: {challenge_id: {"points":int, "at":float}}}
 _SOLVES: dict[str, dict[str, dict]] = {}
 
+# ---------------------------------------------------------------------------
+# 팀 레지스트리 — 자유입력 대신 미리 정의된 팀을 드롭다운으로(오타로 점수판 갈라짐 방지).
+# PORTAL_TEAMS 환경변수(JSON: [{"team_id","name","side"}...])로 재정의 가능, 없으면 기본 4팀.
+# ---------------------------------------------------------------------------
+def _load_teams() -> list[dict]:
+    import json as _json
+    raw = os.environ.get("PORTAL_TEAMS", "").strip()
+    if raw:
+        try:
+            teams = _json.loads(raw)
+            if isinstance(teams, list) and teams:
+                return teams
+        except ValueError:
+            pass
+    return [
+        {"team_id": "red_alpha", "name": "🔴 레드 알파", "side": "red"},
+        {"team_id": "red_bravo", "name": "🔴 레드 브라보", "side": "red"},
+        {"team_id": "blue_alpha", "name": "🔵 블루 알파", "side": "blue"},
+        {"team_id": "blue_bravo", "name": "🔵 블루 브라보", "side": "blue"},
+    ]
+
+
+TEAMS = _load_teams()
+
+
+@app.get("/portal/teams")
+def list_teams(side: Optional[str] = None):
+    items = [t for t in TEAMS if not side or t.get("side") == side]
+    return {"teams": items}
+
 
 # ---------------------------------------------------------------------------
 # 카탈로그 로딩

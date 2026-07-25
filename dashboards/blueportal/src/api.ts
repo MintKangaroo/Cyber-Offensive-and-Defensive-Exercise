@@ -23,6 +23,7 @@ export interface BlueSubmitResult {
   detail: string;
 }
 export interface ScoreRow { team_id: string; solved: number; points: number; last_solve: number; }
+export interface Team { team_id: string; name: string; side: string; }
 export interface RangeEvent {
   event_id: string; event_type: string; timestamp: number; actor: string;
   team_id: string; target_asset: string; vuln_id?: string | null; phase?: string | null;
@@ -43,6 +44,7 @@ export const submitRule = (cid: string, team: string, rule_yaml: string) =>
     body: JSON.stringify({ team_id: team, rule_yaml }),
   });
 export const fetchBlueScoreboard = () => j<{ scoreboard: ScoreRow[] }>(`${PORTAL}/portal/blue/scoreboard`);
+export const fetchTeams = (side?: string) => j<{ teams: Team[] }>(`${PORTAL}/portal/teams${side ? `?side=${side}` : ""}`);
 export const datasetUrl = (cid: string, which: "attack" | "normal") =>
   `${PORTAL}/portal/blue/challenges/${cid}/dataset?which=${which}`;
 

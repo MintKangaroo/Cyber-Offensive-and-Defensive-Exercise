@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   fetchBlueChallenges, submitRule, fetchBlueScoreboard, datasetUrl,
-  fetchEvents, fetchPatches, togglePatch,
-  type BlueChallenge, type BlueSubmitResult, type ScoreRow, type RangeEvent, type Patches,
+  fetchEvents, fetchPatches, togglePatch, fetchTeams,
+  type BlueChallenge, type BlueSubmitResult, type ScoreRow, type RangeEvent, type Patches, type Team,
 } from "./api";
 
 const DIFF: Record<string, string> = {
@@ -159,7 +159,8 @@ function DetectionPanel({ c, team, onSolved }: { c: BlueChallenge; team: string;
 type Tab = "incident" | "patch" | "detection";
 
 export default function App() {
-  const [team, setTeam] = useLocalState("blueportal_team", "team_blue1");
+  const [team, setTeam] = useLocalState("blueportal_team", "blue_alpha");
+  const [teams, setTeams] = useState<Team[]>([]);
   const [tab, setTab] = useState<Tab>("incident");
   const [events, setEvents] = useState<RangeEvent[]>([]);
   const [patches, setPatches] = useState<Patches>({});
@@ -178,6 +179,13 @@ export default function App() {
   const loadEvents = useCallback(async () => { try { setEvents((await fetchEvents(40)).events); } catch { /* */ } }, []);
 
   useEffect(() => { loadChallenges(); }, [loadChallenges]);
+  useEffect(() => {
+    fetchTeams("blue").then((r) => {
+      setTeams(r.teams);
+      if (r.teams.length && !r.teams.some((t) => t.team_id === team)) setTeam(r.teams[0].team_id);
+    }).catch(() => { /* 백엔드 미기동 시 자유입력 유지 */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     loadEvents(); loadPatches();
     const t = setInterval(() => { loadEvents(); loadPatches(); }, 4000);
@@ -201,8 +209,15 @@ export default function App() {
         <span className="text-[10px] uppercase tracking-widest text-[#5a7088] px-2 py-0.5 rounded border border-[#16263a]">방어팀 전용</span>
         <div className="flex-1" />
         <label className="text-[10px] uppercase tracking-widest text-[#5a7088]">TEAM</label>
-        <input value={team} onChange={(e) => setTeam(e.target.value.trim())}
-          className="bg-[#0d1a2a] border border-[#16263a] rounded px-2 py-1 font-mono text-[12px] text-[#cfe0f0] w-32 focus:border-[#22D3EE]/60 outline-none" />
+        {teams.length > 0 ? (
+          <select value={team} onChange={(e) => setTeam(e.target.value)}
+            className="bg-[#0d1a2a] border border-[#16263a] rounded px-2 py-1 font-mono text-[12px] text-[#cfe0f0] focus:border-[#22D3EE]/60 outline-none">
+            {teams.map((t) => <option key={t.team_id} value={t.team_id}>{t.name}</option>)}
+          </select>
+        ) : (
+          <input value={team} onChange={(e) => setTeam(e.target.value.trim())}
+            className="bg-[#0d1a2a] border border-[#16263a] rounded px-2 py-1 font-mono text-[12px] text-[#cfe0f0] w-32 focus:border-[#22D3EE]/60 outline-none" />
+        )}
         <div className="font-mono text-[13px] text-[#22D3EE] font-bold">{myScore?.points ?? 0}<span className="text-[10px] text-[#5a7088] ml-1">pt</span></div>
       </header>
 

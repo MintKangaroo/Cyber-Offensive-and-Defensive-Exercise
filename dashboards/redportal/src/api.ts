@@ -34,6 +34,8 @@ export interface ScoreRow {
   last_solve: number;
 }
 
+export interface Team { team_id: string; name: string; side: string; }
+
 async function j<T>(url: string, init?: RequestInit): Promise<T> {
   const r = await fetch(url, init);
   if (!r.ok) {
@@ -58,6 +60,9 @@ export async function submitFlag(cid: string, teamId: string, fields: Record<str
 export async function fetchScoreboard(): Promise<{ scoreboard: ScoreRow[] }> {
   return j(`${PORTAL}/portal/scoreboard`);
 }
+
+export const fetchTeams = (side?: string) =>
+  j<{ teams: Team[] }>(`${PORTAL}/portal/teams${side ? `?side=${side}` : ""}`);
 
 export function artifactUrl(cid: string, teamId: string): string {
   return `${PORTAL}/portal/challenges/${cid}/artifact?team_id=${encodeURIComponent(teamId)}`;

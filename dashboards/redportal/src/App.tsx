@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import {
-  fetchChallenges, submitFlag, fetchScoreboard, artifactUrl,
-  type Challenge, type SubmitResult, type ScoreRow,
+  fetchChallenges, submitFlag, fetchScoreboard, artifactUrl, fetchTeams,
+  type Challenge, type SubmitResult, type ScoreRow, type Team,
 } from "./api";
 
 const DIFF_STYLE: Record<string, string> = {
@@ -140,7 +140,8 @@ function SubmitPanel({ c, teamId, onSolved }: { c: Challenge; teamId: string; on
 }
 
 export default function App() {
-  const [teamId, setTeamId] = useLocalState("redportal_team", "team_red1");
+  const [teamId, setTeamId] = useLocalState("redportal_team", "red_alpha");
+  const [teams, setTeams] = useState<Team[]>([]);
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [cat, setCat] = useState<string>("all");
   const [selected, setSelected] = useState<Challenge | null>(null);
@@ -155,6 +156,14 @@ export default function App() {
   }, [teamId]);
 
   useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, [load]);
+  useEffect(() => {
+    fetchTeams("red").then((r) => {
+      setTeams(r.teams);
+      // 저장된 팀이 목록에 없으면 첫 팀으로.
+      if (r.teams.length && !r.teams.some((t) => t.team_id === teamId)) setTeamId(r.teams[0].team_id);
+    }).catch(() => { /* 백엔드 미기동 시 자유입력 유지 */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const cats = useMemo(() => ["all", ...Array.from(new Set(challenges.map((c) => c.category)))], [challenges]);
   const shown = useMemo(() => challenges.filter((c) => cat === "all" || c.category === cat), [challenges, cat]);
@@ -170,8 +179,15 @@ export default function App() {
         </span>
         <div className="flex-1" />
         <label className="text-[10px] uppercase tracking-widest text-[#8a6a6e]">TEAM</label>
-        <input value={teamId} onChange={(e) => setTeamId(e.target.value.trim())}
-          className="bg-[#151011] border border-[#2a1a1c] rounded px-2 py-1 font-mono text-[12px] text-[#F0E6E6] w-32 focus:border-[#FB7185]/60 outline-none" />
+        {teams.length > 0 ? (
+          <select value={teamId} onChange={(e) => setTeamId(e.target.value)}
+            className="bg-[#151011] border border-[#2a1a1c] rounded px-2 py-1 font-mono text-[12px] text-[#F0E6E6] focus:border-[#FB7185]/60 outline-none">
+            {teams.map((t) => <option key={t.team_id} value={t.team_id}>{t.name}</option>)}
+          </select>
+        ) : (
+          <input value={teamId} onChange={(e) => setTeamId(e.target.value.trim())}
+            className="bg-[#151011] border border-[#2a1a1c] rounded px-2 py-1 font-mono text-[12px] text-[#F0E6E6] w-32 focus:border-[#FB7185]/60 outline-none" />
+        )}
         <div className="font-mono text-[13px] text-[#FB7185] font-bold">
           {myScore?.points ?? 0}<span className="text-[10px] text-[#8a6a6e] ml-1">pt</span>
         </div>
