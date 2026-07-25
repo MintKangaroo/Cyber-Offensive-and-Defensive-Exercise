@@ -29,6 +29,79 @@ function Badge({ d }: { d: string }) {
   return <span className={`font-mono text-[9px] uppercase px-1.5 py-0.5 rounded border ${DIFF[d] ?? "border-[#6B7A99]/40 text-[#6B7A99]"}`}>{d}</span>;
 }
 
+// ── CTF 시각화 ────────────────────────────────────────────────
+function Donut({ frac, big, sub, color }: { frac: number; big: string; sub: string; color: string }) {
+  const R = 30, C = 2 * Math.PI * R;
+  return (
+    <svg viewBox="0 0 80 80" className="w-[76px] h-[76px] shrink-0">
+      <circle cx="40" cy="40" r={R} fill="none" stroke="#16263a" strokeWidth="7" />
+      <circle cx="40" cy="40" r={R} fill="none" stroke={color} strokeWidth="7" strokeLinecap="round"
+        strokeDasharray={C} strokeDashoffset={C * (1 - frac)} transform="rotate(-90 40 40)"
+        style={{ transition: "stroke-dashoffset 0.8s ease" }} />
+      <text x="40" y="38" textAnchor="middle" fontSize="15" fontWeight="700" fill={color}>{big}</text>
+      <text x="40" y="52" textAnchor="middle" fontSize="8" fill="#5a7088">{sub}</text>
+    </svg>
+  );
+}
+
+function StatItem({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div className="text-center px-1">
+      <div className="font-mono text-2xl font-bold tabular-nums leading-none" style={{ color }}>{value}</div>
+      <div className="font-mono text-[9px] uppercase tracking-wide text-[#5a7088] mt-1">{label}</div>
+    </div>
+  );
+}
+
+function BlueStats({ challenges, patches, incidents, points, rank }: {
+  challenges: BlueChallenge[]; patches: Patches; incidents: number; points: number; rank: number | null;
+}) {
+  const detTotal = challenges.length || 1;
+  const detSolved = challenges.filter((c) => c.solved).length;
+  let vulnTotal = 0, vulnPatched = 0;
+  for (const a of Object.values(patches)) for (const p of Object.values(a)) { vulnTotal++; if (p) vulnPatched++; }
+  const patchFrac = vulnTotal ? vulnPatched / vulnTotal : 0;
+  return (
+    <div className="border border-[#16263a] rounded-xl bg-gradient-to-br from-[#0c1826] to-[#081018] p-4 mb-4">
+      <div className="flex flex-wrap items-center gap-6">
+        <div className="flex items-center gap-3">
+          <Donut frac={detSolved / detTotal} big={`${detSolved}/${detTotal}`} sub="탐지" color="#22D3EE" />
+          <div>
+            <div className="font-mono text-3xl font-bold text-[#22D3EE] tabular-nums leading-none">{points}<span className="text-sm text-[#5a7088] ml-1">pt</span></div>
+            <div className="font-mono text-[11px] text-[#5a7088] mt-1">{rank ? `🏆 순위 ${rank}위` : "미제출"}</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <Donut frac={patchFrac} big={`${Math.round(patchFrac * 100)}%`} sub={`${vulnPatched}/${vulnTotal}`} color="#34D399" />
+          <div className="font-mono text-[11px] text-[#5a7088]">패치<br />커버리지</div>
+        </div>
+        <div className="flex items-center gap-4 border-l border-[#16263a] pl-6">
+          <StatItem label="활성 공격" value={String(incidents)} color={incidents ? "#FB7185" : "#34D399"} />
+          <StatItem label="탐지 해결" value={String(detSolved)} color="#22D3EE" />
+          <StatItem label="패치 완료" value={String(vulnPatched)} color="#34D399" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ScoreboardBars({ rows, me }: { rows: ScoreRow[]; me: string }) {
+  const max = Math.max(1, ...rows.map((r) => r.points));
+  return (
+    <div className="flex flex-col gap-1.5">
+      {rows.slice(0, 6).map((r, i) => (
+        <div key={r.team_id} className="flex items-center gap-2">
+          <span className={`font-mono text-[10px] w-24 shrink-0 truncate ${r.team_id === me ? "text-[#22D3EE]" : "text-[#8aa0b8]"}`}>{i + 1}. {r.team_id}</span>
+          <div className="flex-1 h-3 rounded bg-[#16263a] overflow-hidden min-w-[60px]">
+            <div className={`h-full rounded transition-all duration-700 ${r.team_id === me ? "bg-[#22D3EE]" : "bg-[#3a6a80]"}`} style={{ width: `${(r.points / max) * 100}%` }} />
+          </div>
+          <span className="font-mono text-[10px] text-[#5a7088] w-14 text-right tabular-nums">{r.points}pt·{r.solved}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── 인시던트 피드 ──────────────────────────────────────────────
 function IncidentFeed({ events }: { events: RangeEvent[] }) {
   return (
@@ -195,6 +268,8 @@ export default function App() {
   const myScore = scoreboard.find((r) => r.team_id === team);
   const solvedCount = challenges.filter((c) => c.solved).length;
   const activeIncidents = events.filter((e) => /compromis|attack|exfil/.test(e.event_type)).length;
+  const rankIdx = scoreboard.findIndex((r) => r.team_id === team);
+  const rank = rankIdx >= 0 ? rankIdx + 1 : null;
 
   const TABS: [Tab, string, string][] = [
     ["incident", "인시던트 피드", activeIncidents ? `🔴 ${activeIncidents}` : ""],
@@ -234,6 +309,7 @@ export default function App() {
 
       <div className="flex">
         <main className="flex-1 p-4 min-w-0">
+          <BlueStats challenges={challenges} patches={patches} incidents={activeIncidents} points={myScore?.points ?? 0} rank={rank} />
           {tab === "incident" && <IncidentFeed events={events} />}
           {tab === "patch" && <PatchBoard patches={patches} reload={loadPatches} />}
           {tab === "detection" && (
@@ -269,13 +345,9 @@ export default function App() {
       </div>
 
       {scoreboard.length > 0 && (
-        <div className="fixed bottom-3 left-3 bg-[#0d1a2a] border border-[#16263a] rounded-lg px-3 py-2">
-          <div className="text-[10px] uppercase tracking-widest text-[#5a7088] mb-1">Blue Scoreboard</div>
-          {scoreboard.slice(0, 5).map((r, i) => (
-            <div key={r.team_id} className={`flex items-center justify-between gap-4 font-mono text-[11px] ${r.team_id === team ? "text-[#22D3EE]" : "text-[#8aa0b8]"}`}>
-              <span>{i + 1}. {r.team_id}</span><span>{r.points}pt · {r.solved}</span>
-            </div>
-          ))}
+        <div className="fixed bottom-3 left-3 bg-[#0d1a2a] border border-[#16263a] rounded-lg px-3 py-2.5 w-72 shadow-lg">
+          <div className="text-[10px] uppercase tracking-widest text-[#5a7088] mb-2">🏆 Blue Scoreboard</div>
+          <ScoreboardBars rows={scoreboard} me={team} />
         </div>
       )}
     </div>

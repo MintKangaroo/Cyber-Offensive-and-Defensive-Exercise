@@ -29,6 +29,102 @@ function DifficultyBadge({ d }: { d: string }) {
   );
 }
 
+// ── CTF 시각화 ────────────────────────────────────────────────
+function Donut({ frac, big, sub, color }: { frac: number; big: string; sub: string; color: string }) {
+  const R = 30, C = 2 * Math.PI * R;
+  return (
+    <svg viewBox="0 0 80 80" className="w-[76px] h-[76px] shrink-0">
+      <circle cx="40" cy="40" r={R} fill="none" stroke="#2a1a1c" strokeWidth="7" />
+      <circle cx="40" cy="40" r={R} fill="none" stroke={color} strokeWidth="7" strokeLinecap="round"
+        strokeDasharray={C} strokeDashoffset={C * (1 - frac)} transform="rotate(-90 40 40)"
+        style={{ transition: "stroke-dashoffset 0.8s ease" }} />
+      <text x="40" y="38" textAnchor="middle" fontSize="16" fontWeight="700" fill={color}>{big}</text>
+      <text x="40" y="52" textAnchor="middle" fontSize="8" fill="#8a6a6e">{sub}</text>
+    </svg>
+  );
+}
+
+const DIFF_COLOR: Record<string, string> = { easy: "#34D399", medium: "#F5A623", hard: "#FB7185", insane: "#C084FC" };
+
+function StatsPanel({ challenges, points, rank }: { challenges: Challenge[]; points: number; rank: number | null }) {
+  const total = challenges.length || 1;
+  const solved = challenges.filter((c) => c.solved).length;
+  const frac = solved / total;
+
+  const byCat = useMemo(() => {
+    const m: Record<string, { total: number; solved: number }> = {};
+    for (const c of challenges) {
+      const b = (m[c.category] ??= { total: 0, solved: 0 });
+      b.total++; if (c.solved) b.solved++;
+    }
+    return Object.entries(m).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [challenges]);
+
+  const byDiff = useMemo(() => {
+    const m: Record<string, { total: number; solved: number }> = {};
+    for (const c of challenges) {
+      const b = (m[c.difficulty] ??= { total: 0, solved: 0 });
+      b.total++; if (c.solved) b.solved++;
+    }
+    return (["easy", "medium", "hard", "insane"] as const).map((d) => [d, m[d] ?? { total: 0, solved: 0 }] as const);
+  }, [challenges]);
+
+  return (
+    <div className="border border-[#2a1a1c] rounded-xl bg-gradient-to-br from-[#150d0f] to-[#0f0809] p-4 mb-4">
+      <div className="flex flex-wrap items-center gap-6">
+        {/* 완료율 도넛 */}
+        <div className="flex items-center gap-3">
+          <Donut frac={frac} big={`${Math.round(frac * 100)}%`} sub={`${solved}/${total}`} color="#FB7185" />
+          <div>
+            <div className="font-mono text-3xl font-bold text-[#FB7185] tabular-nums leading-none">{points}<span className="text-sm text-[#8a6a6e] ml-1">pt</span></div>
+            <div className="font-mono text-[11px] text-[#8a6a6e] mt-1">{rank ? `🏆 순위 ${rank}위` : "미제출"} · {solved} solved</div>
+          </div>
+        </div>
+
+        {/* 난이도 분포 */}
+        <div className="flex items-center gap-3">
+          {byDiff.map(([d, b]) => (
+            <div key={d} className="text-center">
+              <div className="font-mono text-lg font-bold tabular-nums" style={{ color: DIFF_COLOR[d] }}>{b.solved}<span className="text-[10px] text-[#5a4548]">/{b.total}</span></div>
+              <div className="font-mono text-[9px] uppercase" style={{ color: DIFF_COLOR[d] }}>{d}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* 카테고리 진행 바 */}
+        <div className="flex-1 min-w-[260px] grid grid-cols-2 gap-x-5 gap-y-1.5">
+          {byCat.map(([cat, b]) => (
+            <div key={cat} className="flex items-center gap-2">
+              <span className="font-mono text-[10px] text-[#8a6a6e] w-16 shrink-0">{CAT_LABEL[cat] ?? cat}</span>
+              <div className="flex-1 h-1.5 rounded-full bg-[#2a1a1c] overflow-hidden">
+                <div className="h-full rounded-full bg-[#FB7185] transition-all duration-700" style={{ width: `${(b.solved / b.total) * 100}%` }} />
+              </div>
+              <span className="font-mono text-[10px] text-[#8a6a6e] w-8 text-right tabular-nums">{b.solved}/{b.total}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ScoreboardBars({ rows, me }: { rows: ScoreRow[]; me: string }) {
+  const max = Math.max(1, ...rows.map((r) => r.points));
+  return (
+    <div className="flex flex-col gap-1.5">
+      {rows.slice(0, 6).map((r, i) => (
+        <div key={r.team_id} className="flex items-center gap-2">
+          <span className={`font-mono text-[10px] w-24 shrink-0 truncate ${r.team_id === me ? "text-[#FB7185]" : "text-[#c9b8ba]"}`}>{i + 1}. {r.team_id}</span>
+          <div className="flex-1 h-3 rounded bg-[#2a1a1c] overflow-hidden min-w-[60px]">
+            <div className={`h-full rounded transition-all duration-700 ${r.team_id === me ? "bg-[#FB7185]" : "bg-[#8a5a60]"}`} style={{ width: `${(r.points / max) * 100}%` }} />
+          </div>
+          <span className="font-mono text-[10px] text-[#8a6a6e] w-14 text-right tabular-nums">{r.points}pt·{r.solved}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ChallengeCard({ c, onClick }: { c: Challenge; onClick: () => void }) {
   return (
     <button onClick={onClick}
@@ -169,6 +265,8 @@ export default function App() {
   const shown = useMemo(() => challenges.filter((c) => cat === "all" || c.category === cat), [challenges, cat]);
   const myScore = scoreboard.find((r) => r.team_id === teamId);
   const solvedCount = challenges.filter((c) => c.solved).length;
+  const rankIdx = scoreboard.findIndex((r) => r.team_id === teamId);
+  const rank = rankIdx >= 0 ? rankIdx + 1 : null;
 
   return (
     <div className="min-h-screen bg-[#0c0809] text-[#F0E6E6] font-sans">
@@ -199,6 +297,7 @@ export default function App() {
       <div className="flex">
         {/* 챌린지 목록 */}
         <main className="flex-1 p-4 min-w-0">
+          <StatsPanel challenges={challenges} points={myScore?.points ?? 0} rank={rank} />
           <div className="flex flex-wrap gap-1.5 mb-4">
             {cats.map((c) => (
               <button key={c} onClick={() => setCat(c)}
@@ -236,16 +335,11 @@ export default function App() {
         )}
       </div>
 
-      {/* 스코어보드 */}
+      {/* 스코어보드(막대) */}
       {scoreboard.length > 0 && (
-        <div className="fixed bottom-3 left-3 bg-[#151011] border border-[#2a1a1c] rounded-lg px-3 py-2 max-w-xs">
-          <div className="text-[10px] uppercase tracking-widest text-[#8a6a6e] mb-1">Scoreboard</div>
-          {scoreboard.slice(0, 5).map((r, i) => (
-            <div key={r.team_id} className={`flex items-center justify-between gap-4 font-mono text-[11px] ${r.team_id === teamId ? "text-[#FB7185]" : "text-[#c9b8ba]"}`}>
-              <span>{i + 1}. {r.team_id}</span>
-              <span>{r.points}pt · {r.solved}</span>
-            </div>
-          ))}
+        <div className="fixed bottom-3 left-3 bg-[#151011] border border-[#2a1a1c] rounded-lg px-3 py-2.5 w-72 shadow-lg">
+          <div className="text-[10px] uppercase tracking-widest text-[#8a6a6e] mb-2">🏆 Scoreboard</div>
+          <ScoreboardBars rows={scoreboard} me={teamId} />
         </div>
       )}
     </div>
