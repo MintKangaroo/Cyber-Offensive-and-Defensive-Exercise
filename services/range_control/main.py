@@ -262,11 +262,12 @@ def verify_baseline(range_id: str, authorization: str = Header(default="")):
     # 3) safe_probe 전수 — baseline은 전부 VULNERABLE(패치 0)
     probe = safe_probe.run(emit=False)["summary"]
     all_vulnerable = probe["patched"] == 0
-    # 4) probe가 취약 엔드포인트를 찔러 만든 이벤트를 정리(클린 유지)
-    try:
-        requests.post(f"{EVENT}/admin/reset", headers=_hdr(), json={}, timeout=5)
-    except requests.RequestException:
-        pass
+    # 4) probe가 취약 엔드포인트를 찔러 만든 이벤트(→ scoring 소비)를 정리해 클린 유지.
+    for url in (f"{EVENT}/admin/reset", f"{SCORING}/admin/reset"):
+        try:
+            requests.post(url, headers=_hdr(), json={}, timeout=5)
+        except requests.RequestException:
+            pass
     passed = health_ok and all_vulnerable and clean_events
     return {
         "range_id": range_id, "passed": passed,
