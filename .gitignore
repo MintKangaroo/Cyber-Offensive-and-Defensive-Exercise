@@ -9,3 +9,8 @@ node_modules/
 dist/
 .venv/
 /var/log/siem/
+
+# 챌린지 생성 아티팩트(generate_artifact/datasets.py 산출물 — 팀별 온디맨드 생성, 커밋 금지)
+challenges/*/*/deploy/*.jsonl
+challenges/*/*/deploy/*.pcap
+challenges/*/*/deploy/*.log
