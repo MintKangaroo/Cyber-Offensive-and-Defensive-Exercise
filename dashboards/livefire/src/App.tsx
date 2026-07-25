@@ -78,6 +78,23 @@ export default function App() {
         <span className="text-[10px] uppercase tracking-widest text-[#6B7A99] px-2 py-0.5 rounded border border-[#1E2A3F]">
           training environment
         </span>
+        {/* 팀별 전용 포털 진입(포털은 별도 dev 서버: Red 5176 / Blue 5177) */}
+        <a
+          href={`http://${typeof window !== "undefined" ? window.location.hostname : "localhost"}:5176/`}
+          target="_blank" rel="noreferrer"
+          className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded border border-[#FB7185]/50 text-[#FB7185] hover:bg-[#FB7185]/10"
+          title="레드팀 챌린지 포털 열기"
+        >
+          🚩 RED PORTAL
+        </a>
+        <a
+          href={`http://${typeof window !== "undefined" ? window.location.hostname : "localhost"}:5177/`}
+          target="_blank" rel="noreferrer"
+          className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded border border-[#22D3EE]/50 text-[#22D3EE] hover:bg-[#22D3EE]/10"
+          title="블루팀 방어 포털 열기"
+        >
+          🛡️ BLUE PORTAL
+        </a>
         <div className="flex-1" />
         <button
           onClick={() => {

@@ -123,7 +123,9 @@ services:
     ports: ["8060:8060"]
     environment:
       - EVENT_COLLECTOR_URL=http://event_collector:8010
-    depends_on: [event_collector]
+      - CONFIG_SERVICE_URL=http://config_service:8030
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-dev-instructor-token}
+    depends_on: [event_collector, config_service]
     networks: [range_control]
 
   noc_monitor:
