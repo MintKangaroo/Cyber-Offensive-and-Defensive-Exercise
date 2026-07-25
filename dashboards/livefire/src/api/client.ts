@@ -3,10 +3,15 @@ import type {
   RangeEvent, ScoresResponse, Achievement, AllPatches, AuditEntry,
 } from "./types";
 
-const EVENT_COLLECTOR = import.meta.env.VITE_EVENT_COLLECTOR_URL ?? "http://localhost:8010";
-const SCORING_ENGINE = import.meta.env.VITE_SCORING_ENGINE_URL ?? "http://localhost:8020";
-const CONFIG_SERVICE = import.meta.env.VITE_CONFIG_SERVICE_URL ?? "http://localhost:8030";
-const INSTRUCTOR_API = import.meta.env.VITE_INSTRUCTOR_API_URL ?? "http://localhost:8050";
+// 백엔드 호스트는 "페이지를 로드한 호스트"를 따른다. WSL2/원격에서 대시보드를 WSL IP로 열면
+// 브라우저의 localhost는 클라이언트 PC(Windows)를 가리켜 백엔드에 못 붙는다("reconnecting…").
+// window.location.hostname을 쓰면 localhost 접속이든 WSL IP 접속이든 같은 호스트의 백엔드로 붙는다.
+// (VITE_*_URL 환경변수로 명시 지정하면 그게 우선.)
+const H = typeof window !== "undefined" ? window.location.hostname : "localhost";
+const EVENT_COLLECTOR = import.meta.env.VITE_EVENT_COLLECTOR_URL ?? `http://${H}:8010`;
+const SCORING_ENGINE = import.meta.env.VITE_SCORING_ENGINE_URL ?? `http://${H}:8020`;
+const CONFIG_SERVICE = import.meta.env.VITE_CONFIG_SERVICE_URL ?? `http://${H}:8030`;
+const INSTRUCTOR_API = import.meta.env.VITE_INSTRUCTOR_API_URL ?? `http://${H}:8050`;
 const WS_URL = EVENT_COLLECTOR.replace(/^http/, "ws") + "/ws";
 
 async function j<T>(url: string, init?: RequestInit): Promise<T> {

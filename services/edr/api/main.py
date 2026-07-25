@@ -38,7 +38,7 @@ app = FastAPI(title="EDR Backend")
 # CORS가 필요하다. 없으면 브라우저가 preflight/응답을 차단해 호스트/알림/프로세스 트리가
 # 안 뜨고 Isolate/Kill 버튼도 무동작. 로컬 개발/훈련 범위라 localhost 전 포트 허용.
 app.add_middleware(
-    CORSMiddleware, allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    CORSMiddleware, allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|(\d{1,3}\.){3}\d{1,3}|[\w-]+\.ts\.net)(:\d+)?",
     allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
 )
 

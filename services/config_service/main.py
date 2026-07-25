@@ -34,7 +34,7 @@ app = FastAPI(title="Config Service")
 # EDR 콘솔(5173) + Live Fire 대시보드(5174)가 브라우저에서 직접 조회하므로 CORS 필요
 # (격리상태/패치상태 fetch). 로컬 개발/훈련 범위이므로 localhost 전 포트 허용.
 app.add_middleware(
-    CORSMiddleware, allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    CORSMiddleware, allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|(\d{1,3}\.){3}\d{1,3}|[\w-]+\.ts\.net)(:\d+)?",
     allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
 )
 

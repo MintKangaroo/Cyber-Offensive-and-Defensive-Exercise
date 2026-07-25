@@ -27,7 +27,7 @@ app = FastAPI(title="Scoring Engine")
 # Live Fire 대시보드(로컬 dev 5174 등)가 브라우저에서 직접 /scores 등을 조회하므로 CORS 필요.
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 app.add_middleware(
-    CORSMiddleware, allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    CORSMiddleware, allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|(\d{1,3}\.){3}\d{1,3}|[\w-]+\.ts\.net)(:\d+)?",
     allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
 )
 

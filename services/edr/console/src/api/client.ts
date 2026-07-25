@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { Host, ProcessNode, Alert, KillCommand, AuditEntry, WsAlertMessage } from "./types";
 
-const EDR_BASE = import.meta.env.VITE_EDR_BACKEND_URL ?? "http://localhost:8080";
-const CONFIG_BASE = import.meta.env.VITE_CONFIG_SERVICE_URL ?? "http://localhost:8030";
+// 백엔드 호스트는 페이지를 로드한 호스트를 따른다(WSL IP·Tailscale·localhost 모두 대응).
+// EDR 백엔드 포트는 override로 리맵될 수 있어 포트만 VITE_EDR_BACKEND_PORT로 조정 가능(기본 8080).
+const H = typeof window !== "undefined" ? window.location.hostname : "localhost";
+const EDR_PORT = import.meta.env.VITE_EDR_BACKEND_PORT ?? "8080";
+const EDR_BASE = import.meta.env.VITE_EDR_BACKEND_URL ?? `http://${H}:${EDR_PORT}`;
+const CONFIG_BASE = import.meta.env.VITE_CONFIG_SERVICE_URL ?? `http://${H}:8030`;
 const WS_URL = EDR_BASE.replace(/^http/, "ws") + "/edr/ws";
 
 async function j<T>(url: string, init?: RequestInit): Promise<T> {

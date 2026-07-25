@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { NormalizedEvent, Alert, SourceHealthEntry, Stats, AttackCoverage } from "./types";
 
-const SIEM_API = import.meta.env.VITE_SIEM_API_URL ?? "http://localhost:8040";
+// 백엔드 호스트는 페이지를 로드한 호스트를 따른다(WSL IP·Tailscale·localhost 모두 대응).
+const H = typeof window !== "undefined" ? window.location.hostname : "localhost";
+const SIEM_API = import.meta.env.VITE_SIEM_API_URL ?? `http://${H}:8040`;
 const WS_ALERTS_URL = SIEM_API.replace(/^http/, "ws") + "/ws/alerts";
 const WS_LOGS_URL = SIEM_API.replace(/^http/, "ws") + "/ws/logs";
 

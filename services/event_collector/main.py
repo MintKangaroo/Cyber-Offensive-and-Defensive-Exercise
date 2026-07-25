@@ -31,7 +31,7 @@ app = FastAPI(title="Event Collector")
 # 로컬 개발/훈련 범위이므로 localhost 전 포트를 허용(운영에선 리버스프록시/명시 origin 권장).
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 app.add_middleware(
-    CORSMiddleware, allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    CORSMiddleware, allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|(\d{1,3}\.){3}\d{1,3}|[\w-]+\.ts\.net)(:\d+)?",
     allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
 )
 

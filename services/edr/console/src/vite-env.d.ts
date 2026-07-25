@@ -4,6 +4,7 @@
 // (미설정 시 client.ts에서 localhost 기본값으로 폴백)
 interface ImportMetaEnv {
   readonly VITE_EDR_BACKEND_URL?: string;
+  readonly VITE_EDR_BACKEND_PORT?: string;
   readonly VITE_CONFIG_SERVICE_URL?: string;
 }
 
