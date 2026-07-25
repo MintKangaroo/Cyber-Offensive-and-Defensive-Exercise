@@ -38,7 +38,7 @@ Range (물리/논리 훈련장)
 | **팀 간 직접 접근 차단** | ✅ 구현 | per-twin `internal` 네트워크(형제 트윈 도달 불가) — 격리 테스트 실측 |
 | **인터넷 egress 차단** | ✅ 구현 | 11개 트윈 `internal:true` — 외부 도달 불가 |
 | **교관만 전체 Match 조회** | ✅ 구현 | `/matches`·`/safety/*`·`/admin/*` 전부 instructor 토큰(RBAC) 게이트 |
-| **관전자 공개정보 지연** | ⚙️ 부분 | RBAC observer 역할 존재. 지연 표시(delay buffer)는 대시보드 폴링 간격 조정으로 근사, 전용 지연 큐는 후속 |
+| **관전자 공개정보 지연** | ✅ 구현(P3) | `/events/delayed?delay_sec=N` — N초 지난 이벤트만. Live Fire observer 역할이 30s 지연 피드 폴링 + 헤더 표시. RBAC observer 게이트 |
 | **매치별 트윈 셋(물리 격리)** | ✅ 구현(P2) | `scripts/deploy_match.sh` — 별도 compose 프로젝트로 트윈 인스턴스 복제, 매치별 internal 네트워크 → cross-match 도달 차단·egress 차단(실측) |
 | **팀별 동적 포트** | ✅ 구현(P2) | 배포 시 port_base 오프셋(match_a 8301~, match_b 8401~). 매치별 이벤트는 `MATCH_SCENARIO_ID`로 scenario 파티션(실측) |
 | **팀별 서브도메인** | 🔷 로드맵 | 동적 포트는 구현. 서브도메인(리버스프록시 vhost)은 후속 |
