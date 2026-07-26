@@ -779,6 +779,18 @@ FC 99(illegal) → 예외 응답 code 1
 > 이 패턴(`shared/ics/modbus.py` 재사용)으로 나머지 ICS 트윈(정유·수처리 등)에도 실제 Modbus/
 > OPC UA/S7 리스너를 확장할 수 있다. 현재는 power_plant 에 Modbus 를 우선 구현했다.
 
+**물리 안전 결과(SIS 시뮬, `shared/ics/safety.py`)** — Modbus 쓰기가 만든 상태가 위험한지 판정한다.
+안전 인터록이 걸려 있으면 트립으로 **억제**, 공격자가 인터록을 해제하면 **억제 실패 = 물리 임팩트**:
+
+```text
+FC6 TURBINE_RPM=6000 (인터록 ON)  → red_attack_started(PP-006)만  [억제됨]
+FC5 SAFETY_INTERLOCK=OFF          → asset_compromised {safety_impact:"over_max", severity:"critical"}
+```
+
+> 즉 공격자는 과속만으론 부족하고 **안전계장(SIS)을 먼저 무력화**해야 실제 임팩트가 난다 —
+> 실제 ICS 사보타주(예: Triton/TRISIS)의 핵심 패턴을 훈련에 반영. asset_compromised 는 scoring·
+> 시나리오 안전임팩트 목표에 연동된다.
+
 ### #18 AAR 종합 리포트 확장 (P2-4)
 사후검토(`/report/aar`)가 기존 이벤트·점수·탐지(MTTD/heatmap)에 더해 **이번 세션의 하위시스템을
 종합**한다(`services/aar_report/integrations.py`). 각 서비스는 best-effort 수집(없으면 빈 섹션).

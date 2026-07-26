@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 ### Added
+- **P1-1 심화 — ICS 물리 안전 결과**: `shared/ics/safety.py` — 레지스터 한계(min/max)+안전
+  인터록 프로파일로 위험 상태 판정. 인터록 걸림=억제(high), 해제=임팩트(critical). power_plant
+  Modbus 쓰기에 배선 → 과속(>4500)·저유량(<50) + 인터록 해제 시 `asset_compromised` 발행
+  (scenario 안전임팩트 목표 연동). 유닛 6개(192→198). 실측: 인터록 ON 과속=억제(PP-006만),
+  인터록 OFF 후=asset_compromised(over_max/critical) 확인.
 - **P2-4 AAR 확장**: `services/aar_report/integrations.py` — `/report/aar` 에 이번 세션 하위시스템
   종합 섹션 추가: incident_management(SLA·MTTA/MTTR·심각도별), crisis_comms(인젝트 대응률·정시율·
   점수%), integrity(플래그 공유 담합), ics_protocol_attacks(실제 Modbus 등 프로토콜 공격). 각 서비스

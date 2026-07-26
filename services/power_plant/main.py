@@ -94,9 +94,15 @@ safety_override_state = {"override": False, "approved_by": None}
 # Modbus 는 설계상 무인증(ICS insecure-by-design) → 미인가 쓰기는 PP-006 이벤트로 발행.
 # ---------------------------------------------------------------------------
 from shared.ics.modbus import ModbusBank, serve as _modbus_serve  # noqa: E402
+from shared.ics.safety import SafetyProfile, evaluate as _safety_eval  # noqa: E402
 import asyncio as _asyncio  # noqa: E402
 
 _MODBUS_HOLDING = {0: "TURBINE_RPM", 1: "COOLANT_FLOW"}
+# 안전 프로파일(SIS): 터빈 과속(>4500) / 냉각수 저유량(<50). 인터록 코일 0.
+_SAFETY = SafetyProfile(name=ASSET_NAME,
+                        limits={0: {"name": "TURBINE_RPM", "max": 4500},
+                                1: {"name": "COOLANT_FLOW", "min": 50}},
+                        interlock_coil=0)
 _modbus_bank = ModbusBank(holding=[0] * 16, coils=[False] * 16)
 _modbus_bank.holding[0] = int(plc_registers["TURBINE_RPM"])
 _modbus_bank.holding[1] = int(plc_registers["COOLANT_FLOW"])
@@ -137,6 +143,23 @@ def _on_modbus_write(kind: str, addr: int, vals: list) -> None:
             )
         except Exception:
             pass
+
+    # 물리 안전 결과(P1-1 심화): 위험 상태 + 인터록 해제 → 실제 임팩트(asset_compromised).
+    try:
+        breaches = _safety_eval(_SAFETY, _modbus_bank.holding, _modbus_bank.coils)
+        for b in breaches:
+            if not b["contained"]:   # 억제 실패 = 물리 임팩트
+                emit_event(
+                    event_id=Event.make_id("modbus", ASSET_NAME, "SAFETY", b["register"], str(time.time())),
+                    event_type=EventType.asset_compromised, actor="red", target_asset=ASSET_NAME,
+                    vuln_id="PP-006", phase=RedPhase.lateral_movement, team_id="default",
+                    trace_id=Event.session_trace_id("modbus", ASSET_NAME),
+                    metadata={"protocol": "modbus", "safety_impact": b["condition"],
+                              "register": b["register"], "value": b["value"],
+                              "limit": b["limit"], "severity": b["severity"]},
+                )
+    except Exception:
+        pass
 
 
 _modbus_bank.on_write = _on_modbus_write
