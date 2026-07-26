@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 ### Added
+- **P2-3 반응형(태블릿/모바일)**: Control Tower 를 ≤900px(태블릿)·≤600px(모바일)에서 세로 스택
+  (flex-column)으로 재배치 — 라이브 피드 우선(order), 헬스 칩 가로 스크롤, 조작 바 하단, 피드 2열
+  (시간+내용), 터치 타깃 확대. 실측 캡처(control-tower-mobile.png): 390px 가로 스크롤 없음·풀폭
+  단일 컬럼·820px 태블릿 스택 확인.
 - **P2-2 워룸 모드**: Control Tower 에 대형 화면(프로젝터) 모드 — `▣ WARROOM` 버튼·키보드 `W`
   로 고대비·대형 폰트(피드 19px/점수 26px)·조작바 숨김(읽기전용) 토글, localStorage 유지.
   실측 캡처(docs/images/control-tower-warroom.png): warroom 활성·controls 숨김·피드 70행 확인.

@@ -71,7 +71,38 @@
   #toast.err{border-color:var(--red);color:var(--red)}
   #toast.ok{border-color:var(--green);color:var(--green)}
   .empty{color:var(--dim);font-family:var(--mono);font-size:12px;padding:14px}
-  @media(max-width:900px){.grid{grid-template-columns:1fr;grid-template-rows:auto auto 1fr}.col.right{order:3}}
+  /* ── 태블릿(≤900px): 세로 스택(flex-column) — grid-template 대신 확실히 단일 컬럼 ── */
+  @media(max-width:900px){
+    .grid{display:flex;flex-direction:column;overflow-y:auto}
+    .grid>*{width:100%}
+    .health{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
+    .health .chip{flex:0 0 auto}
+    .col.right{order:3}
+    .controls{order:4}
+    .feed{max-height:52vh}
+  }
+  /* ── 모바일(≤600px): 헤더 랩, 피드 2열(시간+내용), 터치 타깃 확대 ── */
+  @media(max-width:600px){
+    header{height:auto;flex-wrap:wrap;padding:8px 10px;gap:8px}
+    header .title{font-size:12px}
+    .badge{display:none}
+    #mode{display:inline}
+    .grid{padding:8px;gap:8px}
+    .ev{grid-template-columns:52px 1fr;gap:6px;font-size:11px;padding:5px 10px}
+    .ev .tag{display:none}                 /* 토픽 태그는 좌측 색상 바로 대체 */
+    .ev .msg{white-space:normal}
+    .score{font-size:12px}
+    .controls{gap:6px;padding:8px}
+    .controls input{flex:1 1 40%}
+    button{padding:9px 12px}               /* 터치 타깃 */
+    .links{width:100%;margin-left:0;flex-wrap:wrap}
+    #warroomBtn{display:none}               /* 워룸은 대형화면 전용 */
+    /* 글랜스 우선순위: 라이브피드 → 점수/인시던트 → 조작 */
+    .col:not(.right){order:1}
+    .col.right{order:2}
+    .controls{order:5}
+    .feed{max-height:44vh}
+  }
 
   /* ── 워룸(대형 화면/프로젝터) 모드 — 고대비·대형·읽기전용 상황판 ── */
   body.warroom{--ink:#FFFFFF;--dim2:#B8C6E0}

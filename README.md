@@ -589,8 +589,11 @@ $ python3 loadtest/sse_loadtest.py --observers 100 --teams 8 --rate 15 --duratio
 - gateway/dev **모드 자동 감지**(`/api/*` 프록시 생존 여부로 판별), 역할 대시보드로 바로가기.
 - **워룸 모드(P2-2)**: 헤더 `▣ WARROOM` 버튼(또는 키보드 `W`)으로 프로젝터/대형 화면용 고대비·
   대형 레이아웃 토글 — 조작 바를 숨긴 **읽기전용 상황판**. 선택은 localStorage 로 유지.
+- **반응형(P2-3)**: 태블릿(≤900px)·모바일(≤600px)에서 세로 스택(flex-column)으로 재배치 —
+  라이브 피드 우선, 헬스 칩 가로 스크롤, 조작 바는 하단, 터치 타깃 확대. 가로 스크롤 없음.
 
 ![Control Tower 워룸 모드](docs/images/control-tower-warroom.png)
+![Control Tower 모바일](docs/images/control-tower-mobile.png)
 
 > 위 스크린샷은 **실제 실행 캡처**다(Playwright, 4서비스 라이브 + 이벤트·인시던트 주입). 검증: SSE
 > 피드 실시간 수신, 헬스 9/12 green, 스코어 실시간 갱신, **인시던트 4건(SLA 위반 1건 ⚠ 강조)**,
