@@ -646,6 +646,27 @@ Safety Status                          containment 100%
 ```
 `POST /safety/emergency-stop [/release]` 전역 긴급정지(killswitch) · `POST /safety/team-pause` 특정 팀 정지.
 
+### #12 공정성 · 안티치트 (P1-5)
+대회 무결성을 위해 플래그 제출 경로(`challenge_portal`)에 통제를 얹었다(`anticheat.py`).
+
+| 통제 | 동작 | 기본값(env) |
+|---|---|---|
+| **rate-limit** | (팀,챌린지) 슬라이딩 윈도 초과 제출 → **429** | `PORTAL_MAX_ATTEMPTS=10` / `PORTAL_WINDOW_SEC=60` |
+| **lockout** | 연속 오답 임계 초과 → 일시 잠금(정답 시 리셋) | `PORTAL_LOCK_FAILS=6` / `PORTAL_LOCK_SEC=120` |
+| **제출 감사** | 모든 시도 기록(팀·매치·챌린지·정답여부·**플래그 해시**) — 원문 미저장 | `/portal/anticheat/audit` |
+| **플래그 공유 탐지** | 같은 챌린지에 동일 플래그 해시를 낸 팀 ≥2 → 담합 신호 | `/portal/anticheat/flagged` |
+
+담합 의심 시 `unmatched_detection` 이벤트가 발행돼 교관 감사 피드에 뜬다(점수 미적립).
+
+```text
+# 실측(PORTAL_MAX_ATTEMPTS=4, LOCK_FAILS=3): 오답 반복 → 4번째부터 차단
+attempt 1 → HTTP 200   attempt 4 → HTTP 429
+attempt 2 → HTTP 200   attempt 5 → HTTP 429
+attempt 3 → HTTP 200   attempt 6 → HTTP 429
+# /portal/anticheat/flagged (team_a·team_b 가 동일 플래그 제출)
+{"flagged":[{"cid":"AI-005","teams":2,"team_list":"team_a,team_b", ...}]}
+```
+
 ---
 
 ## 저장소 구조

@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 ### Added
+- **P1-5 공정성/안티치트**: `services/challenge_portal/anticheat.py` — 플래그 제출 rate-limit
+  (슬라이딩 윈도)·연속오답 lockout(백오프)·전 제출 감사(sqlite, 플래그는 해시만)·팀간 동일플래그
+  공유 탐지. red/blue submit 에 배선(429 차단), 담합 시 unmatched_detection 이벤트로 교관 가시화.
+  교관 조회 엔드포인트 /portal/anticheat/audit·/flagged. 유닛 9개(116→125). 실측: 4회초과 429,
+  감사 기록, /flagged 담합(team_a·team_b 동일플래그) 탐지 확인.
 - **Control Tower(통합 관리 콘솔)**: `dashboards/control-tower/index.html` — 단일 화면에서 11개
   서비스 헬스·SSE 실시간 피드(P0-4)·라이브 스코어보드·매치·안전상태 + 시나리오/긴급정지/초기화
   컨트롤. gateway `/control/`(auth 게이트) + 랜딩 카드, dev 직접포트 모드 자동감지. self-contained

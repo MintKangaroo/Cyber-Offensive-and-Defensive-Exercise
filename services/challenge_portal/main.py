@@ -36,6 +36,26 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CHALLENGES_ROOT = REPO_ROOT / "challenges"
 EVENT_COLLECTOR_URL = os.environ.get("EVENT_COLLECTOR_URL", "http://event_collector:8010")
 
+# 공정성/안티치트(P1-5) — rate-limit·lockout·감사·플래그공유 탐지
+import sqlite3  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import anticheat  # noqa: E402
+
+_AC_STATE = anticheat.AntiCheatState()
+_AC_CFG = anticheat.Config.from_env()
+_AC_DB_PATH = Path(os.environ.get("DATA_DIR", "/tmp")) / "anticheat.db"
+
+
+def _ac_db() -> sqlite3.Connection:
+    c = sqlite3.connect(_AC_DB_PATH)
+    c.row_factory = sqlite3.Row
+    return c
+
+
+with _ac_db() as _c0:
+    anticheat.init_audit(_c0)
+_c0.close()
+
 app = FastAPI(title="Red Challenge Portal")
 app.add_middleware(
     CORSMiddleware,
@@ -254,6 +274,13 @@ async def submit(cid: str, req: SubmitReq):
 
     # 매치별 플래그 회전: 채점용 팀키는 복합키(match::team), 스코어보드 기록도 동일 키로 격리.
     eff_team = _effective_team(req.team_id, req.match_id)
+
+    # (P1-5) rate-limit·lockout 선검사 — 무차별 플래그 대입 차단.
+    now = time.time()
+    allowed, retry = anticheat.precheck(_AC_STATE, eff_team, cid, now, _AC_CFG)
+    if not allowed:
+        raise HTTPException(429, f"제출 제한: {retry}초 후 재시도(rate-limit/lockout). 반복 오답이 감지되었습니다.")
+
     submission = {"team_id": eff_team, **(req.fields or {})}
     context = {"challenge_dir": e["dir"]}
     try:
@@ -264,6 +291,18 @@ async def submit(cid: str, req: SubmitReq):
     passed = bool(getattr(result, "passed", False))
     got = int(getattr(result, "points", 0))
     detail = str(getattr(result, "detail", ""))
+
+    # (P1-5) 감사 기록 + 플래그 공유 탐지. 플래그 원문 대신 해시만 저장.
+    flag_val = str((req.fields or {}).get("flag") or json.dumps(req.fields, sort_keys=True))
+    vhash = anticheat.flag_hash(flag_val)
+    conn = _ac_db()
+    try:
+        anticheat.record(_AC_STATE, conn, eff_team, req.match_id or "", cid, "red", vhash, passed, now, _AC_CFG)
+        shared_with = anticheat.detect_sharing(conn, cid, vhash, eff_team) if passed else []
+    finally:
+        conn.close()
+    if shared_with:
+        await _emit_collusion(req.team_id, cid, shared_with)  # 담합 신호 → 교관 가시화
 
     already = cid in _SOLVES.get(eff_team, {})
     if passed and not already:
@@ -277,6 +316,7 @@ async def submit(cid: str, req: SubmitReq):
         "grader_points": got,
         "already_solved": already,
         "detail": detail,
+        "flag_sharing_suspected": shared_with,   # 같은 플래그를 먼저 낸 다른 팀(있으면 담합 의심)
     }
 
 
@@ -301,6 +341,59 @@ def scoreboard():
         })
     rows.sort(key=lambda r: (-r["points"], r["last_solve"]))
     return {"scoreboard": rows}
+
+
+async def _emit_collusion(team_id: str, cid: str, shared_with: list[str]) -> None:
+    """(P1-5) 플래그 공유 의심 → unmatched_detection 로 교관 감사 피드에 신호(점수 미적립)."""
+    ev = {
+        "event_id": str(uuid.uuid4()),
+        "event_type": "unmatched_detection",
+        "timestamp": time.time(),
+        "actor": "system",
+        "team_id": team_id,
+        "scenario_id": "default",
+        "target_asset": "flag_integrity",
+        "phase": "objective",
+        "challenge_id": cid,
+        "metadata": {"source": "anticheat", "signal": "flag_sharing_suspected",
+                     "challenge": cid, "same_flag_as": shared_with},
+    }
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            await client.post(f"{EVENT_COLLECTOR_URL}/events", json=ev)
+    except httpx.HTTPError:
+        pass
+
+
+@app.get("/portal/anticheat/audit")
+def anticheat_audit(cid: Optional[str] = None, team_id: Optional[str] = None, limit: int = 200):
+    """(P1-5) 제출 감사 로그(교관 사후검증). 플래그 원문은 저장 안 함(해시만)."""
+    conn = _ac_db()
+    q = "SELECT ts,team_id,match_id,cid,side,passed,value_hash FROM submissions"
+    cond, params = [], []
+    if cid:
+        cond.append("cid=?"); params.append(cid)
+    if team_id:
+        cond.append("team_id=?"); params.append(team_id)
+    if cond:
+        q += " WHERE " + " AND ".join(cond)
+    q += " ORDER BY ts DESC LIMIT ?"; params.append(limit)
+    rows = [dict(r) for r in conn.execute(q, params).fetchall()]
+    conn.close()
+    return {"count": len(rows), "submissions": rows}
+
+
+@app.get("/portal/anticheat/flagged")
+def anticheat_flagged():
+    """(P1-5) 담합 의심: 같은 챌린지에 '정답'으로 동일 플래그 해시를 낸 팀이 2개 이상인 건."""
+    conn = _ac_db()
+    rows = conn.execute(
+        """SELECT cid, value_hash, COUNT(DISTINCT team_id) AS teams,
+                  GROUP_CONCAT(DISTINCT team_id) AS team_list, MIN(ts) AS first_ts
+           FROM submissions WHERE passed=1
+           GROUP BY cid, value_hash HAVING teams >= 2 ORDER BY first_ts""").fetchall()
+    conn.close()
+    return {"flagged": [dict(r) for r in rows]}
 
 
 async def _emit_solve(team_id: str, e: dict) -> None:
@@ -429,6 +522,12 @@ async def blue_submit(cid: str, req: BlueSubmitReq):
     except (yaml.YAMLError, ValueError) as ex:
         raise HTTPException(400, f"규칙 YAML 파싱 오류: {ex}")
 
+    # (P1-5) rate-limit·lockout — 블루 규칙 제출도 무차별 시도 차단.
+    now = time.time()
+    allowed, retry = anticheat.precheck(_AC_STATE, req.team_id, cid, now, _AC_CFG)
+    if not allowed:
+        raise HTTPException(429, f"제출 제한: {retry}초 후 재시도(rate-limit/lockout).")
+
     cdir = Path(e["dir"])
     _ensure_datasets(cdir)
     grader_path = cdir / "grader" / "blue_grader.py"
@@ -454,6 +553,13 @@ async def blue_submit(cid: str, req: BlueSubmitReq):
 
     passed = bool(getattr(result, "passed", False))
     detail = str(getattr(result, "detail", ""))
+    # (P1-5) 감사 기록(규칙 해시). 블루는 규칙이라 공유탐지는 신호로만.
+    conn = _ac_db()
+    try:
+        anticheat.record(_AC_STATE, conn, req.team_id, "", cid, "blue",
+                         anticheat.flag_hash(req.rule_yaml), passed, now, _AC_CFG)
+    finally:
+        conn.close()
     already = cid in _BLUE_SOLVES.get(req.team_id, {})
     if passed and not already:
         _BLUE_SOLVES.setdefault(req.team_id, {})[cid] = {"points": e["points_blue"], "at": time.time()}
