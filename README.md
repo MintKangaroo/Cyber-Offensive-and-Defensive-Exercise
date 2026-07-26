@@ -828,6 +828,18 @@ SIEM 탐지 규칙(`services/siem/detection/rules/ics_layer.yaml`)이 매칭하�
 > 규칙: `ICS-MODBUS-WRITE-PP/WU`(미인가 쓰기, T0836/T0855) · `ICS-SAFETY-INTERLOCK-SUPPRESS`
 > (인터록 무력화, T0878). 실제 SIEM DetectionEngine + 트윈 파서를 통과하는 테스트로 고정.
 
+**엔터프라이즈 프로토콜 — 실제 SMTP 오픈 릴레이(P1-2 슬라이스, `shared/net/smtp_server.py`)**:
+`defense_network` 트윈이 25번 포트에서 **진짜 SMTP** 를 말한다(`smtplib`·`swaks`·`telnet` 대응).
+취약점 **DN-004 오픈 릴레이** — 인증 없이 외부 도메인으로 메일을 릴레이(스팸/피싱 발판),
+패치되면 550 거부. 릴레이 발생 시 DN-004 이벤트 + SIEM 로그(기존 규칙이 Blue 탐지로 연결).
+
+```text
+# 실측(stdlib smtplib)
+MAIL FROM:<spammer@evil.com> ; RCPT TO:<victim@external.org>  → 250 (오픈 릴레이 성공)
+  → DN-004 이벤트(vector=open_relay) + SIEM 로그(/smtp/relay)
+패치 시: RCPT 외부 → 550 5.7.1 Relaying denied
+```
+
 ### #18 AAR 종합 리포트 확장 (P2-4)
 사후검토(`/report/aar`)가 기존 이벤트·점수·탐지(MTTD/heatmap)에 더해 **이번 세션의 하위시스템을
 종합**한다(`services/aar_report/integrations.py`). 각 서비스는 best-effort 수집(없으면 빈 섹션).

@@ -6,4 +6,5 @@ COPY shared/ shared/
 COPY services/defense_network/ services/defense_network/
 WORKDIR /app/services/defense_network
 EXPOSE 8003
+EXPOSE 25
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003"]

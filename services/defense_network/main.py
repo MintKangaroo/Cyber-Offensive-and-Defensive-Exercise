@@ -77,6 +77,63 @@ def patched(flag_key: str) -> bool:
     return _config.is_patched(vuln_id, env_fallback_key=flag_key)
 
 
+# ---------------------------------------------------------------------------
+# 실제 SMTP 서버(P1-2 슬라이스) — 진짜 SMTP + 오픈 릴레이(DN-004).
+# 인증 없이 외부 도메인 릴레이 수락 시 취약(스팸/피싱 발판). smtplib/swaks 로 실공격 가능.
+# ---------------------------------------------------------------------------
+import json as _json  # noqa: E402
+import asyncio as _asyncio  # noqa: E402
+from shared.net.smtp_server import SmtpSession as _SmtpSession, serve as _smtp_serve  # noqa: E402
+from shared.siem_access_log import get_siem_logger as _get_siem_logger  # noqa: E402
+
+_LOCAL_DOMAINS = {"corp.local", "defense.local"}
+_smtp_siem = _get_siem_logger(ASSET_NAME)
+_smtp_server = None
+
+
+def _on_mail(msg: dict) -> None:
+    """메일 접수 콜백 — 외부 릴레이면 DN-004 이벤트 + SIEM 로그(Blue 탐지 가능)."""
+    if not msg.get("relay"):
+        return
+    if patched("PATCH_DN_004"):
+        return
+    try:
+        emit_event(
+            event_id=Event.make_id("smtp", ASSET_NAME, "DN-004", str(time.time())),
+            event_type=EventType.red_attack_started, actor="red", target_asset=ASSET_NAME,
+            vuln_id="DN-004", phase=RedPhase.lateral_movement, team_id="default",
+            trace_id=Event.session_trace_id("smtp", ASSET_NAME),
+            metadata={"protocol": "smtp", "sender": msg.get("sender"),
+                      "recipients": msg.get("recipients"), "vector": "open_relay"})
+    except Exception:
+        pass
+    try:
+        _smtp_siem.info(_json.dumps({
+            "ts": time.time(), "asset": ASSET_NAME, "method": "SMTP",
+            "endpoint": "/smtp/relay", "status": 250, "vuln_id": "DN-004",
+            "team_id": "default", "trace_id": Event.session_trace_id("smtp", ASSET_NAME),
+            "sender": msg.get("sender"), "recipients": msg.get("recipients")}))
+    except Exception:
+        pass
+
+
+def _smtp_factory() -> "_SmtpSession":
+    # allow_relay 는 커넥션마다 patched 상태를 반영(패치되면 외부 릴레이 거부).
+    return _SmtpSession("mail.corp.local", allow_relay=not patched("PATCH_DN_004"),
+                        local_domains=_LOCAL_DOMAINS, on_message=_on_mail)
+
+
+@app.on_event("startup")
+async def _start_smtp():
+    global _smtp_server
+    if os.environ.get("SMTP_ENABLED", "1") != "1":
+        return
+    try:
+        _smtp_server = await _smtp_serve(_smtp_factory, "0.0.0.0", int(os.environ.get("SMTP_PORT", "25")))
+    except OSError:
+        pass  # 25 바인딩 실패해도 HTTP 트윈은 계속
+
+
 SHARES = {
     "PublicShare": ["readme.txt", "briefing_schedule.txt"],
     "AdminShare$": ["classified_dummy_report.pdf", "plant_safety_config.flag"],

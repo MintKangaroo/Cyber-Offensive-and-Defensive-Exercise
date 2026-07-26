@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 ### Added
+- **P1-2 슬라이스 — defense_network 실제 SMTP + 오픈 릴레이(DN-004)**: `shared/net/smtp_server.py`
+  세션 상태머신(HELO/MAIL/RCPT/DATA/QUIT) + asyncio 서버. defense_network 가 25 에서 진짜 SMTP 를
+  말하고, 인증 없이 외부 도메인 릴레이 수락 시 취약(패치되면 550). 릴레이 시 DN-004 이벤트 + SIEM
+  로그(기존 DN-004 규칙이 blue_detection_success 로 연결). 유닛 8개(210→218). 실측: stdlib smtplib
+  로 외부 릴레이 성공(open relay)·패치 시 550 거부·DN-004 이벤트/SIEM 로그 확인.
 - **P1-1 red→blue 폐루프 — ICS Modbus 탐지→채점**: ICS 트윈이 Modbus 활동을 SIEM access 로그로
   발행(`get_siem_logger`), SIEM 탐지 규칙(`ics_layer.yaml`: ICS-MODBUS-WRITE-PP/WU·
   ICS-SAFETY-INTERLOCK-SUPPRESS, `raw.ics_technique` 매칭) → 알림 → 기존 `blue_detection_success`
