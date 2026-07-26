@@ -87,7 +87,11 @@ import time as _time  # noqa: E402
 from shared.ics.modbus import ModbusBank, serve as _modbus_serve  # noqa: E402
 from shared.ics.safety import SafetyProfile, evaluate as _safety_eval  # noqa: E402
 from shared.ics.anomaly import IcsBaseline, RegBand, classify_write as _wu_classify  # noqa: E402
+from shared.siem_access_log import get_siem_logger as _wu_get_siem_logger  # noqa: E402
+import json as _wu_json  # noqa: E402
 from shared.event_client import emit_event as _emit  # noqa: E402
+
+_wu_siem_log = _wu_get_siem_logger("water_utility")
 from shared.event_schema import Event, EventType, RedPhase  # noqa: E402
 
 _ASSET = "water_utility"
@@ -112,6 +116,17 @@ def _wu_on_write(kind: str, addr: int, vals: list) -> None:
     if anomaly:
         md.update({"ics_technique": anomaly["technique"], "ics_severity": anomaly["severity"],
                    "ics_reason": anomaly["reason"]})
+    try:
+        _wu_siem_log.info(_wu_json.dumps({
+            "ts": _time.time(), "asset": _ASSET, "method": "MODBUS",
+            "endpoint": f"/modbus/{'interlock' if kind == 'coil' else 'register'}/{target}",
+            "status": 200, "vuln_id": "WTR-001", "team_id": "default",
+            "trace_id": Event.session_trace_id("modbus", _ASSET),
+            "ics_technique": anomaly["technique"] if anomaly else None,
+            "ics_severity": anomaly["severity"] if anomaly else None, "register": target,
+        }))
+    except Exception:
+        pass
     try:
         _emit(event_id=Event.make_id("modbus", _ASSET, "WTR-001", target, str(_time.time())),
               event_type=EventType.red_objective_success, actor="red", target_asset=_ASSET,

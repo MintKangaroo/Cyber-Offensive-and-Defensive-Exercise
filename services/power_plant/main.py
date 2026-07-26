@@ -96,7 +96,11 @@ safety_override_state = {"override": False, "approved_by": None}
 from shared.ics.modbus import ModbusBank, serve as _modbus_serve  # noqa: E402
 from shared.ics.safety import SafetyProfile, evaluate as _safety_eval  # noqa: E402
 from shared.ics.anomaly import IcsBaseline, RegBand, classify_write as _classify  # noqa: E402
+from shared.siem_access_log import get_siem_logger as _get_siem_logger  # noqa: E402
+import json as _json  # noqa: E402
 import asyncio as _asyncio  # noqa: E402
+
+_siem_log = _get_siem_logger(ASSET_NAME)  # Modbus 활동을 SIEM 으로 흘려 Blue 탐지 가능하게
 
 _MODBUS_HOLDING = {0: "TURBINE_RPM", 1: "COOLANT_FLOW"}
 # ICS 이상탐지 베이스라인(Blue/SIEM 신호) — 운전 밴드 + 보호 + 안전 코일.
@@ -140,6 +144,18 @@ def _on_modbus_write(kind: str, addr: int, vals: list) -> None:
         target = "SAFETY_INTERLOCK" if addr == 0 else f"COIL{addr}"
     # ICS 이상탐지 분류(MITRE ICS) — Blue/SIEM 이 이 신호로 탐지.
     anomaly = _classify(_ICS_BASE, kind, addr, vals)
+    # Modbus 활동을 SIEM access 로그로 발행 → 탐지 규칙(ICS-*)이 매칭 → blue_detection_success.
+    try:
+        _siem_log.info(_json.dumps({
+            "ts": time.time(), "asset": ASSET_NAME, "method": "MODBUS",
+            "endpoint": f"/modbus/{'interlock' if kind == 'coil' else 'register'}/{target}",
+            "status": 200, "vuln_id": "PP-006", "team_id": "default",
+            "trace_id": Event.session_trace_id("modbus", ASSET_NAME),
+            "ics_technique": anomaly["technique"] if anomaly else None,
+            "ics_severity": anomaly["severity"] if anomaly else None, "register": target,
+        }))
+    except Exception:
+        pass
     if not patched("PATCH_PP_006"):
         try:
             md = {"protocol": "modbus", "register": target, "values": vals, "fc_kind": kind}

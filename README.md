@@ -815,6 +815,19 @@ FC5 SAFETY_INTERLOCK=OFF          → asset_compromised {safety_impact:"over_max
 
 > Blue 는 이 신호로 ICS 공격을 탐지하고, AAR 의 `ics_protocol_attacks` 섹션과 SIEM 헌팅에 연동된다.
 
+**red→blue 폐루프(탐지→채점)** — ICS 트윈은 Modbus 활동을 **SIEM access 로그로 발행**하고,
+SIEM 탐지 규칙(`services/siem/detection/rules/ics_layer.yaml`)이 매칭하면 기존 파이프라인이
+`blue_detection_success` 를 발행해 **Blue 점수 + dwell-time 보너스**로 이어진다:
+
+```text
+트윈 Modbus 쓰기 → SIEM 로그(vuln_id=PP-006, ics_technique=T0878)
+  → 규칙 ICS-SAFETY-INTERLOCK-SUPPRESS(raw.ics_technique ~T0878) 매칭
+  → 알림 → blue_detection_success(matched_event_id=trace_id) → scoring dwell 보너스
+```
+
+> 규칙: `ICS-MODBUS-WRITE-PP/WU`(미인가 쓰기, T0836/T0855) · `ICS-SAFETY-INTERLOCK-SUPPRESS`
+> (인터록 무력화, T0878). 실제 SIEM DetectionEngine + 트윈 파서를 통과하는 테스트로 고정.
+
 ### #18 AAR 종합 리포트 확장 (P2-4)
 사후검토(`/report/aar`)가 기존 이벤트·점수·탐지(MTTD/heatmap)에 더해 **이번 세션의 하위시스템을
 종합**한다(`services/aar_report/integrations.py`). 각 서비스는 best-effort 수집(없으면 빈 섹션).

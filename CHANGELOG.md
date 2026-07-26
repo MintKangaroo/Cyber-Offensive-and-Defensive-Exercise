@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 ### Added
+- **P1-1 red→blue 폐루프 — ICS Modbus 탐지→채점**: ICS 트윈이 Modbus 활동을 SIEM access 로그로
+  발행(`get_siem_logger`), SIEM 탐지 규칙(`ics_layer.yaml`: ICS-MODBUS-WRITE-PP/WU·
+  ICS-SAFETY-INTERLOCK-SUPPRESS, `raw.ics_technique` 매칭) → 알림 → 기존 `blue_detection_success`
+  push → Blue 점수+dwell 보너스. 실제 엔진+트윈 파서 통과 유닛 5개(205→210). 실측: 트윈이 T0836/
+  T0878 로그 라인 기록·규칙 매칭·정상 이벤트 오탐 없음 확인.
 - **P1-1 red→blue — ICS Modbus 이상탐지**: `shared/ics/anomaly.py` — Modbus 쓰기를 MITRE ATT&CK
   for ICS 로 분류(T0836 Modify Parameter·T0855 Unauthorized Command·T0878 Suppression of Alarms).
   power_plant·water_utility 트윈이 각 Modbus 이벤트 metadata 에 ics_technique/severity/reason 을

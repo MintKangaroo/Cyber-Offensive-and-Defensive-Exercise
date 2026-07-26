@@ -1,0 +1,29 @@
+# ICS 계층 탐지 규칙(P1-1 red→blue) — 실제 Modbus 공격을 Blue 가 탐지.
+# 트윈이 Modbus 쓰기를 SIEM access 로그로 흘리면, 이 규칙이 매칭 → blue_detection_success → 점수.
+
+- id: ICS-MODBUS-WRITE-PP
+  title: "ICS 미인가 Modbus 쓰기 - 발전소"
+  severity: 4
+  mitre: [T0836, T0855]        # Modify Parameter, Unauthorized Command
+  source_type: twin
+  kind: match
+  match:
+    vuln_id: "PP-006"
+
+- id: ICS-MODBUS-WRITE-WU
+  title: "ICS 미인가 Modbus 쓰기 - 수처리(공중보건)"
+  severity: 5
+  mitre: [T0836, T0855]
+  source_type: twin
+  kind: match
+  match:
+    vuln_id: "WTR-001"
+
+- id: ICS-SAFETY-INTERLOCK-SUPPRESS
+  title: "ICS 안전 인터록/알람 비활성화"
+  severity: 5
+  mitre: [T0878]               # Suppression of Alarms
+  source_type: twin
+  kind: match
+  match:
+    raw.ics_technique: "~T0878"
