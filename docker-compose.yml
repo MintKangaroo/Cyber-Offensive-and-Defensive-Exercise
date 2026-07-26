@@ -173,6 +173,17 @@ services:
     volumes: [ auth_data:/data ]
     networks: [range_control]
 
+  incident:
+    build: { context: ., dockerfile: services/incident/Dockerfile }
+    container_name: incident
+    ports: ["8095:8095"]
+    environment:
+      - DATA_DIR=/data
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+    volumes: [ inc_case_data:/data ]
+    depends_on: [event_collector]
+    networks: [range_control]
+
   challenge_portal:
     build: { context: ., dockerfile: services/challenge_portal/Dockerfile }
     container_name: challenge_portal
@@ -732,6 +743,7 @@ networks:
 
 volumes:
   auth_data: {}
+  inc_case_data: {}
   ec_data: {}
   sc_data: {}
   cf_data: {}

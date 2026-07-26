@@ -107,6 +107,10 @@
       <div class="rows" id="matches"><div class="empty">매치 없음</div></div>
     </div>
     <div class="panel">
+      <h2>▢ Incidents <span class="count" id="incCount">0</span></h2>
+      <div class="rows" id="incidents"><div class="empty">인시던트 없음</div></div>
+    </div>
+    <div class="panel">
       <h2>⛨ Safety</h2>
       <div class="rows" id="safety"><div class="empty">…</div></div>
     </div>
@@ -140,6 +144,7 @@ const SVC = {
   auth:      {gw:"/auth",           port:8051, health:"/health", label:"auth"},
   instructor:{gw:"/api/instructor", port:8050, health:"/health", label:"instructor"},
   range:     {gw:"/api/range",      port:8055, health:"/health", label:"range"},
+  incident:  {gw:"/api/incident",   port:8095, health:"/health", label:"incident"},
   portal:    {gw:"/api/portal",     port:8060, health:"/health", label:"portal"},
   edr:       {gw:"/api/edr",        port:8080, health:"/health", label:"edr"},
   noc:       {gw:null,              port:8070, health:"/health", label:"noc"},
@@ -231,6 +236,20 @@ async function pollMatches(){
     const box = document.getElementById("matches");
     box.innerHTML = arr.length ? arr.map(m=>`<div class="kv"><span class="k">${m.match_id||m.id||"?"}</span><span class="v">${m.scenario_id||m.status||""}</span></div>`).join("") : `<div class="empty">매치 없음</div>`;
   }catch(_){}
+}
+const SEVC = {critical:"var(--red)", high:"var(--amber)", medium:"var(--violet)", low:"var(--dim2)"};
+async function pollIncidents(){
+  try{
+    const r = await fetch(base("incident")+"/incidents", {credentials:cred()});
+    const d = await r.json();
+    const arr = (d.incidents||[]).filter(i=>i.status!=="closed");
+    document.getElementById("incCount").textContent = arr.length;
+    const box = document.getElementById("incidents");
+    box.innerHTML = arr.length ? arr.slice(0,8).map(i=>{
+      const breach = i.sla && (i.sla.response_breached||i.sla.resolution_breached);
+      return `<div class="kv"><span class="k" style="color:${SEVC[i.severity]||'var(--dim)'}">${(i.severity||'?').toUpperCase().slice(0,4)}</span><span class="v" style="flex:1;margin:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${i.title||i.id}</span><span class="v ${breach?'bad':''}">${i.status}${breach?' ⚠SLA':''}</span></div>`;
+    }).join("") : `<div class="empty">인시던트 없음</div>`;
+  }catch(_){ document.getElementById("incidents").innerHTML=`<div class="empty">incident 서비스 응답 없음</div>`; }
 }
 async function pollSafety(){
   try{
@@ -327,12 +346,13 @@ function tickClock(){ document.getElementById("clock").textContent = new Date().
   await detectMode();
   healthChips();
   connectSSE();
-  const all = ()=>{ pollHealth(); pollScores(); pollMatches(); pollSafety(); };
+  const all = ()=>{ pollHealth(); pollScores(); pollMatches(); pollSafety(); pollIncidents(); };
   all();
   setInterval(pollHealth, 5000);
   setInterval(pollScores, 8000);   // SSE scores 가 즉시 갱신, 이건 fallback
   setInterval(pollMatches, 10000);
   setInterval(pollSafety, 6000);
+  setInterval(pollIncidents, 7000);
   setInterval(tickClock, 1000); tickClock();
 })();
 </script>

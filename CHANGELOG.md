@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 ### Added
+- **Incident Case Management(P1)**: `services/incident`(8095) — SIEM/EDR 알림→인시던트 승격
+  (alert_id 중복방지), 라이프사이클 상태머신(new→triage→contained→eradicated→recovered→closed,
+  역행·건너뛰기 거부), 전 변경 타임라인, 심각도별 SLA(응답/해결) 위반 리포트, AAR 연동(MTTA/MTTR).
+  RBAC(쓰기 blue/instructor·읽기 게이트), 승격 시 blue_detection_success 이벤트. docker-compose
+  +gateway `/api/incident` +prod env, Control Tower Incidents 패널(SLA 위반 강조). 유닛 17개(125→142).
+  실측: 승격·중복409·불법전이409·풀 라이프사이클·SLA위반 리포트·AAR 타임라인 확인.
 - **P1-5 공정성/안티치트**: `services/challenge_portal/anticheat.py` — 플래그 제출 rate-limit
   (슬라이딩 윈도)·연속오답 lockout(백오프)·전 제출 감사(sqlite, 플래그는 해시만)·팀간 동일플래그
   공유 탐지. red/blue submit 에 배선(429 차단), 담합 시 unmatched_detection 이벤트로 교관 가시화.

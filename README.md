@@ -584,13 +584,14 @@ $ python3 loadtest/sse_loadtest.py --observers 100 --teams 8 --rate 15 --duratio
 한 화면에서:
 - **서비스 헬스**: 11개 서비스 도달성·지연(events/scoring/config/siem/auth/instructor/range/portal/edr/noc/aar).
 - **실시간 상황 피드**: SSE `/stream` 구독(P0-4) — events/detections/scores/safety/phase_clock 토픽 색상 구분.
-- **라이브 스코어보드 · 매치 · 안전 상태**(격리 점수·긴급정지·일시정지 팀).
+- **라이브 스코어보드 · 매치 · 인시던트 · 안전 상태**(SLA 위반 인시던트 강조·격리 점수·긴급정지).
 - **컨트롤 액션**: 시나리오 Start/End, 긴급정지 발동/해제, 훈련 초기화 — 각 사유는 감사 로그에 기록.
 - gateway/dev **모드 자동 감지**(`/api/*` 프록시 생존 여부로 판별), 역할 대시보드로 바로가기.
 
-> 위 스크린샷은 **실제 실행 캡처**다(Playwright, 3서비스 라이브 + 이벤트 주입). 검증: SSE 피드 170행
-> 수신, 헬스 8/11 green, 스코어 실시간 갱신, 그리고 초기화 액션이 실제로 `event(120)·scoring(77 성취
-> +6 팀점수)`를 비우고 긴급정지 엔드포인트가 200을 반환하는 것까지 확인했다.
+> 위 스크린샷은 **실제 실행 캡처**다(Playwright, 4서비스 라이브 + 이벤트·인시던트 주입). 검증: SSE
+> 피드 실시간 수신, 헬스 9/12 green, 스코어 실시간 갱신, **인시던트 4건(SLA 위반 1건 ⚠ 강조)**,
+> 그리고 초기화 액션이 실제로 `event(120)·scoring(성취+팀점수)`를 비우고 긴급정지가 200을 반환하는
+> 것까지 확인했다.
 
 ---
 
@@ -665,6 +666,26 @@ attempt 2 → HTTP 200   attempt 5 → HTTP 429
 attempt 3 → HTTP 200   attempt 6 → HTTP 429
 # /portal/anticheat/flagged (team_a·team_b 가 동일 플래그 제출)
 {"flagged":[{"cid":"AI-005","teams":2,"team_list":"team_a,team_b", ...}]}
+```
+
+### #13 인시던트 케이스 관리 (Incident Case Management, P1)
+탐지에서 끝나지 않고 **SOC 케이스 운영**까지: SIEM/EDR 알림을 인시던트로 승격해 라이프사이클로
+추적한다(`services/incident`, 8095). Control Tower·Blue 팀 워크플로에 연동.
+
+| 기능 | 설명 |
+|---|---|
+| **알림→승격** | `POST /incidents/from-alert` — `alert_id` 중복 승격 방지, 승격 시 `blue_detection_success` 이벤트 |
+| **라이프사이클** | `new → triage → contained → eradicated → recovered → closed` — 역행·건너뛰기·재개 거부(409) |
+| **타임라인** | 모든 전이·노트·배정이 시각·행위자와 함께 기록 → 감사·AAR 근거 |
+| **SLA** | 심각도별 응답/해결 시한(critical 15/240분 … low 240/4320분), 위반 리포트 `GET /incidents/sla` |
+| **AAR 연동** | `GET /incidents/{id}/aar` — 전체 타임라인 + **MTTA/MTTR** + SLA 결과 |
+
+```text
+# 실측: 알림 승격 → 라이프사이클 → AAR
+promote SIEM-4412(critical) → INC-…  |  dup 승격 → 409  |  new→recovered(건너뛰기) → 409
+new→triage→contained→eradicated→recovered→closed → 전부 200
+AAR: status=closed, mtta/mttr 계산, timeline 6건, SLA 위반 없음
+/incidents/sla → {"open":4,"breached_count":1}   # 미대응 critical 1건 SLA 위반 탐지
 ```
 
 ---

@@ -46,6 +46,8 @@ services:
     environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
   auth:
     environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
+  incident:
+    environment: [ "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
 
 volumes:
   gateway_certs: {}
