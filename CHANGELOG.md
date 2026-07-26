@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 ### Added
+- **Control Tower(통합 관리 콘솔)**: `dashboards/control-tower/index.html` — 단일 화면에서 11개
+  서비스 헬스·SSE 실시간 피드(P0-4)·라이브 스코어보드·매치·안전상태 + 시나리오/긴급정지/초기화
+  컨트롤. gateway `/control/`(auth 게이트) + 랜딩 카드, dev 직접포트 모드 자동감지. self-contained
+  HTML(빌드 불필요). 실측 캡처(docs/images/control-tower.png): SSE 170행·헬스 8/11·초기화 write 확인.
 - **P0-4 실시간 푸시(폴링 제거)**: `shared/sse_bus.py` SSE 단일 허브 + `event_collector`
   `GET /stream`(토픽 events/detections/scores/safety/phase_clock, JWT 역할·매치 필터, 관전자 30초
   지연, Last-Event-ID 리플레이) + `POST /internal/publish`(S2S safety/phase_clock). 대시보드 `useSSE()`

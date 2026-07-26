@@ -574,6 +574,26 @@ $ python3 loadtest/sse_loadtest.py --observers 100 --teams 8 --rate 15 --duratio
 
 ---
 
+## 통합 관리 콘솔 — Control Tower (단일 화면 운영)
+
+교관이 **한 화면에서 플랫폼 전체를 관리**하는 단일 페이지 콘솔(`dashboards/control-tower/index.html`,
+빌드 불필요한 self-contained HTML). gateway에서 `/control/`로 접속(랜딩 카드), dev에서는 직접 포트로.
+
+![Control Tower](docs/images/control-tower.png)
+
+한 화면에서:
+- **서비스 헬스**: 11개 서비스 도달성·지연(events/scoring/config/siem/auth/instructor/range/portal/edr/noc/aar).
+- **실시간 상황 피드**: SSE `/stream` 구독(P0-4) — events/detections/scores/safety/phase_clock 토픽 색상 구분.
+- **라이브 스코어보드 · 매치 · 안전 상태**(격리 점수·긴급정지·일시정지 팀).
+- **컨트롤 액션**: 시나리오 Start/End, 긴급정지 발동/해제, 훈련 초기화 — 각 사유는 감사 로그에 기록.
+- gateway/dev **모드 자동 감지**(`/api/*` 프록시 생존 여부로 판별), 역할 대시보드로 바로가기.
+
+> 위 스크린샷은 **실제 실행 캡처**다(Playwright, 3서비스 라이브 + 이벤트 주입). 검증: SSE 피드 170행
+> 수신, 헬스 8/11 green, 스코어 실시간 갱신, 그리고 초기화 액션이 실제로 `event(120)·scoring(77 성취
+> +6 팀점수)`를 비우고 긴급정지 엔드포인트가 200을 반환하는 것까지 확인했다.
+
+---
+
 ## 실전 운영 (다중 팀 · 초기화 · 안전 통제)
 
 실전 대회 운영을 위한 P1 운영 기능. **`range_control` 서비스(8055)** 가 오케스트레이션하며, 교관
