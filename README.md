@@ -688,6 +688,28 @@ AAR: status=closed, mtta/mttr 계산, timeline 6건, SLA 위반 없음
 /incidents/sla → {"open":4,"breached_count":1}   # 미대응 critical 1건 SLA 위반 탐지
 ```
 
+### #14 비기술 인젝트 (Crisis Comms Injects, P1-4)
+훈련은 기술 공방만이 아니다. 침해 중 **언론이 전화하고 경영진이 답을 요구하고 규제기관이 시한을
+건다**. `services/injects`(8096)가 이런 비기술 상황을 팀 인박스로 배달하고, 마감 준수와 응답 품질
+(교관 루브릭)을 채점한다.
+
+| 요소 | 설명 |
+|---|---|
+| **내장 라이브러리** | 언론(15분)·경영 브리핑(10분)·규제 72시간 신고·법무 증거보전 — 마감·루브릭 포함 |
+| **디스패치→인박스** | 교관이 팀에 발송 → 팀 인박스에 도착(`seconds_left`·마감상태 표시) |
+| **정시/지각 판정** | `POST /injects/{id}/respond` 시 마감 대비 자동 판정 |
+| **루브릭 채점** | 교관이 항목별 채점(상한 clamp) → **지각 시 감점**(기본 0.5×) → 최종 점수, 이벤트 발행 |
+| **성과 스코어보드** | 팀별 대응률·정시율·점수% (`GET /injects/scoreboard`) |
+
+```text
+# 실측
+dispatch media-press-call → blue_alpha,blue_bravo (deadline 15m)
+inbox: subject="…15분 내 입장?" state=pending seconds_left>0
+respond(blue_alpha) → on_time  |  dup respond → 409
+score rubric{9,8,5} → 22/25    |  scoreboard: blue_alpha score_pct=88, on_time_rate=100
+지각 케이스: raw 20 → late 0.5× → 최종 10 (late_penalty_applied=true)
+```
+
 ---
 
 ## 저장소 구조

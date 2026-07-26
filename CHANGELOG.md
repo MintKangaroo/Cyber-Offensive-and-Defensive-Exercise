@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 ### Added
+- **P1-4 비기술 인젝트**: `services/injects`(8096) — 위기 커뮤니케이션 훈련. 내장 인젝트
+  라이브러리(언론/경영/규제/법무, 마감·루브릭 포함) + 교관 커스텀 디스패치, 팀 인박스(도착·마감·
+  상태), 응답 제출 시 정시/지각 자동판정, 교관 루브릭 채점(항목별 상한 clamp)→지각 감점→최종점수,
+  팀별 성과 스코어보드(대응률·정시율·점수%). 채점 시 stage_completed 이벤트. model.py 순수로직 +
+  유닛 10개(142→152). docker-compose+gateway+prod env, Control Tower 헬스 연동. 실측: 디스패치·인박스·
+  정시응답·중복409·루브릭 22/25·지각 감점(20→10) 확인.
 - **Incident Case Management(P1)**: `services/incident`(8095) — SIEM/EDR 알림→인시던트 승격
   (alert_id 중복방지), 라이프사이클 상태머신(new→triage→contained→eradicated→recovered→closed,
   역행·건너뛰기 거부), 전 변경 타임라인, 심각도별 SLA(응답/해결) 위반 리포트, AAR 연동(MTTA/MTTR).
