@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 ### Added
+- **P2-2 워룸 모드**: Control Tower 에 대형 화면(프로젝터) 모드 — `▣ WARROOM` 버튼·키보드 `W`
+  로 고대비·대형 폰트(피드 19px/점수 26px)·조작바 숨김(읽기전용) 토글, localStorage 유지.
+  실측 캡처(docs/images/control-tower-warroom.png): warroom 활성·controls 숨김·피드 70행 확인.
 - **P1-1 심화 — ICS 물리 안전 결과**: `shared/ics/safety.py` — 레지스터 한계(min/max)+안전
   인터록 프로파일로 위험 상태 판정. 인터록 걸림=억제(high), 해제=임팩트(critical). power_plant
   Modbus 쓰기에 배선 → 과속(>4500)·저유량(<50) + 인터록 해제 시 `asset_compromised` 발행

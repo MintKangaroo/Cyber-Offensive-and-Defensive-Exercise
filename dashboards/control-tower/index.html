@@ -72,6 +72,23 @@
   #toast.ok{border-color:var(--green);color:var(--green)}
   .empty{color:var(--dim);font-family:var(--mono);font-size:12px;padding:14px}
   @media(max-width:900px){.grid{grid-template-columns:1fr;grid-template-rows:auto auto 1fr}.col.right{order:3}}
+
+  /* ── 워룸(대형 화면/프로젝터) 모드 — 고대비·대형·읽기전용 상황판 ── */
+  body.warroom{--ink:#FFFFFF;--dim2:#B8C6E0}
+  body.warroom header{height:64px}
+  body.warroom .title{font-size:22px}
+  body.warroom .controls{display:none}                 /* 조작 바 숨김(읽기전용 투사) */
+  body.warroom .health .lat{display:none}               /* 지연 숫자 숨김 */
+  body.warroom .health .chip{padding:8px 16px;font-size:15px}
+  body.warroom .grid{grid-template-rows:auto 1fr;grid-template-columns:1fr 460px;gap:16px;padding:16px}
+  body.warroom .panel>h2{font-size:15px;padding:14px 18px}
+  body.warroom .ev{grid-template-columns:92px 130px 1fr;font-size:19px;padding:9px 18px;line-height:1.5}
+  body.warroom .ev .tag{font-size:13px}
+  body.warroom .score{font-size:26px;padding:12px 18px;gap:16px}
+  body.warroom .score .rd,body.warroom .score .bl{width:96px}
+  body.warroom .kv{font-size:18px;padding:9px 18px}
+  body.warroom .count{font-size:16px}
+  body.warroom #warroomBtn{border-color:var(--amber);color:var(--amber)}
 </style>
 </head>
 <body>
@@ -82,6 +99,7 @@
   <div class="spacer"></div>
   <span class="mono" id="plat" style="color:var(--dim);font-size:12px" title="관측성 서비스 기준 가동 서비스 수">plat …</span>
   <div class="conn"><span class="dot" id="sseDot"></span><span id="sseTxt">SSE …</span></div>
+  <button id="warroomBtn" onclick="toggleWarroom()" title="대형 화면(워룸) 모드 — 키보드 W" style="padding:5px 10px">▣ WARROOM</button>
   <span class="mono" id="clock" style="color:var(--dim);font-size:12px"></span>
 </header>
 
@@ -353,6 +371,17 @@ async function resetTraining(){
 }
 
 // ── 부팅 ────────────────────────────────────────────────────────────────────
+// ── 워룸 모드(P2-2): 대형 화면 상황판 토글(W 키·버튼·localStorage 유지) ──
+function setWarroom(on){
+  document.body.classList.toggle("warroom", on);
+  try{ localStorage.setItem("ct_warroom", on ? "1" : "0"); }catch(_){}
+}
+function toggleWarroom(){ setWarroom(!document.body.classList.contains("warroom")); }
+window.addEventListener("keydown", (e)=>{
+  if ((e.key==="w"||e.key==="W") && !/input|textarea/i.test(e.target.tagName)) toggleWarroom();
+});
+try{ if(localStorage.getItem("ct_warroom")==="1") setWarroom(true); }catch(_){}
+
 function tickClock(){ document.getElementById("clock").textContent = new Date().toLocaleTimeString("en-GB"); }
 (async function(){
   await detectMode();
