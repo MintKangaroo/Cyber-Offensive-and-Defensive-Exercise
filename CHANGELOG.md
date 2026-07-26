@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 ### Added
+- **P2-4 AAR 확장**: `services/aar_report/integrations.py` — `/report/aar` 에 이번 세션 하위시스템
+  종합 섹션 추가: incident_management(SLA·MTTA/MTTR·심각도별), crisis_comms(인젝트 대응률·정시율·
+  점수%), integrity(플래그 공유 담합), ics_protocol_attacks(실제 Modbus 등 프로토콜 공격). 각 서비스
+  best-effort 수집(없으면 빈 섹션), replay metadata 문자열 정규화. 유닛 8개(184→192). 실측: 인시던트
+  MTTA/MTTR·인젝트 88%·Modbus TURBINE_RPM 공격 집계·PDF 무회귀(200) 확인.
 - **P1-1 트윈 프로토콜 리얼리즘(실제 Modbus/TCP)**: `shared/ics/modbus.py` — 순수 PDU 처리
   (FC1 코일읽기·FC3/4 레지스터읽기·FC5 코일쓰기·FC6 단일쓰기·FC16 다중쓰기·예외응답 01/02/03)
   + asyncio TCP 서버(MBAP 프레이밍). power_plant 트윈이 502 에서 **진짜 Modbus 를 말한다** —

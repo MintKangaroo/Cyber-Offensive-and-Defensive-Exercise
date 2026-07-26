@@ -131,6 +131,9 @@ services:
       - EVENT_COLLECTOR_URL=http://event_collector:8010
       - SCORING_ENGINE_URL=http://scoring_engine:8020
       - SIEM_API_URL=http://siem_api:8040
+      - INCIDENT_URL=http://incident:8095
+      - INJECTS_URL=http://injects:8096
+      - CHALLENGE_PORTAL_URL=http://challenge_portal:8060
     depends_on: [event_collector, scoring_engine]
     networks: [range_control]
 

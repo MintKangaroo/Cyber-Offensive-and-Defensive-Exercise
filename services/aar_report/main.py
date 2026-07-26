@@ -22,10 +22,16 @@ from services.aar_report.metrics import (  # noqa: E402
 from services.aar_report.attack_heatmap import build_heatmap, uncovered_techniques  # noqa: E402
 from services.aar_report.recommendations import generate_recommendations  # noqa: E402
 from services.aar_report.pdf.render import render_pdf  # noqa: E402
+from services.aar_report.integrations import (  # noqa: E402
+    summarize_incidents, summarize_injects, summarize_integrity, summarize_protocol_attacks,
+)
 
 EVENT_COLLECTOR_URL = os.environ.get("EVENT_COLLECTOR_URL", "http://event_collector:8010")
 SCORING_ENGINE_URL = os.environ.get("SCORING_ENGINE_URL", "http://scoring_engine:8020")
 SIEM_API_URL = os.environ.get("SIEM_API_URL", "http://siem_api:8040")
+INCIDENT_URL = os.environ.get("INCIDENT_URL", "http://incident:8095")
+INJECTS_URL = os.environ.get("INJECTS_URL", "http://injects:8096")
+CHALLENGE_PORTAL_URL = os.environ.get("CHALLENGE_PORTAL_URL", "http://challenge_portal:8060")
 PDF_OUTPUT_DIR = Path(os.environ.get("AAR_PDF_DIR", "/tmp/aar_reports"))
 PDF_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -62,6 +68,17 @@ async def get_aar_report(scenario_id: str = "default"):
         except httpx.HTTPError:
             pass  # SIEM이 없어도 리포트 자체는 이벤트/점수만으로 생성 가능
 
+        # --- P2-4 확장: 인시던트·인젝트·무결성(각 best-effort, 없으면 빈 섹션) ---
+        async def _get_json(url, key, default):
+            try:
+                r = await client.get(url); r.raise_for_status()
+                return r.json().get(key, default)
+            except (httpx.HTTPError, ValueError):
+                return default
+        incidents = await _get_json(f"{INCIDENT_URL}/incidents", "incidents", [])
+        inject_board = await _get_json(f"{INJECTS_URL}/injects/scoreboard", "scoreboard", [])
+        flagged = await _get_json(f"{CHALLENGE_PORTAL_URL}/portal/anticheat/flagged", "flagged", [])
+
     mttd = compute_mttd(events)
     mttr = compute_mttr(events)
     detection_rate = compute_detection_rate(events)
@@ -97,6 +114,11 @@ async def get_aar_report(scenario_id: str = "default"):
         "attack_heatmap": heatmap,
         "uncovered_techniques": gaps,
         "recommendations": recommendations,
+        # P2-4 확장 섹션 — 이번 세션 하위시스템 종합
+        "incident_management": summarize_incidents(incidents),
+        "crisis_comms": summarize_injects(inject_board),
+        "integrity": summarize_integrity(flagged),
+        "ics_protocol_attacks": summarize_protocol_attacks(events),
     }
 
 

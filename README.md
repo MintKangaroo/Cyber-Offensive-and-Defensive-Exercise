@@ -779,6 +779,26 @@ FC 99(illegal) → 예외 응답 code 1
 > 이 패턴(`shared/ics/modbus.py` 재사용)으로 나머지 ICS 트윈(정유·수처리 등)에도 실제 Modbus/
 > OPC UA/S7 리스너를 확장할 수 있다. 현재는 power_plant 에 Modbus 를 우선 구현했다.
 
+### #18 AAR 종합 리포트 확장 (P2-4)
+사후검토(`/report/aar`)가 기존 이벤트·점수·탐지(MTTD/heatmap)에 더해 **이번 세션의 하위시스템을
+종합**한다(`services/aar_report/integrations.py`). 각 서비스는 best-effort 수집(없으면 빈 섹션).
+
+| 섹션 | 내용 |
+|---|---|
+| `incident_management` | 인시던트 총/오픈/SLA위반·평균 **MTTA/MTTR**·심각도별(P1 Incident) |
+| `crisis_comms` | 인젝트 대응률·정시율·평균 점수%(P1-4 Injects) |
+| `integrity` | 플래그 공유(담합) 케이스(P1-5 Anti-cheat), clean 여부 |
+| `ics_protocol_attacks` | 실제 프로토콜(Modbus 등) 공격 총계·프로토콜별·레지스터별(P1-1) |
+
+```text
+# 실측(/report/aar)
+incident_management : {total:1, open:0, breached:0, avg_mtta_sec:.., avg_mttr_sec:.., by_severity:{critical:1}}
+crisis_comms        : {teams:1, avg_response_rate:100, avg_on_time_rate:100, avg_score_pct:88}
+integrity           : {flagged_count:0, clean:true}
+ics_protocol_attacks: {total:1, by_protocol:{modbus:1}, by_register:{TURBINE_RPM:1}}
+# /report/aar/pdf 무회귀(200, application/pdf)
+```
+
 ---
 
 ## 저장소 구조
