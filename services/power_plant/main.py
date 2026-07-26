@@ -88,6 +88,71 @@ def patched(flag_key: str) -> bool:
 plc_registers = {"TURBINE_RPM": 3000, "COOLANT_FLOW": 100, "SAFETY_INTERLOCK": True}
 safety_override_state = {"override": False, "approved_by": None}
 
+# ---------------------------------------------------------------------------
+# 실제 Modbus/TCP 리스너(P1-1) — 트윈이 진짜 Modbus 를 말한다(mbpoll/pymodbus/metasploit 대응).
+# 홀딩 레지스터 0=TURBINE_RPM, 1=COOLANT_FLOW / 코일 0=SAFETY_INTERLOCK.
+# Modbus 는 설계상 무인증(ICS insecure-by-design) → 미인가 쓰기는 PP-006 이벤트로 발행.
+# ---------------------------------------------------------------------------
+from shared.ics.modbus import ModbusBank, serve as _modbus_serve  # noqa: E402
+import asyncio as _asyncio  # noqa: E402
+
+_MODBUS_HOLDING = {0: "TURBINE_RPM", 1: "COOLANT_FLOW"}
+_modbus_bank = ModbusBank(holding=[0] * 16, coils=[False] * 16)
+_modbus_bank.holding[0] = int(plc_registers["TURBINE_RPM"])
+_modbus_bank.holding[1] = int(plc_registers["COOLANT_FLOW"])
+_modbus_bank.coils[0] = bool(plc_registers["SAFETY_INTERLOCK"])
+_modbus_server = None
+
+
+def _sync_bank_from_registers() -> None:
+    """HTTP 경로로 바뀐 상태를 Modbus 뱅크에 반영(양 경로 일관성)."""
+    try:
+        _modbus_bank.holding[0] = int(plc_registers.get("TURBINE_RPM", 0))
+        _modbus_bank.holding[1] = int(plc_registers.get("COOLANT_FLOW", 0))
+        _modbus_bank.coils[0] = bool(plc_registers.get("SAFETY_INTERLOCK", False))
+    except (ValueError, TypeError):
+        pass
+
+
+def _on_modbus_write(kind: str, addr: int, vals: list) -> None:
+    """Modbus 쓰기 콜백 — 물리 상태 반영 + 미인가 쓰기 이벤트(PP-006)."""
+    if kind == "holding":
+        for i, v in enumerate(vals):
+            name = _MODBUS_HOLDING.get(addr + i)
+            if name:
+                plc_registers[name] = int(v)
+        target = _MODBUS_HOLDING.get(addr, f"HR{addr}")
+    else:  # coil
+        if addr == 0:
+            plc_registers["SAFETY_INTERLOCK"] = bool(vals[0])
+        target = "SAFETY_INTERLOCK" if addr == 0 else f"COIL{addr}"
+    if not patched("PATCH_PP_006"):
+        try:
+            emit_event(
+                event_id=Event.make_id("modbus", ASSET_NAME, "PP-006", target, str(time.time())),
+                event_type=EventType.red_attack_started, actor="red", target_asset=ASSET_NAME,
+                vuln_id="PP-006", phase=RedPhase.lateral_movement, team_id="default",
+                trace_id=Event.session_trace_id("modbus", ASSET_NAME),
+                metadata={"protocol": "modbus", "register": target, "values": vals, "fc_kind": kind},
+            )
+        except Exception:
+            pass
+
+
+_modbus_bank.on_write = _on_modbus_write
+
+
+@app.on_event("startup")
+async def _start_modbus():
+    global _modbus_server
+    if os.environ.get("MODBUS_ENABLED", "1") != "1":
+        return
+    port = int(os.environ.get("MODBUS_PORT", "502"))
+    try:
+        _modbus_server = await _modbus_serve(_modbus_bank, "0.0.0.0", port)
+    except OSError:
+        pass  # 502 바인딩 실패(권한/포트 점유) 시 HTTP 트윈은 계속 동작
+
 HMI_ACCOUNTS = {"operator": "operator", "engineer": "Eng!neer_2024"}  # PP-002 기본계정
 
 
@@ -138,6 +203,7 @@ def plc_write(req: PLCWrite, authorization: str = Header(default=""), x_team_id:
     if req.register not in plc_registers:
         raise HTTPException(400, "unknown register")
     plc_registers[req.register] = req.value
+    _sync_bank_from_registers()   # Modbus 뱅크와 일관성 유지(P1-1)
     return {"patched": patched("PATCH_PP_001"), "registers": plc_registers}
 
 

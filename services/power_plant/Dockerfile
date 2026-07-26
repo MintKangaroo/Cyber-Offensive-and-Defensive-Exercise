@@ -7,4 +7,5 @@ COPY shared/ shared/
 COPY services/power_plant/ services/power_plant/
 WORKDIR /app/services/power_plant
 EXPOSE 8002
+EXPOSE 502
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]

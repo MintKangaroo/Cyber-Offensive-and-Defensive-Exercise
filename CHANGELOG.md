@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 ### Added
+- **P1-1 트윈 프로토콜 리얼리즘(실제 Modbus/TCP)**: `shared/ics/modbus.py` — 순수 PDU 처리
+  (FC1 코일읽기·FC3/4 레지스터읽기·FC5 코일쓰기·FC6 단일쓰기·FC16 다중쓰기·예외응답 01/02/03)
+  + asyncio TCP 서버(MBAP 프레이밍). power_plant 트윈이 502 에서 **진짜 Modbus 를 말한다** —
+  홀딩 0=TURBINE_RPM/1=COOLANT_FLOW, 코일 0=SAFETY_INTERLOCK. Modbus 무인증 쓰기는 PP-006
+  이벤트 발행(scoring 연동), HTTP `/api/plc/read` 와 상태 일관. 유닛 8개(176→184). 실측: 실 Modbus
+  클라이언트로 RPM 6000 과속·안전인터록 OFF 공격 → 상태 반영·PP-006 이벤트 2건 확인.
 - **P1-3 시나리오 저작 지원**: `services/scenario_engine/authoring.py` — 스키마 너머 의미 검증
   (lint: 중복 stage·requires 참조·전방참조·vuln 참조·최종 stage·blue 목표), 실행 없는 dry-run
   (타임라인 투영·총점·errors/warnings), phase_clock(경과→현재 예상 stage/잔여). 단일+크로스오버

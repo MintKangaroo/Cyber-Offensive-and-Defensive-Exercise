@@ -756,6 +756,29 @@ GET /scenario/AIRPORT-DISRUPT-01/phase-clock?elapsed_sec=700 (1800s/3stage):
   → current_stage=2, remaining=1100, stage_remaining=500
 ```
 
+### #17 트윈 프로토콜 리얼리즘 — 실제 Modbus/TCP (P1-1)
+지금까지 트윈의 "Modbus"는 HTTP 목(`/api/modbus/...`)이었다. 이제 **power_plant 트윈이 502에서
+진짜 Modbus/TCP 를 말한다**(`shared/ics/modbus.py`) — `mbpoll`·`pymodbus`·`metasploit` 의
+modbus 모듈 같은 **실제 공격 도구가 그대로 붙는다**.
+
+- 지원 FC: 1(코일 읽기)·3/4(레지스터 읽기)·5(코일 쓰기)·6(단일 쓰기)·16(다중 쓰기) + 예외 응답.
+- 레지스터 맵: 홀딩 `0=TURBINE_RPM`·`1=COOLANT_FLOW`, 코일 `0=SAFETY_INTERLOCK`.
+- Modbus 는 설계상 **무인증**(ICS insecure-by-design) → 미인가 쓰기는 **PP-006 이벤트**로 발행돼
+  scoring·SIEM·상황판에 연동. HTTP `/api/plc/read` 와 상태가 일관된다.
+- 격리 모델 유지: 502 는 컨테이너 내부(트윈 네트워크)에서만 노출 — Red 컨테이너가 `pp_twin:502` 로 공격.
+
+```text
+# 실측: 실제 Modbus 클라이언트로 발전소 공격
+FC3 read [TURBINE_RPM, COOLANT_FLOW] = (3000, 100)
+FC6 write TURBINE_RPM=6000 (과속) ; FC5 SAFETY_INTERLOCK=OFF
+→ HTTP /api/plc/read = {"TURBINE_RPM":6000,"COOLANT_FLOW":100,"SAFETY_INTERLOCK":false}
+→ 이벤트: PP-006 TURBINE_RPM [6000], PP-006 SAFETY_INTERLOCK [False]  (protocol=modbus)
+FC 99(illegal) → 예외 응답 code 1
+```
+
+> 이 패턴(`shared/ics/modbus.py` 재사용)으로 나머지 ICS 트윈(정유·수처리 등)에도 실제 Modbus/
+> OPC UA/S7 리스너를 확장할 수 있다. 현재는 power_plant 에 Modbus 를 우선 구현했다.
+
 ---
 
 ## 저장소 구조
