@@ -710,6 +710,29 @@ score rubric{9,8,5} → 22/25    |  scoreboard: blue_alpha score_pct=88, on_time
 지각 케이스: raw 20 → late 0.5× → 최종 10 (late_penalty_applied=true)
 ```
 
+### #15 플랫폼 관측성 (Observability, P2-5)
+서비스가 18개+로 늘면서 "지금 뭐가 살아있고 얼마나 느린가"를 한곳에서 봐야 한다.
+`services/observability`(8097)가 전 서비스 `/health` 를 **비동기 스크레이프**해 표준 지표로
+노출한다 — 각 서비스에 계측 코드를 심지 않는 **최소 침습** 방식.
+
+| 노출 | 내용 |
+|---|---|
+| `GET /metrics` | **Prometheus 노출형식** — `cr_service_up`·`cr_service_scrape_ms`·health 숫자필드 게이지·`cr_platform_services_up` |
+| `GET /observability/summary` | JSON 요약(up/down/total + 서비스별 지연) — Control Tower 헤더 `plat N/M up` |
+| gateway | `/metrics`(Prometheus 스크레이프용 비인증) · `/api/observability`(대시보드용 인증) |
+
+```text
+# 실측(docker 서비스 스크레이프)
+cr_service_up{service="event_collector"} 1
+cr_service_scrape_ms{service="challenge_portal"} 23.59
+cr_service_challenges{service="challenge_portal"} 56      # /health payload 카운터 자동 노출
+cr_service_up{service="dead_svc"} 0                        # 다운 서비스 → 0
+cr_platform_services_up 5
+```
+
+> Prometheus/Grafana 는 `observability:8097/metrics`(또는 gateway `/metrics`)를 스크레이프 타깃으로
+> 등록하면 된다. 배포 시 `/metrics` 는 내부 ops 네트워크로 제한 권장.
+
 ---
 
 ## 저장소 구조

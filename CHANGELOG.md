@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 ### Added
+- **P2-5 플랫폼 관측성**: `services/observability`(8097) — 컨트롤플레인 전 서비스 /health 를
+  비동기 스크레이프해 Prometheus 노출형식(`/metrics`: cr_service_up·scrape_ms·health 숫자필드
+  게이지·cr_platform_services_up)과 JSON 요약(`/observability/summary`)으로 노출(무계측·최소침습).
+  gateway `/metrics`(Prometheus용 비인증)·`/api/observability`(인증), Control Tower 헤더에 plat N/M up
+  지표. model.py 순수로직 + 유닛 8개(152→160). 실측: docker 서비스 스크레이프·다운서비스 up 0·
+  payload 카운터(challenges=56) 확인.
 - **P1-4 비기술 인젝트**: `services/injects`(8096) — 위기 커뮤니케이션 훈련. 내장 인젝트
   라이브러리(언론/경영/규제/법무, 마감·루브릭 포함) + 교관 커스텀 디스패치, 팀 인박스(도착·마감·
   상태), 응답 제출 시 정시/지각 자동판정, 교관 루브릭 채점(항목별 상한 clamp)→지각 감점→최종점수,

@@ -13,6 +13,7 @@
 | `services/challenge_portal/anticheat.py` | **공정성/안티치트(P1-5)**: 제출 rate-limit·lockout, 감사(sqlite), 플래그공유 탐지. 엔드포인트: /portal/anticheat/audit·/flagged |
 | `services/incident/` | **Incident Case Management(P1)**: 알림→인시던트 승격·라이프사이클·타임라인·SLA·AAR. 포트 8095. 엔드포인트: /incidents/from-alert·/{id}/transition·/sla·/{id}/aar |
 | `services/injects/` | **비기술 인젝트(P1-4)**: 미디어/경영/규제 인젝트 라이브러리·디스패치·인박스·마감·루브릭 채점. 포트 8096. 엔드포인트: /injects/library·/dispatch·/inbox·/{id}/respond·/{id}/score·/scoreboard |
+| `services/observability/` | **플랫폼 관측성(P2-5)**: 전 서비스 /health 스크레이프 → Prometheus /metrics + JSON 요약. 포트 8097. 게이지: cr_service_up·scrape_ms·payload 카운터·cr_platform_services_up |
 | `shared/siem_schema.py` | SIEM 정규화 이벤트(ECS-lite), severity 매핑 |
 | `shared/storage_interface.py` | SIEM 저장소 추상클래스(SQLite/OpenSearch 교체) |
 | `shared/api_contract.py` | 서비스 포트·엔드포인트·요청모델 명세 |

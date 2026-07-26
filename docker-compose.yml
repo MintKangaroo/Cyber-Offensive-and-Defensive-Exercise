@@ -195,6 +195,12 @@ services:
     depends_on: [event_collector]
     networks: [range_control]
 
+  observability:
+    build: { context: ., dockerfile: services/observability/Dockerfile }
+    container_name: observability
+    ports: ["8097:8097"]
+    networks: [range_control]
+
   challenge_portal:
     build: { context: ., dockerfile: services/challenge_portal/Dockerfile }
     container_name: challenge_portal

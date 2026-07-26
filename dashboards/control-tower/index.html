@@ -80,6 +80,7 @@
   <span class="badge">training environment</span>
   <span class="badge mono" id="mode">detecting…</span>
   <div class="spacer"></div>
+  <span class="mono" id="plat" style="color:var(--dim);font-size:12px" title="관측성 서비스 기준 가동 서비스 수">plat …</span>
   <div class="conn"><span class="dot" id="sseDot"></span><span id="sseTxt">SSE …</span></div>
   <span class="mono" id="clock" style="color:var(--dim);font-size:12px"></span>
 </header>
@@ -146,6 +147,7 @@ const SVC = {
   range:     {gw:"/api/range",      port:8055, health:"/health", label:"range"},
   incident:  {gw:"/api/incident",   port:8095, health:"/health", label:"incident"},
   injects:   {gw:"/api/injects",     port:8096, health:"/health", label:"injects"},
+  observability: {gw:"/api/observability", port:8097, health:"/health", label:"observ"},
   portal:    {gw:"/api/portal",     port:8060, health:"/health", label:"portal"},
   edr:       {gw:"/api/edr",        port:8080, health:"/health", label:"edr"},
   noc:       {gw:null,              port:8070, health:"/health", label:"noc"},
@@ -252,6 +254,15 @@ async function pollIncidents(){
     }).join("") : `<div class="empty">인시던트 없음</div>`;
   }catch(_){ document.getElementById("incidents").innerHTML=`<div class="empty">incident 서비스 응답 없음</div>`; }
 }
+async function pollPlatform(){
+  try{
+    const r = await fetch(base("observability")+"/observability/summary", {credentials:cred()});
+    const d = await r.json();
+    const el = document.getElementById("plat");
+    el.textContent = `plat ${d.up}/${d.total} up`;
+    el.style.color = d.down>0 ? "var(--amber)" : "var(--green)";
+  }catch(_){ document.getElementById("plat").textContent = "plat n/a"; }
+}
 async function pollSafety(){
   try{
     const r = await fetch(base("range")+"/safety/status", {credentials:cred()});
@@ -347,13 +358,14 @@ function tickClock(){ document.getElementById("clock").textContent = new Date().
   await detectMode();
   healthChips();
   connectSSE();
-  const all = ()=>{ pollHealth(); pollScores(); pollMatches(); pollSafety(); pollIncidents(); };
+  const all = ()=>{ pollHealth(); pollScores(); pollMatches(); pollSafety(); pollIncidents(); pollPlatform(); };
   all();
   setInterval(pollHealth, 5000);
   setInterval(pollScores, 8000);   // SSE scores 가 즉시 갱신, 이건 fallback
   setInterval(pollMatches, 10000);
   setInterval(pollSafety, 6000);
   setInterval(pollIncidents, 7000);
+  setInterval(pollPlatform, 6000);
   setInterval(tickClock, 1000); tickClock();
 })();
 </script>
