@@ -52,14 +52,41 @@ def _bearer(authorization: str) -> str:
     return (authorization or "").replace("Bearer ", "").strip()
 
 
+def _jwt_secret() -> str:
+    return os.environ.get("AUTH_JWT_SECRET", "").strip()
+
+
+def _decode_jwt(token: str) -> "Identity | None":
+    """AUTH_JWT_SECRET로 서명된 JWT면 Identity로 디코드. 아니면 None(정적 토큰 등)."""
+    secret = _jwt_secret()
+    if not secret or token.count(".") != 2:
+        return None
+    try:
+        import jwt  # PyJWT
+        claims = jwt.decode(token, secret, algorithms=["HS256"])
+    except Exception:  # 서명 불일치/만료/형식오류 → 무효 토큰
+        return None
+    role = claims.get("role")
+    if claims.get("type") not in (None, "access") or role not in ROLES:
+        return None
+    return Identity(actor=claims.get("sub", role), role=role)
+
+
 def authenticate(authorization: str) -> Identity:
-    """Authorization 헤더 → Identity. 토큰 설정 시 무효 토큰은 401."""
+    """Authorization 헤더 → Identity. JWT(P0-2) 또는 정적 토큰(하위호환)을 검증.
+    JWT 시크릿·정적 토큰이 모두 없으면 dev 모드(로컬 편의)."""
     from fastapi import HTTPException
     mapping = _token_role_map()
-    if not mapping:
-        # dev 모드: 어떤 토큰도 설정되지 않음 → 미인증도 instructor 권한으로 통과(로컬 편의)
-        return Identity(actor="unauthenticated", role="instructor", dev_mode=True)
+    has_jwt = bool(_jwt_secret())
     token = _bearer(authorization)
+    if not mapping and not has_jwt:
+        # dev 모드: 인증 구성 자체가 없음 → 미인증도 instructor로 통과(dev 프로파일 전용)
+        return Identity(actor="unauthenticated", role="instructor", dev_mode=True)
+    # 1) JWT 우선(서명 검증)
+    ident = _decode_jwt(token) if has_jwt else None
+    if ident is not None:
+        return ident
+    # 2) 정적 토큰(하위호환)
     role = mapping.get(token)
     if role is None:
         raise HTTPException(status_code=401, detail="missing or invalid token")

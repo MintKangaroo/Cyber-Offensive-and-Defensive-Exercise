@@ -21,5 +21,6 @@ fill INSTRUCTOR_TOKEN
 fill RED_TOKEN "red-$(gen)"
 fill BLUE_TOKEN "blue-$(gen)"
 fill OBSERVER_TOKEN "obs-$(gen)"
+fill AUTH_JWT_SECRET
 fill CHALLENGE_SECRET
 echo "✅ 완료 — .env 를 안전하게 보관하세요(커밋 금지)."

@@ -1,0 +1,31 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>로그인 — Cyber Range</title><style>
+*{margin:0;box-sizing:border-box;font-family:ui-monospace,Menlo,monospace}
+body{min-height:100vh;background:#0A0E1A;color:#E8EDF5;display:flex;align-items:center;justify-content:center}
+form{background:#111725;border:1px solid #1E2A3F;border-radius:14px;padding:2rem;width:340px;display:flex;flex-direction:column;gap:.9rem}
+h1{font-size:1.1rem;letter-spacing:.15em;color:#22D3EE;text-align:center;margin-bottom:.5rem}
+input{background:#0A0E1A;border:1px solid #1E2A3F;border-radius:8px;padding:.7rem;color:#E8EDF5;font-size:.9rem}
+input:focus{border-color:#22D3EE;outline:none}
+button{background:#22D3EE22;border:1px solid #22D3EE88;border-radius:8px;padding:.7rem;color:#22D3EE;font-weight:600;cursor:pointer}
+.err{color:#FB7185;font-size:.75rem;min-height:1rem;text-align:center}
+.sub{color:#6B7A99;font-size:.68rem;text-align:center}
+</style></head><body>
+<form id="f">
+  <h1>🛡️ CYBER RANGE 로그인</h1>
+  <input id="u" placeholder="username" autocomplete="username" autofocus>
+  <input id="p" type="password" placeholder="password" autocomplete="current-password">
+  <button type="submit">로그인</button>
+  <div class="err" id="e"></div>
+  <div class="sub">교관이 발급한 계정으로 로그인하세요</div>
+</form>
+<script>
+document.getElementById('f').onsubmit=async(ev)=>{ev.preventDefault();
+  const e=document.getElementById('e');e.textContent='';
+  const r=await fetch('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({username:u.value,password:p.value})});
+  if(r.ok){const d=await r.json();
+    const home={instructor:'/ops/',red:'/red/',blue:'/blue/',observer:'/ops/'}[d.role]||'/';
+    location.href=home;
+  }else{e.textContent='로그인 실패 — 자격증명 확인';}
+};
+</script></body></html>

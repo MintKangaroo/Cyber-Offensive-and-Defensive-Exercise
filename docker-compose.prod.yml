@@ -28,9 +28,24 @@ services:
 
   # --- prod 보안 기본값: 관전자 read 게이트 ON (read도 인증 요구) ---
   scoring_engine:
-    environment: [ "OBSERVER_READ_ENFORCE=true" ]
+    environment: [ "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
   edr_backend:
-    environment: [ "OBSERVER_READ_ENFORCE=true" ]
+    environment: [ "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
+
+  event_collector:
+    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET}" ]
+  config_service:
+    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
+  instructor_api:
+    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
+  challenge_portal:
+    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
+  range_control:
+    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
+  siem_api:
+    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
+  auth:
+    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
 
 volumes:
   gateway_certs: {}

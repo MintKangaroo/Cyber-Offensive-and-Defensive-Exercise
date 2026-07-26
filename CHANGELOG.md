@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 ### Added
+- **P0-2 인증/세션/감사**: `auth` 서비스(8051) — 사용자 계정(PBKDF2 해시)·CSV 일괄등록, 로그인 →
+  단기 access JWT(15분)+refresh(8h, role/team_id/match_id 클레임)·httpOnly 쿠키, `/auth/revoke`
+  즉시 폐기. `shared/rbac.py`가 JWT 서명 검증(정적 토큰 하위호환). gateway 로그인 게이트
+  (auth_request로 무인증 차단→/login, 쿠키→Bearer 주입). 역할×엔드포인트 pytest 매트릭스(25).
+  실측: 무인증 302→/login, red→instructor 전용 403, instructor 200, 위조/오답 401.
 - **P0-1 단일 진입점/프로덕션 배포**: `gateway`(nginx) 서비스 — 5개 대시보드를 프로덕션 빌드해
   서브경로(/ops·/red·/blue·/blue/siem·/blue/edr)로 정적 서빙 + `/api/*` 백엔드 프록시 + self-signed
   TLS 자동 생성 + http→https. 랜딩(역할 선택). `docker-compose.prod.yml`(fail-fast·OBSERVER_READ_ENFORCE).

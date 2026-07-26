@@ -523,7 +523,11 @@ python3 infra/challenge_qa/run_all.py --challenge NET-007
 
 ## RBAC (역할 기반 접근제어)
 
-토큰→역할 매핑(`shared/rbac.py`). 토큰 미설정 로컬 dev는 관대 통과(하위호환).
+토큰→역할 매핑(`shared/rbac.py`). **P0-2**: `auth` 서비스(8051)가 로그인→JWT(access 15분/refresh 8h,
+role·team_id·match_id 클레임, httpOnly 쿠키)를 발급하고 `rbac.py`가 서명을 검증한다(정적 토큰
+하위호환). 프로덕션 gateway는 **로그인 게이트**(auth_request)로 무인증 접근을 `/login`으로 돌리고
+쿠키→Bearer를 백엔드에 주입한다. 계정은 교관이 `/auth/register`·CSV(`/auth/users/bulk`)로 발급,
+부정행위자는 `/auth/revoke`로 즉시 차단. 토큰·JWT 시크릿 미설정 로컬 dev는 관대 통과(하위호환).
 
 | 엔드포인트 | 무토큰 | red | blue | observer | instructor |
 |---|---|---|---|---|---|

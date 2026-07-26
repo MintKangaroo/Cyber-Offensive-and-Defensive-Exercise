@@ -26,6 +26,7 @@ COPY --from=build /b/blueportal/dist/  /usr/share/nginx/html/blue/
 COPY --from=build /b/siem/dist/        /usr/share/nginx/html/blue/siem/
 COPY --from=build /b/edrconsole/dist/  /usr/share/nginx/html/blue/edr/
 COPY infra/gateway/landing.html /usr/share/nginx/html/landing.html
+COPY infra/gateway/login.html /usr/share/nginx/html/login.html
 COPY infra/gateway/nginx.conf   /etc/nginx/conf.d/default.conf
 COPY infra/gateway/proxy_ws.conf /etc/nginx/proxy_ws.conf
 COPY infra/gateway/entrypoint.sh /entrypoint.sh

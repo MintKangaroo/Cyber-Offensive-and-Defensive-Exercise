@@ -162,6 +162,17 @@ services:
     depends_on: [event_collector, scoring_engine, config_service, challenge_portal]
     networks: [range_control]
 
+  auth:
+    build: { context: ., dockerfile: services/auth/Dockerfile }
+    container_name: auth
+    ports: ["8051:8051"]
+    environment:
+      - DATA_DIR=/data
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-}
+      - AUTH_ADMIN_PASSWORD=${AUTH_ADMIN_PASSWORD:-}
+    volumes: [ auth_data:/data ]
+    networks: [range_control]
+
   challenge_portal:
     build: { context: ., dockerfile: services/challenge_portal/Dockerfile }
     container_name: challenge_portal
@@ -720,6 +731,7 @@ networks:
   range_control: { driver: bridge }
 
 volumes:
+  auth_data: {}
   ec_data: {}
   sc_data: {}
   cf_data: {}
