@@ -95,9 +95,15 @@ safety_override_state = {"override": False, "approved_by": None}
 # ---------------------------------------------------------------------------
 from shared.ics.modbus import ModbusBank, serve as _modbus_serve  # noqa: E402
 from shared.ics.safety import SafetyProfile, evaluate as _safety_eval  # noqa: E402
+from shared.ics.anomaly import IcsBaseline, RegBand, classify_write as _classify  # noqa: E402
 import asyncio as _asyncio  # noqa: E402
 
 _MODBUS_HOLDING = {0: "TURBINE_RPM", 1: "COOLANT_FLOW"}
+# ICS 이상탐지 베이스라인(Blue/SIEM 신호) — 운전 밴드 + 보호 + 안전 코일.
+_ICS_BASE = IcsBaseline(name=ASSET_NAME,
+                        registers={0: RegBand("TURBINE_RPM", 2800, 3600, protected=True),
+                                   1: RegBand("COOLANT_FLOW", 80, 120)},
+                        safety_coils={0})
 # 안전 프로파일(SIS): 터빈 과속(>4500) / 냉각수 저유량(<50). 인터록 코일 0.
 _SAFETY = SafetyProfile(name=ASSET_NAME,
                         limits={0: {"name": "TURBINE_RPM", "max": 4500},
@@ -132,14 +138,20 @@ def _on_modbus_write(kind: str, addr: int, vals: list) -> None:
         if addr == 0:
             plc_registers["SAFETY_INTERLOCK"] = bool(vals[0])
         target = "SAFETY_INTERLOCK" if addr == 0 else f"COIL{addr}"
+    # ICS 이상탐지 분류(MITRE ICS) — Blue/SIEM 이 이 신호로 탐지.
+    anomaly = _classify(_ICS_BASE, kind, addr, vals)
     if not patched("PATCH_PP_006"):
         try:
+            md = {"protocol": "modbus", "register": target, "values": vals, "fc_kind": kind}
+            if anomaly:
+                md.update({"ics_technique": anomaly["technique"], "ics_severity": anomaly["severity"],
+                           "ics_reason": anomaly["reason"]})
             emit_event(
                 event_id=Event.make_id("modbus", ASSET_NAME, "PP-006", target, str(time.time())),
                 event_type=EventType.red_attack_started, actor="red", target_asset=ASSET_NAME,
                 vuln_id="PP-006", phase=RedPhase.lateral_movement, team_id="default",
                 trace_id=Event.session_trace_id("modbus", ASSET_NAME),
-                metadata={"protocol": "modbus", "register": target, "values": vals, "fc_kind": kind},
+                metadata=md,
             )
         except Exception:
             pass

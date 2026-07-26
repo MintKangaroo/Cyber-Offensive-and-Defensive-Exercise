@@ -86,6 +86,7 @@ import os as _os  # noqa: E402
 import time as _time  # noqa: E402
 from shared.ics.modbus import ModbusBank, serve as _modbus_serve  # noqa: E402
 from shared.ics.safety import SafetyProfile, evaluate as _safety_eval  # noqa: E402
+from shared.ics.anomaly import IcsBaseline, RegBand, classify_write as _wu_classify  # noqa: E402
 from shared.event_client import emit_event as _emit  # noqa: E402
 from shared.event_schema import Event, EventType, RedPhase  # noqa: E402
 
@@ -97,17 +98,26 @@ _WU_SAFETY = SafetyProfile(name=_ASSET,
                            interlock_coil=0)
 _wu_bank = ModbusBank(holding=[2, 60] + [0] * 14, coils=[True] + [False] * 15)  # 2ppm/60%, 인터록 ON
 _wu_server = None
+_WU_ICS_BASE = IcsBaseline(name=_ASSET,
+                           registers={0: RegBand("CHLORINE_PPM", 0, 4, protected=True),
+                                      1: RegBand("INTAKE_PUMP_RATE", 0, 100)},
+                           safety_coils={0})
 
 
 def _wu_on_write(kind: str, addr: int, vals: list) -> None:
     target = (_MB_HOLDING.get(addr, f"HR{addr}") if kind == "holding"
               else ("SAFETY_INTERLOCK" if addr == 0 else f"COIL{addr}"))
+    anomaly = _wu_classify(_WU_ICS_BASE, kind, addr, vals)
+    md = {"protocol": "modbus", "register": target, "values": vals, "fc_kind": kind}
+    if anomaly:
+        md.update({"ics_technique": anomaly["technique"], "ics_severity": anomaly["severity"],
+                   "ics_reason": anomaly["reason"]})
     try:
         _emit(event_id=Event.make_id("modbus", _ASSET, "WTR-001", target, str(_time.time())),
               event_type=EventType.red_objective_success, actor="red", target_asset=_ASSET,
               vuln_id="WTR-001", phase=RedPhase.objective, team_id="default",
               trace_id=Event.session_trace_id("modbus", _ASSET),
-              metadata={"protocol": "modbus", "register": target, "values": vals, "fc_kind": kind})
+              metadata=md)
     except Exception:
         pass
     # 물리 안전: 염소 과투입 + 인터록 해제 → 공중보건 임팩트

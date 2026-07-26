@@ -12,6 +12,7 @@
 | `shared/sse_bus.py` | **SSE 상황판 허브(P0-4)**: 토픽 pub/sub, Last-Event-ID 리플레이, 역할·지연 가시성 |
 | `shared/ics/modbus.py` | **실제 Modbus/TCP(P1-1)**: 순수 PDU 처리(FC1/3/4/5/6/16·예외) + asyncio 서버. power_plant 502 리스너 |
 | `shared/ics/safety.py` | **ICS 안전 결과(P1-1 심화)**: 레지스터 한계+인터록 프로파일 → 위험/억제 판정. 인터록 해제+과속 → asset_compromised |
+| `shared/ics/anomaly.py` | **ICS 이상탐지(P1-1 red→blue)**: Modbus 쓰기 → MITRE ICS 분류(T0836/T0855/T0878). 이벤트 metadata 로 Blue/SIEM 탐지 신호 |
 | `services/challenge_portal/anticheat.py` | **공정성/안티치트(P1-5)**: 제출 rate-limit·lockout, 감사(sqlite), 플래그공유 탐지. 엔드포인트: /portal/anticheat/audit·/flagged |
 | `services/incident/` | **Incident Case Management(P1)**: 알림→인시던트 승격·라이프사이클·타임라인·SLA·AAR. 포트 8095. 엔드포인트: /incidents/from-alert·/{id}/transition·/sla·/{id}/aar |
 | `services/injects/` | **비기술 인젝트(P1-4)**: 미디어/경영/규제 인젝트 라이브러리·디스패치·인박스·마감·루브릭 채점. 포트 8096. 엔드포인트: /injects/library·/dispatch·/inbox·/{id}/respond·/{id}/score·/scoreboard |

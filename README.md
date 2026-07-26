@@ -803,6 +803,18 @@ FC5 SAFETY_INTERLOCK=OFF          → asset_compromised {safety_impact:"over_max
 > 실제 ICS 사보타주(예: Triton/TRISIS)의 핵심 패턴을 훈련에 반영. asset_compromised 는 scoring·
 > 시나리오 안전임팩트 목표에 연동된다.
 
+**ICS 이상탐지(red→blue, `shared/ics/anomaly.py`)** — Red 의 실제 Modbus 공격을 Blue/SIEM 이
+탐지·분류할 수 있게, 각 Modbus 쓰기를 **MITRE ATT&CK for ICS** 기법으로 분류해 이벤트 metadata
+(`ics_technique`/`ics_severity`/`ics_reason`)에 실어 발행한다:
+
+| 공격 | 분류(MITRE ICS) | 심각도 |
+|---|---|---|
+| 보호 레지스터 무인증 쓰기(밴드 내) | T0855 Unauthorized Command Message | medium |
+| 프로세스 값 운전 밴드 이탈 | T0836 Modify Parameter | high~critical |
+| 안전 인터록/알람 비활성화 | T0878 Suppression of Alarms | critical |
+
+> Blue 는 이 신호로 ICS 공격을 탐지하고, AAR 의 `ics_protocol_attacks` 섹션과 SIEM 헌팅에 연동된다.
+
 ### #18 AAR 종합 리포트 확장 (P2-4)
 사후검토(`/report/aar`)가 기존 이벤트·점수·탐지(MTTD/heatmap)에 더해 **이번 세션의 하위시스템을
 종합**한다(`services/aar_report/integrations.py`). 각 서비스는 best-effort 수집(없으면 빈 섹션).

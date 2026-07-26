@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 ### Added
+- **P1-1 red→blue — ICS Modbus 이상탐지**: `shared/ics/anomaly.py` — Modbus 쓰기를 MITRE ATT&CK
+  for ICS 로 분류(T0836 Modify Parameter·T0855 Unauthorized Command·T0878 Suppression of Alarms).
+  power_plant·water_utility 트윈이 각 Modbus 이벤트 metadata 에 ics_technique/severity/reason 을
+  실어 발행 → Blue/SIEM 탐지 신호. 유닛 7개(198→205). 실측: in-band 보호쓰기=T0855, 밴드이탈=T0836
+  critical, 인터록 해제=T0878 확인.
 - **P1-1 확장 — water_utility 실제 Modbus**: 두 번째 ICS 트윈도 502 에서 진짜 Modbus 를 말한다
   (`shared/ics/modbus.py`+`safety.py` 재사용 실증). 홀딩 0=CHLORINE_PPM/1=INTAKE_PUMP_RATE,
   코일 0=인터록. 무인증 쓰기 → WTR-001 이벤트, 염소 >4ppm+인터록 해제 → asset_compromised
