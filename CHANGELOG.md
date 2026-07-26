@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 ### Added
+- **P1-1 확장 — water_utility 실제 Modbus**: 두 번째 ICS 트윈도 502 에서 진짜 Modbus 를 말한다
+  (`shared/ics/modbus.py`+`safety.py` 재사용 실증). 홀딩 0=CHLORINE_PPM/1=INTAKE_PUMP_RATE,
+  코일 0=인터록. 무인증 쓰기 → WTR-001 이벤트, 염소 >4ppm+인터록 해제 → asset_compromised
+  (chemical_overdose_public_health). 실측: 실 Modbus 로 8ppm 과투입, 인터록 ON=억제·OFF 후=임팩트.
 - **P2-3 반응형(태블릿/모바일)**: Control Tower 를 ≤900px(태블릿)·≤600px(모바일)에서 세로 스택
   (flex-column)으로 재배치 — 라이브 피드 우선(order), 헬스 칩 가로 스크롤, 조작 바 하단, 피드 2열
   (시간+내용), 터치 타깃 확대. 실측 캡처(control-tower-mobile.png): 390px 가로 스크롤 없음·풀폭

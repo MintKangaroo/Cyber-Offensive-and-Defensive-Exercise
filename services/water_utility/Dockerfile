@@ -6,4 +6,5 @@ COPY shared/ shared/
 COPY services/water_utility/ services/water_utility/
 WORKDIR /app/services/water_utility
 EXPOSE 8203
+EXPOSE 502
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8203"]

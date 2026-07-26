@@ -77,6 +77,69 @@ VULNS = [
 
 app = make_ics_twin("water_utility", "Water Treatment SCADA Twin", VULNS)
 
+# ---------------------------------------------------------------------------
+# 실제 Modbus/TCP 리스너(P1-1) — 두 번째 ICS 트윈도 진짜 Modbus 를 말한다.
+# 홀딩 0=CHLORINE_PPM(투입 설정), 1=INTAKE_PUMP_RATE / 코일 0=SAFETY_INTERLOCK(과투입 보호).
+# 안전: 염소 >4ppm + 인터록 해제 → 화학 과투입(공중보건 임팩트, asset_compromised).
+# ---------------------------------------------------------------------------
+import os as _os  # noqa: E402
+import time as _time  # noqa: E402
+from shared.ics.modbus import ModbusBank, serve as _modbus_serve  # noqa: E402
+from shared.ics.safety import SafetyProfile, evaluate as _safety_eval  # noqa: E402
+from shared.event_client import emit_event as _emit  # noqa: E402
+from shared.event_schema import Event, EventType, RedPhase  # noqa: E402
+
+_ASSET = "water_utility"
+_MB_HOLDING = {0: "CHLORINE_PPM", 1: "INTAKE_PUMP_RATE"}
+_WU_SAFETY = SafetyProfile(name=_ASSET,
+                           limits={0: {"name": "CHLORINE_PPM", "max": 4},      # 안전 상한 4ppm
+                                   1: {"name": "INTAKE_PUMP_RATE", "max": 100}},
+                           interlock_coil=0)
+_wu_bank = ModbusBank(holding=[2, 60] + [0] * 14, coils=[True] + [False] * 15)  # 2ppm/60%, 인터록 ON
+_wu_server = None
+
+
+def _wu_on_write(kind: str, addr: int, vals: list) -> None:
+    target = (_MB_HOLDING.get(addr, f"HR{addr}") if kind == "holding"
+              else ("SAFETY_INTERLOCK" if addr == 0 else f"COIL{addr}"))
+    try:
+        _emit(event_id=Event.make_id("modbus", _ASSET, "WTR-001", target, str(_time.time())),
+              event_type=EventType.red_objective_success, actor="red", target_asset=_ASSET,
+              vuln_id="WTR-001", phase=RedPhase.objective, team_id="default",
+              trace_id=Event.session_trace_id("modbus", _ASSET),
+              metadata={"protocol": "modbus", "register": target, "values": vals, "fc_kind": kind})
+    except Exception:
+        pass
+    # 물리 안전: 염소 과투입 + 인터록 해제 → 공중보건 임팩트
+    try:
+        for b in _safety_eval(_WU_SAFETY, _wu_bank.holding, _wu_bank.coils):
+            if not b["contained"]:
+                _emit(event_id=Event.make_id("modbus", _ASSET, "SAFETY", b["register"], str(_time.time())),
+                      event_type=EventType.asset_compromised, actor="red", target_asset=_ASSET,
+                      vuln_id="WTR-001", phase=RedPhase.objective, team_id="default",
+                      trace_id=Event.session_trace_id("modbus", _ASSET),
+                      metadata={"protocol": "modbus", "safety_impact": b["condition"],
+                                "register": b["register"], "value": b["value"],
+                                "limit": b["limit"], "severity": b["severity"],
+                                "impact": "chemical_overdose_public_health"})
+    except Exception:
+        pass
+
+
+_wu_bank.on_write = _wu_on_write
+
+
+@app.on_event("startup")
+async def _start_wu_modbus():
+    global _wu_server
+    if _os.environ.get("MODBUS_ENABLED", "1") != "1":
+        return
+    try:
+        _wu_server = await _modbus_serve(_wu_bank, "0.0.0.0", int(_os.environ.get("MODBUS_PORT", "502")))
+    except OSError:
+        pass
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8203)

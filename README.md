@@ -783,8 +783,13 @@ FC6 write TURBINE_RPM=6000 (과속) ; FC5 SAFETY_INTERLOCK=OFF
 FC 99(illegal) → 예외 응답 code 1
 ```
 
-> 이 패턴(`shared/ics/modbus.py` 재사용)으로 나머지 ICS 트윈(정유·수처리 등)에도 실제 Modbus/
-> OPC UA/S7 리스너를 확장할 수 있다. 현재는 power_plant 에 Modbus 를 우선 구현했다.
+> 이 패턴(`shared/ics/modbus.py` 재사용)으로 나머지 ICS 트윈에도 실제 Modbus 를 확장한다.
+> **현재 power_plant + water_utility 두 트윈이 실제 Modbus/TCP 를 말한다**(재사용성 실증):
+>
+> | 트윈 | 홀딩 레지스터 | 인터록 해제 시 임팩트 |
+> |---|---|---|
+> | power_plant | 0=TURBINE_RPM(≤4500)·1=COOLANT_FLOW(≥50) | 터빈 과속(over_max) |
+> | water_utility | 0=CHLORINE_PPM(≤4)·1=INTAKE_PUMP_RATE | 염소 과투입(공중보건, chemical_overdose) |
 
 **물리 안전 결과(SIS 시뮬, `shared/ics/safety.py`)** — Modbus 쓰기가 만든 상태가 위험한지 판정한다.
 안전 인터록이 걸려 있으면 트립으로 **억제**, 공격자가 인터록을 해제하면 **억제 실패 = 물리 임팩트**:
