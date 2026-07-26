@@ -194,6 +194,76 @@ def list_scenarios():
     }
 
 
+# --- 저작 지원(P1-3): 검증(dry-run)·린트·페이즈 클록 ---------------------------
+import yaml  # noqa: E402
+from .authoring import dry_run, lint_scenario, phase_clock  # noqa: E402
+
+
+class ValidateReq(BaseModel):
+    yaml: str
+
+
+def _scenario_dict(doc: dict) -> dict:
+    """YAML 문서에서 scenario 하위 딕셔너리 추출(단일/크로스오버 루트 허용)."""
+    return doc.get("scenario") or doc.get("crossover_scenario") or {}
+
+
+def _raw_scenarios() -> dict[str, dict]:
+    """scenarios/ 의 원본 scenario 딕셔너리(저작 검증용, 파싱된 모델과 별개)."""
+    out: dict[str, dict] = {}
+    for p in Path(SCENARIOS_DIR).rglob("*.yaml"):
+        try:
+            for doc in yaml.safe_load_all(p.read_text()):
+                if not doc:
+                    continue
+                sc = _scenario_dict(doc)
+                if sc.get("id"):
+                    out[sc["id"]] = sc
+        except (yaml.YAMLError, OSError):
+            continue
+    return out
+
+
+@app.post("/scenario/validate")
+def scenario_validate(req: ValidateReq):
+    """YAML 텍스트를 저장/실행 없이 검증 + 타임라인 투영(dry-run). 저작 UI의 핵심."""
+    try:
+        doc = yaml.safe_load(req.yaml)
+    except yaml.YAMLError as e:
+        raise HTTPException(400, f"YAML 파싱 오류: {e}")
+    if not isinstance(doc, dict):
+        raise HTTPException(400, "YAML 최상위는 매핑이어야 합니다(scenario: ...).")
+    sc = _scenario_dict(doc)
+    if not sc:
+        raise HTTPException(400, "scenario 또는 crossover_scenario 루트 키가 필요합니다.")
+    return dry_run(sc)
+
+
+@app.get("/scenario/lint-all")
+def scenario_lint_all():
+    """저장된 전 시나리오 린트(CI 게이트용). error 가 하나라도 있으면 ok=False."""
+    raw = _raw_scenarios()
+    report = {}
+    total_err = 0
+    for sid, sc in raw.items():
+        issues = lint_scenario(sc)
+        errs = [i for i in issues if i["level"] == "error"]
+        total_err += len(errs)
+        report[sid] = {"errors": len(errs),
+                       "warnings": len([i for i in issues if i["level"] == "warning"]),
+                       "issues": issues}
+    return {"ok": total_err == 0, "scenarios": len(raw), "total_errors": total_err, "report": report}
+
+
+@app.get("/scenario/{scenario_id}/phase-clock")
+def scenario_phase_clock(scenario_id: str, elapsed_sec: float = 0):
+    """경과 시간 → 현재 예상 stage·잔여(교관 페이싱용 페이즈 클록)."""
+    sc = _raw_scenarios().get(scenario_id)
+    if not sc:
+        raise HTTPException(404, f"scenario not found: {scenario_id}")
+    return phase_clock(sc, elapsed_sec)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8045)

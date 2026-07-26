@@ -21,6 +21,7 @@
 | `tests/test_contracts.py` | 계약 회귀 테스트 |
 | `services/scenario_engine/loader.py` | 시나리오 YAML 로더(단일+크로스오버), Config Service 초기상태 주입 |
 | `services/scenario_engine/runner.py` | stage 순서판정/chain_bonus, **크로스오버 phase 잠금해제+증거패키징** |
+| `services/scenario_engine/authoring.py` | **시나리오 저작(P1-3)**: lint(의미검증)·dry_run(타임라인 투영)·phase_clock. 엔드포인트: /scenario/validate·/lint-all·/{id}/phase-clock |
 | `services/patch_console/` | **Ansible 패치 콘솔**: 화이트리스트 플레이북 실행, audit, Config Service 연동 |
 | `services/noc_monitor/health_poller.py` | **Health Poller**: uptime/latency 계산, Recovery Watcher와 NOC이 공유 |
 | `services/noc_monitor/api/main.py` | **NOC API**: /noc/status /noc/history /noc/ws |

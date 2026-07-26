@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 ### Added
+- **P1-3 시나리오 저작 지원**: `services/scenario_engine/authoring.py` — 스키마 너머 의미 검증
+  (lint: 중복 stage·requires 참조·전방참조·vuln 참조·최종 stage·blue 목표), 실행 없는 dry-run
+  (타임라인 투영·총점·errors/warnings), phase_clock(경과→현재 예상 stage/잔여). 단일+크로스오버
+  (phase_*.stages 수집) 모두 지원. 엔드포인트 /scenario/validate·/lint-all·/{id}/phase-clock,
+  gateway /api/scenario. 유닛 16개(160→176). 실측: 저장된 14시나리오 lint 0-error·깨진 YAML 오류탐지·
+  phase-clock(1800s/3stage) current_stage 판정 확인.
 - **P2-5 플랫폼 관측성**: `services/observability`(8097) — 컨트롤플레인 전 서비스 /health 를
   비동기 스크레이프해 Prometheus 노출형식(`/metrics`: cr_service_up·scrape_ms·health 숫자필드
   게이지·cr_platform_services_up)과 JSON 요약(`/observability/summary`)으로 노출(무계측·최소침습).

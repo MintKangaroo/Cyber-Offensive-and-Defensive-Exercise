@@ -733,6 +733,29 @@ cr_platform_services_up 5
 > Prometheus/Grafana 는 `observability:8097/metrics`(또는 gateway `/metrics`)를 스크레이프 타깃으로
 > 등록하면 된다. 배포 시 `/metrics` 는 내부 ops 네트워크로 제한 권장.
 
+### #16 시나리오 저작 지원 (Authoring, P1-3)
+교관이 시나리오 YAML 을 **저장·실행 전에 검증**한다. 스키마(형식) 너머의 **의미**를 잡고,
+실행 없이 타임라인을 투영하며(dry-run), 경과 시간→예상 단계(phase clock)를 계산한다
+(`services/scenario_engine/authoring.py`).
+
+| 엔드포인트 | 설명 |
+|---|---|
+| `POST /scenario/validate` | YAML 텍스트 → **lint + dry-run**(errors/warnings·타임라인·총점). 저작 UI 핵심 |
+| `GET /scenario/lint-all` | 저장된 전 시나리오 린트(**CI 게이트**용, error 있으면 ok=false) |
+| `GET /scenario/{id}/phase-clock?elapsed_sec=` | 현재 예상 stage·잔여(교관 페이싱) |
+
+린트 규칙: 중복 stage·`requires_stage` 참조/전방참조·`vuln_id`가 initial_state에 있는지·최종 stage·
+blue 목표 유무·points≤0. 단일 + **크로스오버(`phase_*.stages` 수집)** 모두 지원.
+
+```text
+# 실측
+GET /scenario/lint-all → {"ok":true,"scenarios":14,"total_errors":0}   # 저장 시나리오 전수 통과
+POST /scenario/validate (중복 stage + 없는 vuln + points -5):
+  → ok=false, errors=1, codes=[duplicate_stage, unknown_vuln, nonpositive_points, no_final_stage, ...]
+GET /scenario/AIRPORT-DISRUPT-01/phase-clock?elapsed_sec=700 (1800s/3stage):
+  → current_stage=2, remaining=1100, stage_remaining=500
+```
+
 ---
 
 ## 저장소 구조
