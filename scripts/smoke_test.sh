@@ -253,6 +253,19 @@ else
 fi
 
 # -----------------------------------------------------------------------------
+# SSE 실시간 푸시(P0-4) — /stream 구독 중 이벤트 주입 → 즉시 수신되는지.
+echo; echo "── 실시간 푸시 (SSE /stream) ──"
+seid="sse-$(date +%s)-$$"
+ssefile=$(mktemp)
+( curl -sN --max-time 4 "http://localhost:8010/stream?topics=events" > "$ssefile" 2>/dev/null ) &
+ssepid=$!
+sleep 0.8
+c -X POST "http://localhost:8010/events" -H 'Content-Type: application/json' -d "{\"event_id\":\"$seid\",\"event_type\":\"red_attack_started\",\"timestamp\":$(date +%s),\"actor\":\"red\",\"team_id\":\"smoke\",\"scenario_id\":\"default\",\"target_asset\":\"dmz\",\"phase\":\"initial_access\",\"metadata\":{}}" >/dev/null 2>&1
+wait $ssepid 2>/dev/null
+if grep -q "$seid" "$ssefile"; then ok "SSE 푸시 — 구독자가 주입 이벤트를 실시간 수신"; else bad "SSE 푸시 — 이벤트 미수신(/stream 확인)"; fi
+rm -f "$ssefile"
+
+# -----------------------------------------------------------------------------
 # 크래시 복구(볼륨 영속, P0-3). 기본 스킵. SMOKE_CRASH_RECOVERY=1 로 활성화.
 if [ "${SMOKE_CRASH_RECOVERY:-0}" = "1" ]; then
   echo; echo "── 크래시 복구 (볼륨 영속) ──"

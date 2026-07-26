@@ -14,8 +14,10 @@ import asyncio
 from pathlib import Path
 from typing import Optional
 
+import time
 import httpx
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header, Request, Cookie
+from fastapi.responses import StreamingResponse
 from starlette.websockets import WebSocketState
 
 import sys
@@ -24,9 +26,38 @@ from shared.event_schema import Event  # noqa: E402
 
 APP_DIR = Path(__file__).parent
 DB_PATH = Path(os.environ.get("DATA_DIR", str(APP_DIR))) / "events.db"  # 볼륨 마운트로 영속(P0-3)
-SCORING_ENGINE_URL = "http://scoring_engine:8020"
+SCORING_ENGINE_URL = os.environ.get("SCORING_ENGINE_URL", "http://scoring_engine:8020")
+OBSERVER_DELAY_SEC = float(os.environ.get("OBSERVER_DELAY_SEC", "30"))
 
 from shared.rbac import require_role  # noqa: E402
+from shared.sse_bus import SSEBus, visible_to, LIVE_TOPICS  # noqa: E402
+
+# 단일 상황판 허브(P0-4). 모든 토픽을 이 버스로 흘려 EventSource 하나로 구독한다.
+bus = SSEBus(buffer_size=2000)
+
+
+def _topic_for(event: Event) -> str:
+    """이벤트 → SSE 토픽 매핑. detections(탐지/차단) 는 별도 토픽으로 분리."""
+    et = event.event_type.value
+    if et in ("blue_detection_success", "blue_block_success", "unmatched_detection"):
+        return "detections"
+    return "events"
+
+
+def _claims_from(authorization: str, cookie: str | None) -> tuple[str, str]:
+    """Authorization/쿠키 → (role, match_id). 시크릿 미설정(dev)이면 (instructor, '')."""
+    secret = os.environ.get("AUTH_JWT_SECRET", "").strip()
+    tok = (authorization or "").replace("Bearer ", "").strip() or (cookie or "")
+    if not secret or tok.count(".") != 2:
+        return "instructor", ""   # dev 또는 비-JWT → 전체 열람(dev 편의, 운영은 gateway 게이트)
+    try:
+        import jwt
+        c = jwt.decode(tok, secret, algorithms=["HS256"])
+        if c.get("type") not in (None, "access"):
+            return "observer", ""
+        return c.get("role", "observer"), str(c.get("match_id", "") or "")
+    except Exception:
+        return "observer", ""   # 무효 토큰 → 가장 제한적(관전자·지연)
 
 app = FastAPI(title="Event Collector")
 
@@ -121,6 +152,10 @@ async def ingest_event(event: Event):
 
     # Dashboard 실시간 스트림으로 브로드캐스트 (중복이어도 UI 갱신은 상관없음)
     await _broadcast(event)
+    # SSE 허브 발행(P0-4). 관전자 지연 필터는 구독측 visible_to 가 timestamp 로 처리.
+    payload = event.model_dump(mode="json")
+    payload.setdefault("match_id", event.metadata.get("match_id", "") if event.metadata else "")
+    bus.publish(_topic_for(event), payload)
 
     # Scoring Engine에 전달 (신규 이벤트일 때만; 실패해도 이벤트 저장은 이미 완료됨)
     if not is_duplicate:
@@ -149,7 +184,18 @@ async def _forward_to_scoring_engine(event: Event):
             payload.setdefault("metadata", {})["_unmatched"] = True
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
-            await client.post(f"{SCORING_ENGINE_URL}/score/ingest", json=payload)
+            r = await client.post(f"{SCORING_ENGINE_URL}/score/ingest", json=payload)
+            # 점수 적립이 발생하면 scores 토픽으로 실시간 push(상황판 리더보드 폴링 제거)
+            if r.status_code == 200:
+                res = r.json()
+                if res.get("awarded"):
+                    bus.publish("scores", {
+                        "team_id": event.team_id, "actor": event.actor,
+                        "category": res.get("category"), "points": res.get("points"),
+                        "scenario_id": event.scenario_id,
+                        "match_id": (event.metadata or {}).get("match_id", ""),
+                        "timestamp": time.time(),
+                    })
     except httpx.HTTPError:
         pass  # Scoring Engine이 다운이어도 Event Collector는 계속 동작
 
@@ -239,6 +285,65 @@ async def event_stream(websocket: WebSocket):
         _ws_clients.discard(websocket)
 
 
+
+
+def _sse_frame(m) -> str:
+    return f"id: {m.id}\nevent: {m.topic}\ndata: {json.dumps(m.data)}\n\n"
+
+
+@app.get("/stream")
+async def stream(request: Request, topics: str = "", last_event_id: str = "",
+                 authorization: str = Header(default=""),
+                 cr_token: str | None = Cookie(default=None),
+                 last_event_id_hdr: str = Header(default="", alias="Last-Event-ID")):
+    """상황판 실시간 구독(P0-4, SSE). 폴링을 대체한다.
+    - topics: 콤마 목록(events,detections,scores,safety,phase_clock). 비면 전체.
+    - Last-Event-ID(헤더 또는 쿼리): 재연결 시 놓친 메시지 리플레이.
+    - 역할·매치·관전자 지연은 visible_to 로 필터."""
+    role, match_id = _claims_from(authorization, cr_token)
+    tset = {t.strip() for t in topics.split(",") if t.strip()} or None
+    try:
+        last_id = int(last_event_id_hdr or last_event_id or 0)
+    except ValueError:
+        last_id = 0
+
+    async def gen():
+        yield "retry: 3000\n\n"   # EventSource 자동 재연결 간격(ms)
+        now = time.time()
+        # 1) 리플레이(놓친 이벤트)
+        for m in bus.replay(last_id, tset):
+            if visible_to(m, role, match_id, now, OBSERVER_DELAY_SEC):
+                yield _sse_frame(m)
+        yield f": subscribed role={role} topics={sorted(tset) if tset else 'all'}\n\n"
+        # 2) 라이브 구독
+        with bus.subscription(maxsize=1000) as q:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    m = await asyncio.wait_for(q.get(), timeout=15.0)
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"   # 하트비트(프록시 타임아웃·재연결 방지)
+                    continue
+                if tset is not None and m.topic not in tset:
+                    continue
+                if visible_to(m, role, match_id, time.time(), OBSERVER_DELAY_SEC):
+                    yield _sse_frame(m)
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.post("/internal/publish")
+async def internal_publish(request: Request, authorization: str = Header(default="")):
+    """S2S 발행(safety/phase_clock 등). range_control·scenario_engine 이 상황판에 밀어넣는 통로."""
+    require_role(authorization, {"instructor"})
+    body = await request.json()
+    topic = body.get("topic", "events")
+    data = body.get("data", {})
+    data.setdefault("timestamp", time.time())
+    seq = bus.publish(topic, data)
+    return {"published": seq, "topic": topic, "subscribers": bus.subscribers}
 
 
 @app.post("/admin/reset")

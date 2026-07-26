@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { fetchScores, fetchScoreHistory, usePolling } from "../../api/client";
+import { fetchScores, fetchScoreHistory, usePolling, useSSE } from "../../api/client";
 import { useRangeStore } from "../../store/rangeStore";
 import type { Achievement } from "../../api/types";
 
@@ -79,8 +79,10 @@ function ScoreSparkline({ achievements }: { achievements: Achievement[] }) {
 
 export function ScoreBoard() {
   const scenarioId = useRangeStore((s) => s.scenarioId);
-  const { data: scores } = usePolling(() => fetchScores(scenarioId), 3000, [scenarioId]);
-  const { data: history } = usePolling(() => fetchScoreHistory(scenarioId), 5000, [scenarioId]);
+  // P0-4: 점수는 SSE push 로 갱신. 폴링은 재연결 공백용 느린 fallback(15s)으로만 유지.
+  const { data: scores, reload: reloadScores } = usePolling(() => fetchScores(scenarioId), 15000, [scenarioId]);
+  const { data: history, reload: reloadHistory } = usePolling(() => fetchScoreHistory(scenarioId), 15000, [scenarioId]);
+  useSSE(["scores"], { scores: () => { reloadScores(); reloadHistory(); } });
 
   const teamEntries = Object.entries(scores?.teams ?? {});
 

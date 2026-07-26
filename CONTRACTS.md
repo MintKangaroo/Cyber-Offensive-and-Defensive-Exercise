@@ -9,6 +9,7 @@
 | 경로 | 내용 |
 |---|---|
 | `shared/event_schema.py` | Live Fire 이벤트(트윈/수집/점수/시나리오 공용), 점수표 |
+| `shared/sse_bus.py` | **SSE 상황판 허브(P0-4)**: 토픽 pub/sub, Last-Event-ID 리플레이, 역할·지연 가시성 |
 | `shared/siem_schema.py` | SIEM 정규화 이벤트(ECS-lite), severity 매핑 |
 | `shared/storage_interface.py` | SIEM 저장소 추상클래스(SQLite/OpenSearch 교체) |
 | `shared/api_contract.py` | 서비스 포트·엔드포인트·요청모델 명세 |

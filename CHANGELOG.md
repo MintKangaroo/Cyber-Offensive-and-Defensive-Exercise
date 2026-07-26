@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 ### Added
+- **P0-4 실시간 푸시(폴링 제거)**: `shared/sse_bus.py` SSE 단일 허브 + `event_collector`
+  `GET /stream`(토픽 events/detections/scores/safety/phase_clock, JWT 역할·매치 필터, 관전자 30초
+  지연, Last-Event-ID 리플레이) + `POST /internal/publish`(S2S safety/phase_clock). 대시보드 `useSSE()`
+  (EventSource+백오프)로 폴링→구독 전환(Live Fire 리더보드 push). `loadtest/sse_loadtest.py`(스레드).
+  실측: 관전자 100+팀 8 동시 108연결에서 반영 지연 **p95 77ms**(목표<1s). ingest 상한 ~23/s(sqlite
+  fsync·단일워커, SSE 무관)는 정직히 기록. SSE 버스 유닛테스트 10개(총 106→116).
 - **P0-2 인증/세션/감사**: `auth` 서비스(8051) — 사용자 계정(PBKDF2 해시)·CSV 일괄등록, 로그인 →
   단기 access JWT(15분)+refresh(8h, role/team_id/match_id 클레임)·httpOnly 쿠키, `/auth/revoke`
   즉시 폐기. `shared/rbac.py`가 JWT 서명 검증(정적 토큰 하위호환). gateway 로그인 게이트

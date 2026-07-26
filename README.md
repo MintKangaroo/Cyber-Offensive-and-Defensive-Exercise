@@ -543,6 +543,37 @@ role·team_id·match_id 클레임, httpOnly 쿠키)를 발급하고 `rbac.py`가
 
 ---
 
+## 실시간 푸시 (P0-4 — 폴링 제거)
+
+상황판이 3~5초 폴링으로 서버를 두드리던 것을, 서버가 밀어주는 **SSE 단일 허브**로 바꿨다.
+`event_collector`의 **`GET /stream`** 하나로 모든 토픽을 구독한다(`shared/sse_bus.py`).
+
+- **토픽**: `events` / `detections` / `scores` / `safety` / `phase_clock` (`?topics=` 로 선택).
+- **역할·매치 필터**: JWT 클레임으로 red/blue는 자기 매치만, **관전자는 30초 지연**(`visible_to`).
+- **리플레이**: 재연결 시 `Last-Event-ID` 이후 놓친 이벤트만 링버퍼에서 재전송(EventSource 자동).
+- **S2S 발행**: `POST /internal/publish` 로 range_control·scenario가 `safety`/`phase_clock` 주입.
+- 대시보드는 `useSSE()`(EventSource + 지수 백오프)로 구독 — Live Fire 리더보드가 push 로 갱신.
+
+**실측**(`loadtest/sse_loadtest.py`, WSL2 dev, uvicorn 단일 워커):
+
+```
+$ python3 loadtest/sse_loadtest.py --observers 100 --teams 8 --rate 15 --duration 8
+구독자        : 팀 8 + 관전자 100 = 108 동시연결
+수신 샘플(팀) : 960
+반영 지연 p50 : 54.9 ms
+반영 지연 p95 : 77.4 ms   (목표 < 1000 ms)
+반영 지연 p99 : 101.7 ms
+판정          : PASS ✅
+```
+
+> 관전자 100명이 동시에 붙어도 상황판 반영 지연 **p95 77ms**(목표 1s 대비 여유). SSE 팬아웃은
+> 서브밀리초 수준이다. 단, **이벤트 수집(ingest) 처리량은 이 dev 구성에서 ~23/s가 상한**이다
+> — 단일 워커 + 요청마다 fsync 하는 sqlite(같은 디스크 standalone ~100/s) 때문으로, SSE 층과
+> 무관한 영속화 계층 제약이다. 프롬프트가 제시한 1000/s 는 배치 쓰기·큐잉·다중 워커(샤딩된 허브)
+> 재설계가 필요하며, 이는 별도 과제로 남긴다(정직한 측정치).
+
+---
+
 ## 실전 운영 (다중 팀 · 초기화 · 안전 통제)
 
 실전 대회 운영을 위한 P1 운영 기능. **`range_control` 서비스(8055)** 가 오케스트레이션하며, 교관

@@ -135,6 +135,52 @@ export function useEventStream(onEvent: (e: RangeEvent) => void) {
   return { connected };
 }
 
+/**
+ * SSE 구독(P0-4). 폴링 대체 — event_collector /stream 에 EventSource 로 붙어
+ * 토픽별 핸들러를 호출한다. 브라우저 EventSource 는 재연결 시 Last-Event-ID 를
+ * 자동 전송(놓친 이벤트 리플레이). 치명적 종료(CLOSED)에는 지수 백오프로 재생성.
+ */
+export function useSSE(topics: string[], handlers: Record<string, (data: unknown) => void>) {
+  const hRef = useRef(handlers);
+  hRef.current = handlers;
+  const topicKey = topics.join(",");
+  const [connected, setConnected] = useState(false);
+
+  useEffect(() => {
+    const base = EVENT_COLLECTOR.startsWith("/") ? `${location.origin}${EVENT_COLLECTOR}` : EVENT_COLLECTOR;
+    const url = `${base}/stream?topics=${topicKey}`;
+    let es: EventSource | null = null;
+    let cancelled = false;
+    let delay = 1000;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    function connect() {
+      if (cancelled) return;
+      es = new EventSource(url, { withCredentials: true });
+      es.onopen = () => { setConnected(true); delay = 1000; };
+      for (const t of topics) {
+        es.addEventListener(t, (e) => {
+          try { hRef.current[t]?.(JSON.parse((e as MessageEvent).data)); } catch { /* 무시 */ }
+        });
+      }
+      es.onerror = () => {
+        setConnected(false);
+        // readyState CLOSED(2) = 치명적 → 수동 백오프 재생성. CONNECTING(0) = 브라우저 자동 재연결.
+        if (es && es.readyState === 2 && !cancelled) {
+          es.close();
+          timer = setTimeout(connect, delay);
+          delay = Math.min(delay * 2, 15000);
+        }
+      };
+    }
+    connect();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); es?.close(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topicKey]);
+
+  return { connected };
+}
+
 export function usePolling<T>(fn: () => Promise<T>, intervalMs: number, deps: unknown[] = []) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
