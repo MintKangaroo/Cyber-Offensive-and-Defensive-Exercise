@@ -1,0 +1,59 @@
+# 단일 시나리오: 발전소 — 실제 Modbus SIS 무력화 → 터빈 과속 파괴
+# ================================================================
+# 실제 Modbus/TCP(502)로 수행하는 ICS 사보타주 킬체인. HMI 초기 접근 → 안전계장(SIS)
+# 인터록 무력화 → 지속 과속으로 터빈 물리 파괴. Blue 는 미인가 Modbus 쓰기·인터록 무력화를
+# 탐지하고, 위험 중 인터록을 재무장(blue_block_success)해 파국을 막아야 한다.
+# 트윈이 실제 Modbus 를 말하므로 mbpoll/pymodbus/metasploit 로 실공격 가능.
+scenario:
+  id: "POWERPLANT-MODBUS-SABOTAGE-01"
+  name: "발전소 Modbus SIS 무력화 사보타주"
+  description: "HMI 침투 → 실제 Modbus 로 안전 인터록 무력화 → 지속 과속으로 터빈 파괴하는 ICS 킬체인"
+  target_asset: "power_plant"
+  difficulty: "hard"
+  time_limit_sec: 1800
+
+  initial_vuln_state:
+    PP-002: vulnerable          # HMI 기본 자격증명
+    PP-006: vulnerable          # 미인가 Modbus 쓰기(보호 레지스터/코일)
+
+  stages:
+    - stage: 1
+      name: "초기 접근 - HMI 기본 자격증명 로그인"
+      objective_event: red_attack_started
+      match: { vuln_id: "PP-002" }
+      points: 25
+      expected_sec: 300
+      mitre: [T0812]            # Default Credentials
+    - stage: 2
+      name: "안전계장 무력화 - Modbus 로 SIS 인터록 OFF"
+      objective_event: red_attack_started
+      match: { vuln_id: "PP-006" }
+      points: 45
+      requires_stage: 1
+      expected_sec: 600
+      mitre: [T0878]            # Suppression of Alarms/Interlock
+    - stage: 3
+      name: "물리 파괴 - 지속 과속으로 터빈 catastrophic failure"
+      objective_event: asset_compromised
+      match: { vuln_id: "PP-006" }
+      points: 80
+      requires_stage: 2
+      expected_sec: 900
+      mitre: [T0836]            # Modify Parameter (over-speed)
+      is_final: true
+
+  chain_bonus:
+    all_stages_in_order: 50
+    within_sec: 900
+
+  blue_objectives:
+    - name: "미인가 Modbus 쓰기 탐지"
+      match_alert: "ICS-MODBUS-WRITE-PP"
+      points: 35
+    - name: "안전 인터록 무력화 탐지"
+      match_alert: "ICS-SAFETY-INTERLOCK-SUPPRESS"
+      points: 45
+
+  noise:
+    enabled: true
+    normal_traffic_eps: 3

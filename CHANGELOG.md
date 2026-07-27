@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 ### Added
+- **ICS 킬체인 시나리오 저작**: `scenarios/single/POWERPLANT-MODBUS-SABOTAGE-01.yaml` — 실제 Modbus
+  SIS 무력화 킬체인(HMI 접근 → 인터록 OFF → 지속 과속 파괴)을 교관용 훈련 시나리오로 저작. Blue
+  탐지목표(ICS-MODBUS-WRITE-PP·ICS-SAFETY-INTERLOCK-SUPPRESS) 포함. P1-3 도구로 검증: 스키마 로드·
+  lint 0-error·dry-run(150점, expected_sec 타임라인)·phase-clock 통과. lint-all 14→15 시나리오 0-error.
 - **P1-1 — Blue 방어 액션 채점(SIS 재무장)**: 위험 상태에서 Blue 가 안전 인터록을 재무장
   (Modbus coil0→ON)하면 `blue_block_success` 발행 → Blue 점수. `process_sim.in_danger()` 순수판정.
   재무장 시 다음 tick 부터 트립이 걸려 파국 방지 — Red 의 T0878 무력화와 대칭. 유닛 1개(229→230).
