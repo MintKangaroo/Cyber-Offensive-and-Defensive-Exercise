@@ -119,6 +119,27 @@ _modbus_bank.holding[1] = int(plc_registers["COOLANT_FLOW"])
 _modbus_bank.coils[0] = bool(plc_registers["SAFETY_INTERLOCK"])
 _modbus_server = None
 
+# 연속 물리 시뮬(P1-1 심화): HR2=ACTUAL_RPM, HR3=COOLANT_TEMP (읽기전용 텔레메트리).
+# 명령(HR0)·유량(HR1)에 따라 동역학적으로 반응 — 공격자는 즉시반영이 아닌 프로세스 응답을 읽어야.
+from shared.ics.process_sim import ProcessState, ProcessParams, step as _proc_step  # noqa: E402
+_PROC_PARAMS = ProcessParams(slew_rpm_per_s=400, nominal_rpm=3000, ambient_temp=40, k_heat=0.02, k_cool=0.5)
+_proc_state = ProcessState(actual_rpm=float(_modbus_bank.holding[0]), coolant_temp=40.0)
+_modbus_bank.holding[2] = int(_proc_state.actual_rpm)   # ACTUAL_RPM
+_modbus_bank.holding[3] = int(_proc_state.coolant_temp)  # COOLANT_TEMP
+
+
+@app.on_event("startup")
+async def _start_process_sim():
+    async def _loop():
+        global _proc_state
+        while True:
+            cmd = float(_modbus_bank.holding[0]); flow = float(_modbus_bank.holding[1])
+            _proc_state = _proc_step(_proc_state, cmd, flow, dt=0.5, p=_PROC_PARAMS)
+            _modbus_bank.holding[2] = int(_proc_state.actual_rpm)
+            _modbus_bank.holding[3] = int(_proc_state.coolant_temp)
+            await _asyncio.sleep(0.5)
+    _asyncio.create_task(_loop())
+
 
 def _sync_bank_from_registers() -> None:
     """HTTP 경로로 바뀐 상태를 Modbus 뱅크에 반영(양 경로 일관성)."""

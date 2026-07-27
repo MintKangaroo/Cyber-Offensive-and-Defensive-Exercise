@@ -803,6 +803,19 @@ FC5 SAFETY_INTERLOCK=OFF          → asset_compromised {safety_impact:"over_max
 > 실제 ICS 사보타주(예: Triton/TRISIS)의 핵심 패턴을 훈련에 반영. asset_compromised 는 scoring·
 > 시나리오 안전임팩트 목표에 연동된다.
 
+**연속 물리 시뮬(`shared/ics/process_sim.py`)** — 레지스터가 순간값이 아니라 **동역학적으로 반응**한다.
+터빈 RPM 은 명령값으로 slew-rate(400rpm/s) 제한을 받으며 상승하고, 냉각수 온도는 RPM 발열·유량
+냉각으로 변한다. 읽기전용 텔레메트리(HR2=ACTUAL_RPM, HR3=COOLANT_TEMP)를 Modbus 로 읽는다:
+
+```text
+# 실측: 6000 명령 + 냉각수 차단 후 Modbus 읽기(시간 경과)
+t0 [cmd,flow,ACTUAL,TEMP] = 3000,100,3000,40
+t1 = 6000,0,3400,46   t2 = 6000,0,3800,60   t3 = 6000,0,4200,82
+```
+
+> 공격자는 값을 '쓰면 즉시'가 아니라 **프로세스 응답을 읽고 추론**해야 하고, 방어자는 위험으로
+> 향하는 **추세를 보고 대응할 시간**을 얻는다(실제 SCADA 계측처럼).
+
 **ICS 이상탐지(red→blue, `shared/ics/anomaly.py`)** — Red 의 실제 Modbus 공격을 Blue/SIEM 이
 탐지·분류할 수 있게, 각 Modbus 쓰기를 **MITRE ATT&CK for ICS** 기법으로 분류해 이벤트 metadata
 (`ics_technique`/`ics_severity`/`ics_reason`)에 실어 발행한다:

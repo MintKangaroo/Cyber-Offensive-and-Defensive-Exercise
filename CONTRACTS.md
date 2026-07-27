@@ -12,6 +12,7 @@
 | `shared/sse_bus.py` | **SSE 상황판 허브(P0-4)**: 토픽 pub/sub, Last-Event-ID 리플레이, 역할·지연 가시성 |
 | `shared/ics/modbus.py` | **실제 Modbus/TCP(P1-1)**: 순수 PDU 처리(FC1/3/4/5/6/16·예외) + asyncio 서버. power_plant 502 리스너 |
 | `shared/ics/safety.py` | **ICS 안전 결과(P1-1 심화)**: 레지스터 한계+인터록 프로파일 → 위험/억제 판정. 인터록 해제+과속 → asset_compromised |
+| `shared/ics/process_sim.py` | **ICS 연속 물리 시뮬(P1-1 심화)**: RPM slew·냉각 열역학 순수 step(). power_plant HR2=ACTUAL_RPM/HR3=TEMP 텔레메트리 |
 | `shared/ics/anomaly.py` | **ICS 이상탐지(P1-1 red→blue)**: Modbus 쓰기 → MITRE ICS 분류(T0836/T0855/T0878). 이벤트 metadata 로 Blue/SIEM 탐지 신호 |
 | `shared/net/smtp_server.py` | **실제 SMTP(P1-2 슬라이스)**: 세션 상태머신 + asyncio 서버. defense_network 25 리스너, 오픈 릴레이(DN-004) |
 | `services/challenge_portal/anticheat.py` | **공정성/안티치트(P1-5)**: 제출 rate-limit·lockout, 감사(sqlite), 플래그공유 탐지. 엔드포인트: /portal/anticheat/audit·/flagged |

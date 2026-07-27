@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 ### Added
+- **P1-1 심화 — ICS 연속 물리 시뮬**: `shared/ics/process_sim.py` — 레지스터가 순간값이 아니라
+  동역학적으로 반응. 터빈 RPM 은 명령값으로 slew-rate(400rpm/s) 제한 상승, 냉각수 온도는 RPM 발열·
+  유량 냉각으로 변화(주변온도 하한). power_plant 배경 루프가 HR2=ACTUAL_RPM/HR3=COOLANT_TEMP
+  텔레메트리 갱신(읽기전용). 순수 step() 유닛 7개(218→225). 실측: 6000 명령+유량 차단 → ACTUAL
+  3000→3400→3800→4200(slew), TEMP 40→46→60→82(승온) Modbus 읽기로 확인.
 - **P1-2 슬라이스 — defense_network 실제 SMTP + 오픈 릴레이(DN-004)**: `shared/net/smtp_server.py`
   세션 상태머신(HELO/MAIL/RCPT/DATA/QUIT) + asyncio 서버. defense_network 가 25 에서 진짜 SMTP 를
   말하고, 인증 없이 외부 도메인 릴레이 수락 시 취약(패치되면 550). 릴레이 시 DN-004 이벤트 + SIEM
