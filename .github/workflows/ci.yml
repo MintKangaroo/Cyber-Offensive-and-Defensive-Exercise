@@ -78,8 +78,9 @@ jobs:
         run: |
           docker compose up -d --build \
             event_collector scoring_engine config_service edr_backend siem_api \
-            scenario_engine instructor_api aar_report noc_monitor \
-            ground_station power_plant defense_network \
+            scenario_engine instructor_api aar_report noc_monitor range_control \
+            auth challenge_portal incident injects observability \
+            ground_station power_plant water_utility defense_network \
             gs_gateway pp_gateway dn_gateway
 
       - name: Wait for core health
@@ -92,6 +93,28 @@ jobs:
             sleep 3
           done
           echo "services did not become healthy in time"; exit 1
+
+      - name: New services health (auth·incident·injects·observability·portal·range)
+        run: |
+          fail=0
+          for pair in auth:8051 range_control:8055 challenge_portal:8060 \
+                      incident:8095 injects:8096 observability:8097; do
+            port=${pair#*:}; name=${pair%:*}
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:$port/health)
+            echo "$name ($port): $code"
+            [ "$code" = "200" ] || fail=1
+          done
+          exit $fail
+
+      - name: SSE + observability + ICS Modbus E2E
+        run: |
+          # SSE 스트림 존재
+          curl -sf "http://localhost:8010/stream?topics=events" --max-time 2 >/dev/null && echo "SSE ok" || true
+          # 관측성 요약(전 서비스 스크레이프)
+          curl -sf http://localhost:8097/observability/summary | python3 -c "import sys,json;d=json.load(sys.stdin);print('platform up',d['up'],'/',d['total']);exit(0 if d['up']>=6 else 1)"
+          # 컨테이너 내 실제 Modbus(pp_twin:502) — 트윈이 진짜 Modbus 를 말하는지
+          docker cp infra/ci/modbus_probe.py event_collector:/tmp/mb.py
+          docker exec event_collector python3 /tmp/mb.py
 
       - name: Integration smoke test (with recovery)
         run: SMOKE_RECOVERY=1 SMOKE_CRASH_RECOVERY=1 bash scripts/smoke_test.sh

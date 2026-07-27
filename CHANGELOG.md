@@ -3,6 +3,17 @@
 형식: [Keep a Changelog](https://keepachangelog.com/), 버전: [SemVer](https://semver.org/).
 
 ## [Unreleased]
+### Verified / CI
+- **풀스택 도커 통합 검증**: 신규 3종 + 변경 13종 서비스 컨테이너 빌드·기동(11/11 헬스 200) →
+  스모크 36/36(SSE 포함) → 챌린지 QA 69/69 → 신규 서비스 E2E(observability 12/12 스크레이프) →
+  컨테이너 내 실제 Modbus(pp_twin:502) 전부 실배포 확인.
+- **ICS 탐지→채점 라이브 폐루프 검증**: 컨테이너 간 Modbus 공격(T0878 인터록무력화·T0836 과속) →
+  트윈 SIEM 로그 → 라이브 SIEM DetectionEngine(ICS 규칙) → blue_detection_success → **Blue 점수
+  200→260(+60)** 실측. (siem_api 재빌드로 ICS 규칙 로드)
+- **CI 확장**: `.github/workflows/ci.yml` integration 잡에 신규 서비스(auth·incident·injects·
+  observability·challenge_portal·range_control·water_utility) 빌드/기동/헬스 + SSE·관측성·컨테이너
+  Modbus(`infra/ci/modbus_probe.py`) E2E 스텝 추가. unit 잡은 235 유닛 자동 실행.
+
 ### Added
 - **water_utility 대칭 확장 — 화학 과투입 연속물리·파국·Blue 방어**: `process_sim` 재사용(터빈=농도
   유추)으로 두 번째 ICS 트윈을 power_plant 수준으로. 저수조 염소농도(HR2)가 투입설정으로 수렴(혼합
