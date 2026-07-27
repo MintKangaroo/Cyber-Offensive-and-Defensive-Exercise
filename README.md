@@ -816,6 +816,19 @@ t1 = 6000,0,3400,46   t2 = 6000,0,3800,60   t3 = 6000,0,4200,82
 > 공격자는 값을 '쓰면 즉시'가 아니라 **프로세스 응답을 읽고 추론**해야 하고, 방어자는 위험으로
 > 향하는 **추세를 보고 대응할 시간**을 얻는다(실제 SCADA 계측처럼).
 
+**물리 손상 · SIS 트립** — 안전 인터록이 걸려 있으면 redline(4500)에서 **자동 트립(RPM 캡)**,
+해제되면 지속 과속/과열이 **누적 손상(HR4=DAMAGE)** 으로 쌓여 임계 도달 시 **물리적 파괴**한다:
+
+```text
+# 실측
+인터록 ON  + 명령 9000        → ACTUAL 4500 캡(트립), DAMAGE 0          [SIS 억제]
+인터록 OFF + 명령 9000 + 냉각0 → ACTUAL 4900→6900, TEMP 76→376,
+                                DAMAGE 3→42→100 → asset_compromised(catastrophic_failure)
+```
+
+> 실제 ICS 파괴(예: Aurora/과속 파괴)처럼 공격자는 **SIS 를 무력화하고 그 상태를 '지속'** 해야
+> 자산이 파괴된다. 방어자가 인터록을 재무장하면 트립이 걸려 파괴를 막는다.
+
 **ICS 이상탐지(red→blue, `shared/ics/anomaly.py`)** — Red 의 실제 Modbus 공격을 Blue/SIEM 이
 탐지·분류할 수 있게, 각 Modbus 쓰기를 **MITRE ATT&CK for ICS** 기법으로 분류해 이벤트 metadata
 (`ics_technique`/`ics_severity`/`ics_reason`)에 실어 발행한다:

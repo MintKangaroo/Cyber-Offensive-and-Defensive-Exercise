@@ -3,7 +3,7 @@ ICS 연속 물리 시뮬(P1-1 심화) 계약 고정.
 레지스터가 순간값이 아니라 실제 공정처럼 동역학적으로 반응한다 — 터빈 RPM 은 명령값으로
 slew-rate 제한을 받으며 상승하고, 냉각수 온도는 RPM(발열)·유량(냉각)에 따라 변한다.
 """
-from shared.ics.process_sim import ProcessState, ProcessParams, step
+from shared.ics.process_sim import ProcessState, ProcessParams, step, has_failed
 
 
 P = ProcessParams(slew_rpm_per_s=500, nominal_rpm=3000, ambient_temp=40,
@@ -53,3 +53,32 @@ def test_nominal_steady_state_stable_temp():
     s2 = step(s, cmd_rpm=3000, coolant_flow=100, dt=1.0, p=P)
     # 정격 운전(3000rpm, 발열 0) → 온도 변화 미미
     assert abs(s2.coolant_temp - 40) < 1
+
+
+# ── 트립 · 손상(인터록 상태에 따른 결과) ──────────────────────────────
+def test_interlock_engaged_trips_at_redline_no_damage():
+    # 인터록 정상: redline(4500) 초과 명령이어도 트립으로 캡, 손상 0
+    s = ProcessState(actual_rpm=4400, coolant_temp=40)
+    s = step(s, cmd_rpm=9000, coolant_flow=100, dt=1.0, p=P, interlock_engaged=True)
+    assert s.actual_rpm == P.redline_rpm and s.damage == 0.0
+
+
+def test_interlock_disabled_allows_overspeed_and_accumulates_damage():
+    # 인터록 해제: 캡 없음 → redline 초과 → 손상 누적
+    s = ProcessState(actual_rpm=4400, coolant_temp=40)
+    s = step(s, cmd_rpm=9000, coolant_flow=100, dt=1.0, p=P, interlock_engaged=False)
+    assert s.actual_rpm > P.redline_rpm and s.damage > 0.0
+
+
+def test_sustained_overspeed_leads_to_failure():
+    s = ProcessState(actual_rpm=6000, coolant_temp=40)
+    for _ in range(200):   # 지속 과속(인터록 해제) → 누적 손상 → 파국
+        s = step(s, cmd_rpm=9000, coolant_flow=0, dt=1.0, p=P, interlock_engaged=False)
+    assert has_failed(s, P)
+
+
+def test_engaged_interlock_never_fails():
+    s = ProcessState(actual_rpm=3000, coolant_temp=40)
+    for _ in range(500):
+        s = step(s, cmd_rpm=9000, coolant_flow=0, dt=1.0, p=P, interlock_engaged=True)
+    assert not has_failed(s, P) and s.actual_rpm == P.redline_rpm

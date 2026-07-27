@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 ### Added
+- **P1-1 심화 — 물리 손상·SIS 트립 연결**: `process_sim.step()` 에 인터록 인지 추가 — 인터록 정상이면
+  redline(4500)에서 **트립(RPM 캡)·손상 0**, 해제되면 지속 과속/과열이 **누적 손상 → 파국**
+  (failure_threshold). power_plant 배경 루프가 HR4=DAMAGE 갱신 + 파국 에지에 `asset_compromised`
+  (catastrophic_failure) 1회 발행. 유닛 4개(225→229). 실측: 인터록 ON=4500 캡·손상 0, OFF+냉각차단
+  → DAMAGE 3→42→100 → catastrophic_failure(rpm 6900) 확인. 공격자는 SIS 무력화 후 '지속'해야 파괴.
 - **P1-1 심화 — ICS 연속 물리 시뮬**: `shared/ics/process_sim.py` — 레지스터가 순간값이 아니라
   동역학적으로 반응. 터빈 RPM 은 명령값으로 slew-rate(400rpm/s) 제한 상승, 냉각수 온도는 RPM 발열·
   유량 냉각으로 변화(주변온도 하한). power_plant 배경 루프가 HR2=ACTUAL_RPM/HR3=COOLANT_TEMP

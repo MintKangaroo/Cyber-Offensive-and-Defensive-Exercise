@@ -121,22 +121,44 @@ _modbus_server = None
 
 # 연속 물리 시뮬(P1-1 심화): HR2=ACTUAL_RPM, HR3=COOLANT_TEMP (읽기전용 텔레메트리).
 # 명령(HR0)·유량(HR1)에 따라 동역학적으로 반응 — 공격자는 즉시반영이 아닌 프로세스 응답을 읽어야.
-from shared.ics.process_sim import ProcessState, ProcessParams, step as _proc_step  # noqa: E402
+from shared.ics.process_sim import ProcessState, ProcessParams, step as _proc_step, has_failed as _has_failed  # noqa: E402
 _PROC_PARAMS = ProcessParams(slew_rpm_per_s=400, nominal_rpm=3000, ambient_temp=40, k_heat=0.02, k_cool=0.5)
 _proc_state = ProcessState(actual_rpm=float(_modbus_bank.holding[0]), coolant_temp=40.0)
+_proc_failed = False
 _modbus_bank.holding[2] = int(_proc_state.actual_rpm)   # ACTUAL_RPM
 _modbus_bank.holding[3] = int(_proc_state.coolant_temp)  # COOLANT_TEMP
+_modbus_bank.holding[4] = 0                              # DAMAGE(%)
 
 
 @app.on_event("startup")
 async def _start_process_sim():
     async def _loop():
-        global _proc_state
+        global _proc_state, _proc_failed
         while True:
             cmd = float(_modbus_bank.holding[0]); flow = float(_modbus_bank.holding[1])
-            _proc_state = _proc_step(_proc_state, cmd, flow, dt=0.5, p=_PROC_PARAMS)
+            interlock = bool(_modbus_bank.coils[0])
+            _proc_state = _proc_step(_proc_state, cmd, flow, dt=0.5, p=_PROC_PARAMS,
+                                     interlock_engaged=interlock)
             _modbus_bank.holding[2] = int(_proc_state.actual_rpm)
             _modbus_bank.holding[3] = int(_proc_state.coolant_temp)
+            _modbus_bank.holding[4] = int(_proc_state.damage)
+            # 파국 에지(지속 과속+SIS 무력화 → 물리적 파괴). 1회만 발행.
+            if _has_failed(_proc_state, _PROC_PARAMS) and not _proc_failed:
+                _proc_failed = True
+                try:
+                    emit_event(
+                        event_id=Event.make_id("physics", ASSET_NAME, "SAFETY", "FAILURE", str(time.time())),
+                        event_type=EventType.asset_compromised, actor="red", target_asset=ASSET_NAME,
+                        vuln_id="PP-006", phase=RedPhase.lateral_movement, team_id="default",
+                        trace_id=Event.session_trace_id("physics", ASSET_NAME),
+                        metadata={"protocol": "modbus", "safety_impact": "catastrophic_failure",
+                                  "cause": "sustained_overspeed_sis_disabled",
+                                  "actual_rpm": int(_proc_state.actual_rpm),
+                                  "coolant_temp": int(_proc_state.coolant_temp), "severity": "critical"})
+                except Exception:
+                    pass
+            elif interlock and _proc_state.damage == 0:
+                _proc_failed = False   # 정상 복귀 시 재무장(다음 훈련)
             await _asyncio.sleep(0.5)
     _asyncio.create_task(_loop())
 
