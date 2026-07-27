@@ -768,6 +768,9 @@ GET /scenario/AIRPORT-DISRUPT-01/phase-clock?elapsed_sec=700 (1800s/3stage):
 진짜 Modbus/TCP 를 말한다**(`shared/ics/modbus.py`) — `mbpoll`·`pymodbus`·`metasploit` 의
 modbus 모듈 같은 **실제 공격 도구가 그대로 붙는다**.
 
+> 📖 **엔드투엔드 아키텍처 + 실 Modbus 실습 가이드**: [docs/ICS-KILLCHAIN.md](docs/ICS-KILLCHAIN.md)
+> (공격→물리→탐지→방어→시나리오 다이어그램, 로우소켓 공격 코드, 관측 실측치).
+
 - 지원 FC: 1(코일 읽기)·3/4(레지스터 읽기)·5(코일 쓰기)·6(단일 쓰기)·16(다중 쓰기) + 예외 응답.
 - 레지스터 맵: 홀딩 `0=TURBINE_RPM`·`1=COOLANT_FLOW`, 코일 `0=SAFETY_INTERLOCK`.
 - Modbus 는 설계상 **무인증**(ICS insecure-by-design) → 미인가 쓰기는 **PP-006 이벤트**로 발행돼
