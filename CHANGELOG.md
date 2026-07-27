@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 ### Added
+- **water_utility 대칭 확장 — 화학 과투입 연속물리·파국·Blue 방어**: `process_sim` 재사용(터빈=농도
+  유추)으로 두 번째 ICS 트윈을 power_plant 수준으로. 저수조 염소농도(HR2)가 투입설정으로 수렴(혼합
+  slew), 인터록 정상이면 4ppm 캡, 해제되면 오염 손상(HR5) 누적 → 급수오염 파국(asset_compromised,
+  water_supply_contamination). 위험 중 Blue 인터록 재무장 → blue_block_success. 실측: 인터록 ON 4ppm
+  캡·손상0, OFF 오염누적, Blue 재무장 → blue_block_success·손상 플래토 확인.
 - **ICS 시나리오 러너 런타임 검증**: 저작한 POWERPLANT-MODBUS-SABOTAGE-01 을 실제
   `SingleScenarioTracker` 에 통과 — Modbus 공격 이벤트(PP-002→PP-006→asset_compromised)로
   스테이지 자동판정(1/2/3)·점수(25/45/80)·chain_bonus(50)·requires_stage 순서강제 검증. 유닛 5개

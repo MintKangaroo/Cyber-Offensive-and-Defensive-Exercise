@@ -149,6 +149,7 @@ def _wu_on_write(kind: str, addr: int, vals: list) -> None:
                                 "impact": "chemical_overdose_public_health"})
     except Exception:
         pass
+    _wu_blue_defense(kind, addr, vals)   # 위험 중 인터록 재무장 → blue_block_success
 
 
 _wu_bank.on_write = _wu_on_write
@@ -162,6 +163,67 @@ async def _start_wu_modbus():
     try:
         _wu_server = await _modbus_serve(_wu_bank, "0.0.0.0", int(_os.environ.get("MODBUS_PORT", "502")))
     except OSError:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# 연속 물리(P1-1 심화) — 급수 저수조 염소 농도가 투입 설정으로 서서히 수렴(혼합 지연).
+# 인터록 정상이면 안전상한(4ppm)에서 캡(자동 감량), 해제되면 지속 과투입이 오염 손상으로 누적 →
+# 급수 오염 파국(공중보건). Blue 가 인터록 재무장하면 방어 성공. process_sim 재사용(터빈=농도 유추).
+# HR2=RESERVOIR_PPM(실측 농도), HR5=CONTAMINATION(손상%).
+# ---------------------------------------------------------------------------
+import asyncio as _wu_asyncio  # noqa: E402
+from shared.ics.process_sim import (ProcessState as _WState, ProcessParams as _WParams,  # noqa: E402
+                                    step as _w_step, has_failed as _w_failed, in_danger as _w_danger)
+
+# slew=1ppm/s 혼합, 안전상한 redline=4ppm, 온도항 비활성(k_heat=0, crit_temp 무한대), 오염 누적률 2.0
+_WU_PROC = _WParams(slew_rpm_per_s=1, nominal_rpm=0, ambient_temp=0, k_heat=0.0, k_cool=0.0,
+                    redline_rpm=4, crit_temp=1e9, damage_rpm_rate=2.0, damage_temp_rate=0.0,
+                    failure_threshold=100)
+_wu_proc = _WState(actual_rpm=float(_wu_bank.holding[0]), coolant_temp=0.0)
+_wu_failed = False
+_wu_bank.holding[2] = int(_wu_proc.actual_rpm)   # RESERVOIR_PPM
+
+
+@app.on_event("startup")
+async def _start_wu_sim():
+    async def _loop():
+        global _wu_proc, _wu_failed
+        while True:
+            cmd = float(_wu_bank.holding[0]); interlock = bool(_wu_bank.coils[0])
+            _wu_proc = _w_step(_wu_proc, cmd, 0.0, dt=0.5, p=_WU_PROC, interlock_engaged=interlock)
+            _wu_bank.holding[2] = int(_wu_proc.actual_rpm)
+            _wu_bank.holding[5] = int(_wu_proc.damage)
+            if _w_failed(_wu_proc, _WU_PROC) and not _wu_failed:
+                _wu_failed = True
+                try:
+                    _emit(event_id=Event.make_id("physics", _ASSET, "SAFETY", "CONTAM", str(_time.time())),
+                          event_type=EventType.asset_compromised, actor="red", target_asset=_ASSET,
+                          vuln_id="WTR-001", phase=RedPhase.objective, team_id="default",
+                          trace_id=Event.session_trace_id("physics", _ASSET),
+                          metadata={"protocol": "modbus", "safety_impact": "catastrophic_failure",
+                                    "impact": "water_supply_contamination_public_health",
+                                    "reservoir_ppm": int(_wu_proc.actual_rpm), "severity": "critical"})
+                except Exception:
+                    pass
+            elif interlock and _wu_proc.damage == 0:
+                _wu_failed = False
+            await _wu_asyncio.sleep(0.5)
+    _wu_asyncio.create_task(_loop())
+
+
+def _wu_blue_defense(kind: str, addr: int, vals: list) -> None:
+    """위험 중 인터록 재무장(coil0→ON) → blue_block_success(방어 성공)."""
+    try:
+        if kind == "coil" and addr == 0 and vals and bool(vals[0]) \
+                and not _wu_failed and _w_danger(_wu_proc, _WU_PROC):
+            _emit(event_id=Event.make_id("blue", _ASSET, "SIS-REARM", str(_time.time())),
+                  event_type=EventType.blue_block_success, actor="blue", target_asset=_ASSET,
+                  vuln_id="WTR-001", phase=RedPhase.objective, team_id="default",
+                  trace_id=Event.session_trace_id("modbus", _ASSET),
+                  metadata={"protocol": "modbus", "defense": "dosing_interlock_rearmed",
+                            "reservoir_ppm": int(_wu_proc.actual_rpm), "damage": int(_wu_proc.damage)})
+    except Exception:
         pass
 
 
