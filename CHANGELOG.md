@@ -3,6 +3,11 @@
 형식: [Keep a Changelog](https://keepachangelog.com/), 버전: [SemVer](https://semver.org/).
 
 ## [Unreleased]
+### Added
+- **역할별 홈(App Shell)**: gateway `/`(홈)이 `/auth/me`로 역할을 확인해 RBAC상 허용 앱 카드만
+  노출 + 주 화면 강조 + 사용자/역할/로그아웃 바(`infra/gateway/landing.html`). 로그인 후 `/`(홈)으로
+  라우팅. 실측(gateway+로그인, Playwright): instructor 6장·red 2장(Red·LiveFire)·blue 4장 필터 확인.
+
 ### Verified / CI
 - **풀스택 도커 통합 검증**: 신규 3종 + 변경 13종 서비스 컨테이너 빌드·기동(11/11 헬스 200) →
   스모크 36/36(SSE 포함) → 챌린지 QA 69/69 → 신규 서비스 E2E(observability 12/12 스크레이프) →

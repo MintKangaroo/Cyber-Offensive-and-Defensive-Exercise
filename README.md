@@ -483,14 +483,20 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 | 경로 | 대시보드 | 역할 |
 |---|---|---|
-| `/` | 랜딩(역할 선택) | 전체 |
+| `/` | **역할별 홈**(로그인 후 허용 앱만) | 전체 |
 | `/ops/` | Live Fire | 🎓 운영/관전 |
 | `/red/` | Red Portal | 🔴 Red |
 | `/blue/` | Blue Portal | 🔵 Blue |
 | `/blue/siem/` · `/blue/edr/` | SIEM · EDR 콘솔 | 🔵 Blue |
+| `/control/` | Control Tower | 🎓 instructor |
 
-<p align="center"><img src="docs/images/gateway-landing.png" alt="단일 진입점 랜딩" width="760"/><br/>
-<em>https://host/ — 역할 선택 랜딩(gateway). 프론트는 포트 하드코딩 없이 same-origin <code>/api/*</code>로 연결.</em></p>
+**역할별 홈(App Shell)**: 로그인하면 `/`(홈)이 `/auth/me`로 역할을 확인해 **그 역할이 쓸 수 있는 앱
+카드만** 보여주고, 주 화면을 강조(내 주 화면)한다 — red는 Red Portal+Live Fire, blue는 Blue/EDR/SIEM+
+Live Fire, instructor는 전체+Control Tower. 상단에 사용자·역할·로그아웃.
+
+<p align="center"><img src="docs/images/role-home.png" alt="역할별 홈(red)" width="620"/><br/>
+<em>역할별 홈 — red 로그인 시 허용 앱(Red Portal·Live Fire)만 노출. 실 gateway+로그인으로 검증
+(instructor 6장 / red 2장 / blue 4장).</em></p>
 
 > 프로덕션 프로파일은 토큰 미설정 시 **부팅 실패**(fail-fast)하고 `OBSERVER_READ_ENFORCE=true`로
 > read 접근까지 인증을 강제합니다. 실측: `https://host/red/` 가 gateway `/api/portal` 프록시로

@@ -23,9 +23,7 @@ document.getElementById('f').onsubmit=async(ev)=>{ev.preventDefault();
   const e=document.getElementById('e');e.textContent='';
   const r=await fetch('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({username:u.value,password:p.value})});
-  if(r.ok){const d=await r.json();
-    const home={instructor:'/ops/',red:'/red/',blue:'/blue/',observer:'/ops/'}[d.role]||'/';
-    location.href=home;
-  }else{e.textContent='로그인 실패 — 자격증명 확인';}
+  if(r.ok){ location.href='/'; }   // 역할별 홈으로 — 허용 앱만 보이고 주 화면 강조
+  else{e.textContent='로그인 실패 — 자격증명 확인';}
 };
 </script></body></html>

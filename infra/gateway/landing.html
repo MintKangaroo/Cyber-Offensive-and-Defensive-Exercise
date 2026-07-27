@@ -1,25 +1,58 @@
 <!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Cyber Range — 진입</title><style>
+<title>Cyber Range — 홈</title><style>
 *{margin:0;box-sizing:border-box;font-family:ui-monospace,Menlo,monospace}
-body{min-height:100vh;background:#0A0E1A;color:#E8EDF5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2rem;padding:2rem}
+body{min-height:100vh;background:#0A0E1A;color:#E8EDF5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.5rem;padding:2rem}
 h1{font-size:1.6rem;letter-spacing:.15em;color:#22D3EE}.sub{color:#6B7A99;font-size:.8rem;letter-spacing:.1em}
+.who{display:flex;align-items:center;gap:1rem;font-size:.8rem;color:#8A98B8;border:1px solid #1E2A3F;border-radius:10px;padding:.5rem 1rem;min-height:0}
+.who b{color:#E8EDF5}.who .rolechip{text-transform:uppercase;letter-spacing:.08em;padding:2px 8px;border-radius:6px;border:1px solid currentColor;font-size:.68rem}
+.who.red .rolechip{color:#FB7185}.who.blue .rolechip{color:#22D3EE}.who.instructor .rolechip{color:#F5A623}.who.observer .rolechip{color:#A78BFA}
+button.out{background:none;border:1px solid #1E2A3F;border-radius:6px;color:#6B7A99;padding:4px 10px;font-size:.7rem;cursor:pointer}
+button.out:hover{color:#FB7185;border-color:#FB7185}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1rem;max-width:840px;width:100%}
-a.card{display:block;text-decoration:none;border:1px solid #1E2A3F;border-radius:12px;padding:1.4rem;background:#111725;transition:.15s}
+a.card{display:block;text-decoration:none;border:1px solid #1E2A3F;border-radius:12px;padding:1.4rem;background:#111725;transition:.15s;position:relative}
 a.card:hover{transform:translateY(-2px)}
+a.card.primary{box-shadow:0 0 0 1px currentColor inset}
+a.card.primary::after{content:"내 주 화면";position:absolute;top:8px;right:10px;font-size:.6rem;color:#6B7A99;letter-spacing:.06em}
 .role{font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.4rem}
 .name{font-size:1.1rem;color:#E8EDF5}.desc{font-size:.75rem;color:#6B7A99;margin-top:.4rem;line-height:1.4}
 .red{border-color:#FB7185}.red .role{color:#FB7185}.blue{border-color:#22D3EE}.blue .role{color:#22D3EE}
 .ops{border-color:#F5A623}.ops .role{color:#F5A623}
 .ctl{border-color:#34D399}.ctl .role{color:#34D399}
 </style></head><body>
-<div style="text-align:center"><h1>🛡️ CYBER RANGE PLATFORM</h1><div class="sub">역할을 선택해 진입하세요 · TRAINING ENVIRONMENT</div></div>
-<div class="grid">
-  <a class="card red" href="/red/"><div class="role">🔴 Red Team</div><div class="name">Red Portal</div><div class="desc">챌린지 풀이·아티팩트·플래그 제출</div></a>
-  <a class="card blue" href="/blue/"><div class="role">🔵 Blue Team</div><div class="name">Blue Portal</div><div class="desc">인시던트·패치·탐지 규칙</div></a>
-  <a class="card blue" href="/blue/edr/"><div class="role">🔵 Blue</div><div class="name">EDR 콘솔</div><div class="desc">프로세스 격리·kill</div></a>
-  <a class="card blue" href="/blue/siem/"><div class="role">🔵 Blue</div><div class="name">SIEM 콘솔</div><div class="desc">로그 검색·탐지·헌팅</div></a>
-  <a class="card ops" href="/ops/"><div class="role">🎓 Ops</div><div class="name">Live Fire</div><div class="desc">상황판·점수·교관 통제·관전</div></a>
-  <a class="card ctl" href="/control/"><div class="role">◎ Control</div><div class="name">Control Tower</div><div class="desc">전 서비스 헬스·실시간 피드·시나리오/안전 통제 (단일 관리)</div></a>
+<div style="text-align:center"><h1>🛡️ CYBER RANGE PLATFORM</h1><div class="sub" id="sub">TRAINING ENVIRONMENT</div></div>
+<div class="who" id="who" style="display:none">
+  <span>👤 <b id="uname">—</b></span><span class="rolechip" id="rchip">—</span>
+  <button class="out" onclick="logout()">로그아웃</button>
+</div>
+<div class="grid" id="grid">
+  <a class="card red"  data-roles="red instructor"        data-primary="red"        href="/red/"><div class="role">🔴 Red Team</div><div class="name">Red Portal</div><div class="desc">챌린지 풀이·아티팩트·플래그 제출</div></a>
+  <a class="card blue" data-roles="blue instructor"       data-primary="blue"       href="/blue/"><div class="role">🔵 Blue Team</div><div class="name">Blue Portal</div><div class="desc">인시던트·패치·탐지 규칙</div></a>
+  <a class="card blue" data-roles="blue instructor"                                  href="/blue/edr/"><div class="role">🔵 Blue</div><div class="name">EDR 콘솔</div><div class="desc">프로세스 격리·kill</div></a>
+  <a class="card blue" data-roles="blue instructor"                                  href="/blue/siem/"><div class="role">🔵 Blue</div><div class="name">SIEM 콘솔</div><div class="desc">로그 검색·탐지·헌팅</div></a>
+  <a class="card ops"  data-roles="red blue observer instructor" data-primary="observer" href="/ops/"><div class="role">🎓 Ops</div><div class="name">Live Fire</div><div class="desc">상황판·점수·교관 통제·관전</div></a>
+  <a class="card ctl"  data-roles="instructor"             data-primary="instructor" href="/control/"><div class="role">◎ Control</div><div class="name">Control Tower</div><div class="desc">전 서비스 헬스·실시간 피드·시나리오/안전 통제</div></a>
 </div>
 <div class="sub" style="font-size:.68rem">⚠️ 의도적으로 취약한 훈련 환경 — 인터넷에 노출하지 마세요 (SECURITY.md)</div>
-</body></html>
+<script>
+async function logout(){ try{ await fetch('/auth/logout',{method:'POST'}); }catch(_){}
+  location.href='/login'; }
+// 역할 인지: /auth/me 로 로그인 사용자 확인 → 허용 카드만 노출 + 주 화면 강조 + 인사.
+(async function(){
+  let me=null;
+  try{ const r=await fetch('/auth/me',{credentials:'include'}); if(r.ok) me=await r.json(); }catch(_){}
+  const cards=[...document.querySelectorAll('a.card')];
+  if(me && me.role){
+    const role=me.role;
+    document.getElementById('sub').textContent='역할별 홈 · TRAINING ENVIRONMENT';
+    const who=document.getElementById('who'); who.style.display='flex'; who.classList.add(role);
+    document.getElementById('uname').textContent=me.username||'user';
+    document.getElementById('rchip').textContent=role;
+    cards.forEach(c=>{
+      const roles=(c.dataset.roles||'').split(' ');
+      if(!roles.includes(role)){ c.style.display='none'; return; }
+      if((c.dataset.primary||'')===role) c.classList.add('primary');
+    });
+  }
+  // 미로그인: 전체 카드 노출(공개 진입) — 클릭 시 로그인 게이트로.
+})();
+</script></body></html>
