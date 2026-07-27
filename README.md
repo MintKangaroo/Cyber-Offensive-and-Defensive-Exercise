@@ -5,6 +5,10 @@
 > Red(공격) · Blue(방어) · 관전자 · 교관이 함께 훈련하는 **풀스택 사이버 레인지**입니다.
 > 취약 서비스 트윈(**60종**), EDR, SIEM, 시나리오 엔진, 실시간 대시보드, 자동 채점(AAR),
 > 그리고 7개 분야 **69개 CTF 챌린지**를 하나의 `docker compose`로 기동합니다.
+>
+> 여기에 **실제 Modbus/TCP 를 말하는 ICS 트윈**(공격→물리 파괴→탐지→방어 완전 공방 루프),
+> **SSE 실시간 상황판 + 단일 관리 콘솔(Control Tower)**, **인시던트·안티치트·위기 인젝트**,
+> **Prometheus 관측성·시나리오 저작 도구**까지 갖춘 운영형 레인지입니다.
 
 <p align="center">
   <img src="docs/images/livefire-overview.png" alt="Live Fire Range 대시보드" width="900"/>
@@ -15,17 +19,26 @@
 ---
 
 ## 목차
-- [무엇을 하는 플랫폼인가](#무엇을-하는-플랫폼인가)
-- [아키텍처](#아키텍처)
-- [주요 화면 (스크린샷)](#주요-화면-스크린샷)
-- [핵심 기능](#핵심-기능)
-- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종)
-- [챌린지 카탈로그 (69종)](#챌린지-카탈로그-69종)
-- [빠른 시작](#빠른-시작)
-- [검증 · 품질 게이트](#검증--품질-게이트)
-- [RBAC (역할 기반 접근제어)](#rbac-역할-기반-접근제어)
-- [실전 운영 (다중 팀 · 초기화 · 안전 통제)](#실전-운영-다중-팀--초기화--안전-통제)
-- [저장소 구조](#저장소-구조)
+
+**소개 · 구조**
+- [무엇을 하는 플랫폼인가](#무엇을-하는-플랫폼인가) · [아키텍처](#아키텍처) · [주요 화면](#주요-화면-스크린샷) · [핵심 기능](#핵심-기능)
+- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (69종)](#챌린지-카탈로그-69종)
+
+**시작 · 품질 · 접근제어**
+- [빠른 시작](#빠른-시작) · [검증 · 품질 게이트](#검증--품질-게이트) · [RBAC](#rbac-역할-기반-접근제어)
+
+**플랫폼 · 운영 도구**
+- [실시간 푸시 (SSE, P0-4)](#실시간-푸시-p0-4--폴링-제거) · [통합 관리 콘솔 — Control Tower](#통합-관리-콘솔--control-tower-단일-화면-운영)
+- [실전 운영 (다중 팀 · 초기화 · 안전 통제)](#실전-운영-다중-팀--초기화--안전-통제) — #9~#11
+- [경쟁 무결성 · SOC 케이스 운영](#경쟁-무결성--soc-케이스-운영) — #12 안티치트 · #13 인시던트 · #14 인젝트
+- [플랫폼 관측성 · 시나리오 저작](#플랫폼-관측성--시나리오-저작) — #15 관측성 · #16 저작
+
+**ICS·OT 리얼리즘**
+- [실제 Modbus 프로토콜 · 물리 시뮬 · 종합 리포트](#icsot-프로토콜-리얼리즘--종합-리포트) — #17~#18
+- 📖 심화: [ICS 킬체인 엔드투엔드](docs/ICS-KILLCHAIN.md) · [멀티테넌트](docs/MULTI-TENANT.md) · [갭 분석](docs/GAP_ANALYSIS.md)
+
+**기타**
+- [저장소 구조](#저장소-구조) · [라이선스 · 주의](#라이선스--주의)
 
 ---
 
@@ -146,6 +159,10 @@ EDR 8080 · AAR 8090 · **Match vhost 8088** · 대시보드 5173–5177(EDR/Liv
 | **복구 판정** | NOC Monitor가 트윈 헬스를 폴링, 침해→패치→복구를 판정해 MTTR 산출·Blue 가점. |
 | **RBAC** | instructor/red/blue/observer 역할별 토큰. 방어 액션은 instructor·blue, 조작은 instructor, **관전자는 읽기 전용**. |
 | **실전 운영(Range Control)** | **다중 팀 테넌트 격리**(Range→Match→Team→TwinSet, 매치별 물리 트윈 셋·플래그 회전) · **재현 가능 초기화**(snapshot/reset/drift/verify-baseline) · **교관 안전 통제**(긴급정지·격리 상태). → [실전 운영 섹션](#실전-운영-다중-팀--초기화--안전-통제) |
+| **실시간 상황판** | **SSE 단일 허브**(폴링 제거, 관전자 100명 반영지연 p95 77ms) + **Control Tower**(전 서비스 헬스·라이브 피드·시나리오/긴급정지 단일 관리, 워룸·모바일 반응형). → [실시간 푸시](#실시간-푸시-p0-4--폴링-제거) · [Control Tower](#통합-관리-콘솔--control-tower-단일-화면-운영) |
+| **경쟁 무결성 · SOC** | 플래그 **rate-limit·lockout·담합 탐지**(안티치트) · **인시던트 케이스**(알림→승격·SLA·MTTA/MTTR·AAR) · **비기술 인젝트**(언론/규제 위기대응·루브릭 채점). → [무결성·SOC](#경쟁-무결성--soc-케이스-운영) |
+| **관측성 · 저작** | Prometheus `/metrics` 전 서비스 집계 · 시나리오 **lint·dry-run·phase-clock** 저작 도구. → [관측성·저작](#플랫폼-관측성--시나리오-저작) |
+| **ICS 실프로토콜 공방** | power_plant·water_utility가 **실제 Modbus/TCP(502)** 를 말함 → 공격(SIS 무력화·과속) → **연속 물리 파괴** → MITRE ICS 탐지(SIEM) → Blue **SIS 재무장 방어**. → [ICS 킬체인](docs/ICS-KILLCHAIN.md) |
 | **69 챌린지** | 7개 분야 × easy~insane. 팀별 동적 플래그(HMAC)로 답 공유 방지. 전부 자동 QA 통과. |
 
 ---
@@ -654,6 +671,10 @@ Safety Status                          containment 100%
 ```
 `POST /safety/emergency-stop [/release]` 전역 긴급정지(killswitch) · `POST /safety/team-pause` 특정 팀 정지.
 
+---
+
+## 경쟁 무결성 · SOC 케이스 운영
+
 ### #12 공정성 · 안티치트 (P1-5)
 대회 무결성을 위해 플래그 제출 경로(`challenge_portal`)에 통제를 얹었다(`anticheat.py`).
 
@@ -717,6 +738,10 @@ score rubric{9,8,5} → 22/25    |  scoreboard: blue_alpha score_pct=88, on_time
 지각 케이스: raw 20 → late 0.5× → 최종 10 (late_penalty_applied=true)
 ```
 
+---
+
+## 플랫폼 관측성 · 시나리오 저작
+
 ### #15 플랫폼 관측성 (Observability, P2-5)
 서비스가 18개+로 늘면서 "지금 뭐가 살아있고 얼마나 느린가"를 한곳에서 봐야 한다.
 `services/observability`(8097)가 전 서비스 `/health` 를 **비동기 스크레이프**해 표준 지표로
@@ -762,6 +787,10 @@ POST /scenario/validate (중복 stage + 없는 vuln + points -5):
 GET /scenario/AIRPORT-DISRUPT-01/phase-clock?elapsed_sec=700 (1800s/3stage):
   → current_stage=2, remaining=1100, stage_remaining=500
 ```
+
+---
+
+## ICS·OT 프로토콜 리얼리즘 · 종합 리포트
 
 ### #17 트윈 프로토콜 리얼리즘 — 실제 Modbus/TCP (P1-1)
 지금까지 트윈의 "Modbus"는 HTTP 목(`/api/modbus/...`)이었다. 이제 **power_plant 트윈이 502에서
