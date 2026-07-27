@@ -67,3 +67,9 @@ def step(state: ProcessState, cmd_rpm: float, coolant_flow: float,
 
 def has_failed(state: ProcessState, p: ProcessParams) -> bool:
     return state.damage >= p.failure_threshold
+
+
+def in_danger(state: ProcessState, p: ProcessParams) -> bool:
+    """공정이 위험 상태인가(redline 초과·임계온도 초과·손상 진행). 방어 액션 유효성 판정용."""
+    return (state.actual_rpm > p.redline_rpm or state.coolant_temp > p.crit_temp
+            or state.damage > 0)

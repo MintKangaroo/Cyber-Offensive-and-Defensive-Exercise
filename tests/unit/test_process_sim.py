@@ -3,7 +3,7 @@ ICS 연속 물리 시뮬(P1-1 심화) 계약 고정.
 레지스터가 순간값이 아니라 실제 공정처럼 동역학적으로 반응한다 — 터빈 RPM 은 명령값으로
 slew-rate 제한을 받으며 상승하고, 냉각수 온도는 RPM(발열)·유량(냉각)에 따라 변한다.
 """
-from shared.ics.process_sim import ProcessState, ProcessParams, step, has_failed
+from shared.ics.process_sim import ProcessState, ProcessParams, step, has_failed, in_danger
 
 
 P = ProcessParams(slew_rpm_per_s=500, nominal_rpm=3000, ambient_temp=40,
@@ -82,3 +82,10 @@ def test_engaged_interlock_never_fails():
     for _ in range(500):
         s = step(s, cmd_rpm=9000, coolant_flow=0, dt=1.0, p=P, interlock_engaged=True)
     assert not has_failed(s, P) and s.actual_rpm == P.redline_rpm
+
+
+def test_in_danger_predicate():
+    assert in_danger(ProcessState(5000, 40, 0), P) is True      # 과속
+    assert in_danger(ProcessState(3000, 130, 0), P) is True     # 과열
+    assert in_danger(ProcessState(3000, 40, 5), P) is True      # 손상 진행
+    assert in_danger(ProcessState(3000, 40, 0), P) is False     # 정상

@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 ### Added
+- **P1-1 — Blue 방어 액션 채점(SIS 재무장)**: 위험 상태에서 Blue 가 안전 인터록을 재무장
+  (Modbus coil0→ON)하면 `blue_block_success` 발행 → Blue 점수. `process_sim.in_danger()` 순수판정.
+  재무장 시 다음 tick 부터 트립이 걸려 파국 방지 — Red 의 T0878 무력화와 대칭. 유닛 1개(229→230).
+  실측: 공격 중(DAMAGE=10) Blue 재무장 → blue_block_success·DAMAGE 플래토(파국 없음) 확인.
 - **P1-1 심화 — 물리 손상·SIS 트립 연결**: `process_sim.step()` 에 인터록 인지 추가 — 인터록 정상이면
   redline(4500)에서 **트립(RPM 캡)·손상 0**, 해제되면 지속 과속/과열이 **누적 손상 → 파국**
   (failure_threshold). power_plant 배경 루프가 HR4=DAMAGE 갱신 + 파국 에지에 `asset_compromised`

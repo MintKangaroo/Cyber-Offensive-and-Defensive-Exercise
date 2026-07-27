@@ -121,7 +121,7 @@ _modbus_server = None
 
 # 연속 물리 시뮬(P1-1 심화): HR2=ACTUAL_RPM, HR3=COOLANT_TEMP (읽기전용 텔레메트리).
 # 명령(HR0)·유량(HR1)에 따라 동역학적으로 반응 — 공격자는 즉시반영이 아닌 프로세스 응답을 읽어야.
-from shared.ics.process_sim import ProcessState, ProcessParams, step as _proc_step, has_failed as _has_failed  # noqa: E402
+from shared.ics.process_sim import ProcessState, ProcessParams, step as _proc_step, has_failed as _has_failed, in_danger as _in_danger  # noqa: E402
 _PROC_PARAMS = ProcessParams(slew_rpm_per_s=400, nominal_rpm=3000, ambient_temp=40, k_heat=0.02, k_cool=0.5)
 _proc_state = ProcessState(actual_rpm=float(_modbus_bank.holding[0]), coolant_temp=40.0)
 _proc_failed = False
@@ -229,6 +229,23 @@ def _on_modbus_write(kind: str, addr: int, vals: list) -> None:
                               "register": b["register"], "value": b["value"],
                               "limit": b["limit"], "severity": b["severity"]},
                 )
+    except Exception:
+        pass
+
+    # Blue 방어 액션(P1-1): 위험 중 안전 인터록 재무장(coil0→ON) → 방어 성공(blue_block_success).
+    # SIS 를 되살리면 다음 tick 부터 트립이 걸려 파국을 막는다. Red 의 T0878 무력화와 대칭.
+    try:
+        if kind == "coil" and addr == 0 and vals and bool(vals[0]) \
+                and not _proc_failed and _in_danger(_proc_state, _PROC_PARAMS):
+            emit_event(
+                event_id=Event.make_id("blue", ASSET_NAME, "SIS-REARM", str(time.time())),
+                event_type=EventType.blue_block_success, actor="blue", target_asset=ASSET_NAME,
+                vuln_id="PP-006", phase=RedPhase.lateral_movement, team_id="default",
+                trace_id=Event.session_trace_id("modbus", ASSET_NAME),
+                metadata={"protocol": "modbus", "defense": "safety_interlock_rearmed",
+                          "actual_rpm": int(_proc_state.actual_rpm),
+                          "damage": int(_proc_state.damage)},
+            )
     except Exception:
         pass
 

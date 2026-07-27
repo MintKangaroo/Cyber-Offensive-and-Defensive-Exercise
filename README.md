@@ -829,6 +829,18 @@ t1 = 6000,0,3400,46   t2 = 6000,0,3800,60   t3 = 6000,0,4200,82
 > 실제 ICS 파괴(예: Aurora/과속 파괴)처럼 공격자는 **SIS 를 무력화하고 그 상태를 '지속'** 해야
 > 자산이 파괴된다. 방어자가 인터록을 재무장하면 트립이 걸려 파괴를 막는다.
 
+**Blue 방어 채점(대칭 루프)** — 위험 상태에서 Blue 가 **안전 인터록을 재무장**(Modbus coil0→ON)하면
+`blue_block_success` 로 **방어 점수**를 얻고, 다음 tick 부터 트립이 걸려 파국을 막는다:
+
+```text
+# 실측: Red 공격 → Blue 방어
+Red: 인터록 OFF + 과속 → DAMAGE 상승(10...)
+Blue: 인터록 재무장(coil ON) → blue_block_success(safety_interlock_rearmed) + DAMAGE 플래토(파국 없음)
+```
+
+> Red 의 `T0878`(SIS 무력화)과 Blue 의 SIS 재무장이 **대칭 점수 루프**를 이룬다 — 공격도 방어도
+> 실제 Modbus 조작으로 수행하고, 각각 scoring 에 연동된다.
+
 **ICS 이상탐지(red→blue, `shared/ics/anomaly.py`)** — Red 의 실제 Modbus 공격을 Blue/SIEM 이
 탐지·분류할 수 있게, 각 Modbus 쓰기를 **MITRE ATT&CK for ICS** 기법으로 분류해 이벤트 metadata
 (`ics_technique`/`ics_severity`/`ics_reason`)에 실어 발행한다:
