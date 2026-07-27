@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 ### Added
+- **ICS 시나리오 러너 런타임 검증**: 저작한 POWERPLANT-MODBUS-SABOTAGE-01 을 실제
+  `SingleScenarioTracker` 에 통과 — Modbus 공격 이벤트(PP-002→PP-006→asset_compromised)로
+  스테이지 자동판정(1/2/3)·점수(25/45/80)·chain_bonus(50)·requires_stage 순서강제 검증. 유닛 5개
+  (230→235). ICS 공방이 취약트윈→공격→물리결과→탐지→방어→시나리오 채점까지 런타임 폐루프.
 - **ICS 킬체인 시나리오 저작**: `scenarios/single/POWERPLANT-MODBUS-SABOTAGE-01.yaml` — 실제 Modbus
   SIS 무력화 킬체인(HMI 접근 → 인터록 OFF → 지속 과속 파괴)을 교관용 훈련 시나리오로 저작. Blue
   탐지목표(ICS-MODBUS-WRITE-PP·ICS-SAFETY-INTERLOCK-SUPPRESS) 포함. P1-3 도구로 검증: 스키마 로드·
