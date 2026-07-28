@@ -6,4 +6,5 @@ COPY shared/ shared/
 COPY services/lng_terminal/ services/lng_terminal/
 WORKDIR /app/services/lng_terminal
 EXPOSE 8204
+EXPOSE 502
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8204"]

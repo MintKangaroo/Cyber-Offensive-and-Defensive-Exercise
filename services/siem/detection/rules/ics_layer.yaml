@@ -19,6 +19,24 @@
   match:
     vuln_id: "WTR-001"
 
+- id: ICS-MODBUS-WRITE-REF
+  title: "ICS 미인가 Modbus 쓰기 - 정유(과압)"
+  severity: 5
+  mitre: [T0836, T0855]
+  source_type: twin
+  kind: match
+  match:
+    vuln_id: "REF-004"
+
+- id: ICS-MODBUS-WRITE-LNG
+  title: "ICS 미인가 Modbus 쓰기 - LNG(ESD)"
+  severity: 5
+  mitre: [T0836, T0855]
+  source_type: twin
+  kind: match
+  match:
+    vuln_id: "LNG-001"
+
 - id: ICS-SAFETY-INTERLOCK-SUPPRESS
   title: "ICS 안전 인터록/알람 비활성화"
   severity: 5

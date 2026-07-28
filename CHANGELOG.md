@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 ### Added
+- **ICS 실 Modbus 트윈 확장(refinery·lng) + 재사용 헬퍼**: `shared/ics/twin_modbus.py` —
+  검증된 power_plant/water_utility 배선(실 Modbus+연속물리+안전결과+MITRE 탐지+Blue 방어)을
+  `attach_modbus_ics(app, cfg)` 한 줄로 패키징. **refinery_plant**(증류탑 과압→폭발, REF-004)·
+  **lng_terminal**(탱크 과압→파열, LNG-001)에 적용 → 실 Modbus 502. SIEM 규칙 ICS-MODBUS-WRITE-REF/LNG
+  추가. 헬퍼 유닛 3개(235→238). 실측: 4개 ICS 트윈 컨테이너 내 실 Modbus, refinery 공격 → 라이브
+  탐지(ICS-MODBUS-WRITE-REF 3× blue_detection_success) → Blue 점수 +60.
 - **역할별 홈(App Shell)**: gateway `/`(홈)이 `/auth/me`로 역할을 확인해 RBAC상 허용 앱 카드만
   노출 + 주 화면 강조 + 사용자/역할/로그아웃 바(`infra/gateway/landing.html`). 로그인 후 `/`(홈)으로
   라우팅. 실측(gateway+로그인, Playwright): instructor 6장·red 2장(Red·LiveFire)·blue 4장 필터 확인.

@@ -829,9 +829,12 @@ FC 99(illegal) → 예외 응답 code 1
 > |---|---|---|
 > | power_plant | 0=TURBINE_RPM(≤4500)·1=COOLANT_FLOW(≥50) | 터빈 과속(over_max) |
 > | water_utility | 0=CHLORINE_PPM(≤4)·1=INTAKE_PUMP_RATE | 염소 과투입(공중보건, chemical_overdose) |
+> | refinery_plant | 0=COLUMN_PRESSURE(≤8bar)·1=FEED_RATE | 증류탑 과압 폭발(overpressure_explosion) |
+> | lng_terminal | 0=TANK_PRESSURE(≤200)·1=BOG_COMPRESSOR | LNG 탱크 파열·증기운(vapor_cloud) |
 >
-> **두 트윈 모두 대칭**: 연속물리(HR2 실측 텔레메트리)·SIS 트립·지속손상→파국(power_plant=터빈
-> 파괴, water_utility=급수 오염)·Blue 인터록 재무장 방어(blue_block_success)·MITRE ICS 탐지 완비.
+> **4개 트윈 모두 대칭**: 연속물리(HR2 실측 텔레메트리)·SIS 트립·지속손상→파국·Blue 인터록 재무장
+> 방어(blue_block_success)·MITRE ICS 탐지 완비. 신규 트윈은 **재사용 헬퍼**(`shared/ics/twin_modbus.py`,
+> `attach_modbus_ics(app, cfg)` 한 줄)로 섹터별 레지스터/물리/안전 프로파일만 채워 확장.
 
 **물리 안전 결과(SIS 시뮬, `shared/ics/safety.py`)** — Modbus 쓰기가 만든 상태가 위험한지 판정한다.
 안전 인터록이 걸려 있으면 트립으로 **억제**, 공격자가 인터록을 해제하면 **억제 실패 = 물리 임팩트**:

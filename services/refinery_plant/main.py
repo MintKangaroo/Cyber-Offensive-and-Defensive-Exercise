@@ -77,6 +77,28 @@ VULNS = [
 
 app = make_ics_twin("refinery_plant", "Refinery/Petrochemical DCS/SIS Twin", VULNS)
 
+# 실제 Modbus/TCP(P1-1) — 증류탑 압력 제어. HR0=압력설정(bar)·HR1=피드율·HR2=ACTUAL·HR4=DAMAGE.
+# coil0=SIS(과압 릴리프 인터록). 인터록 해제 + 과압(>8bar) 지속 → 과압 폭발(asset_compromised).
+from shared.ics.twin_modbus import attach_modbus_ics, ModbusIcsConfig  # noqa: E402
+from shared.ics.safety import SafetyProfile  # noqa: E402
+from shared.ics.anomaly import IcsBaseline, RegBand  # noqa: E402
+from shared.ics.process_sim import ProcessParams  # noqa: E402
+
+attach_modbus_ics(app, ModbusIcsConfig(
+    asset="refinery_plant", vuln_id="REF-004",
+    reg_names={0: "COLUMN_PRESSURE", 1: "FEED_RATE"},
+    holding_init=[4, 50], coils_init=[True],
+    cmd_reg=0, actual_reg=2, damage_reg=4, interlock_coil=0,
+    safety=SafetyProfile(name="refinery_plant",
+                         limits={0: {"name": "COLUMN_PRESSURE", "max": 8}}, interlock_coil=0),
+    anomaly=IcsBaseline(name="refinery_plant",
+                        registers={0: RegBand("COLUMN_PRESSURE", 3, 8, protected=True),
+                                   1: RegBand("FEED_RATE", 0, 100)}, safety_coils={0}),
+    proc=ProcessParams(slew_rpm_per_s=1, nominal_rpm=0, ambient_temp=0, k_heat=0.0, k_cool=0.0,
+                       redline_rpm=8, crit_temp=1e9, damage_rpm_rate=2.0, damage_temp_rate=0.0,
+                       failure_threshold=100),
+    impact="overpressure_explosion"))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8201)

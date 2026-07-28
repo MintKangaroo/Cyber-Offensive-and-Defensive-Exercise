@@ -71,6 +71,28 @@ VULNS = [
 
 app = make_ics_twin("lng_terminal", "LNG Terminal ESD/BOG Twin", VULNS)
 
+# 실제 Modbus/TCP(P1-1) — LNG 탱크 압력. HR0=탱크압력설정(mbar)·HR1=BOG압축기율·HR2=ACTUAL·HR4=DAMAGE.
+# coil0=ESD(긴급차단 인터록). ESD 해제 + 과압(>200) 지속 → 탱크 파열/증기운(asset_compromised).
+from shared.ics.twin_modbus import attach_modbus_ics, ModbusIcsConfig  # noqa: E402
+from shared.ics.safety import SafetyProfile  # noqa: E402
+from shared.ics.anomaly import IcsBaseline, RegBand  # noqa: E402
+from shared.ics.process_sim import ProcessParams  # noqa: E402
+
+attach_modbus_ics(app, ModbusIcsConfig(
+    asset="lng_terminal", vuln_id="LNG-001",
+    reg_names={0: "TANK_PRESSURE", 1: "BOG_COMPRESSOR"},
+    holding_init=[120, 60], coils_init=[True],
+    cmd_reg=0, actual_reg=2, damage_reg=4, interlock_coil=0,
+    safety=SafetyProfile(name="lng_terminal",
+                         limits={0: {"name": "TANK_PRESSURE", "max": 200}}, interlock_coil=0),
+    anomaly=IcsBaseline(name="lng_terminal",
+                        registers={0: RegBand("TANK_PRESSURE", 80, 200, protected=True),
+                                   1: RegBand("BOG_COMPRESSOR", 0, 100)}, safety_coils={0}),
+    proc=ProcessParams(slew_rpm_per_s=20, nominal_rpm=0, ambient_temp=0, k_heat=0.0, k_cool=0.0,
+                       redline_rpm=200, crit_temp=1e9, damage_rpm_rate=0.1, damage_temp_rate=0.0,
+                       failure_threshold=100),
+    impact="lng_tank_rupture_vapor_cloud", defense_label="esd_rearmed"))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8204)
