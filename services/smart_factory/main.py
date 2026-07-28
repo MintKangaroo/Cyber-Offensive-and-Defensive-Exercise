@@ -78,6 +78,21 @@ VULNS = [
 
 app = make_ics_twin("smart_factory", "Smart Factory PLC/Robot/MES Twin", VULNS)
 
+# 실제 Modbus/TCP(P1-1) — 로봇 속도. HR0=ROBOT_SPEED(%)·HR2=ACTUAL·HR4=DAMAGE. coil0=E-STOP.
+# E-stop 우회 + 과속(>100%) 지속 → 로봇 충돌/부상(asset_compromised).
+from shared.ics.twin_modbus import attach_modbus_ics, ModbusIcsConfig  # noqa: E402
+from shared.ics.safety import SafetyProfile  # noqa: E402
+from shared.ics.anomaly import IcsBaseline, RegBand  # noqa: E402
+from shared.ics.process_sim import ProcessParams  # noqa: E402
+attach_modbus_ics(app, ModbusIcsConfig(
+    asset="smart_factory", vuln_id="FAC-004", reg_names={0: "ROBOT_SPEED", 1: "PAYLOAD"},
+    holding_init=[60, 20], coils_init=[True], cmd_reg=0, actual_reg=2, damage_reg=4, interlock_coil=0,
+    safety=SafetyProfile(name="smart_factory", limits={0: {"name": "ROBOT_SPEED", "max": 100}}, interlock_coil=0),
+    anomaly=IcsBaseline(name="smart_factory", registers={0: RegBand("ROBOT_SPEED", 0, 100, protected=True)}, safety_coils={0}),
+    proc=ProcessParams(slew_rpm_per_s=20, nominal_rpm=0, k_heat=0.0, k_cool=0.0, redline_rpm=100,
+                       crit_temp=1e9, damage_rpm_rate=0.5, damage_temp_rate=0.0, failure_threshold=100),
+    impact="robot_collision_injury", defense_label="estop_rearmed"))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8202)

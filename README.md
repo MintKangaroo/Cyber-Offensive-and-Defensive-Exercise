@@ -827,14 +827,19 @@ FC 99(illegal) → 예외 응답 code 1
 >
 > | 트윈 | 홀딩 레지스터 | 인터록 해제 시 임팩트 |
 > |---|---|---|
-> | power_plant | 0=TURBINE_RPM(≤4500)·1=COOLANT_FLOW(≥50) | 터빈 과속(over_max) |
-> | water_utility | 0=CHLORINE_PPM(≤4)·1=INTAKE_PUMP_RATE | 염소 과투입(공중보건, chemical_overdose) |
-> | refinery_plant | 0=COLUMN_PRESSURE(≤8bar)·1=FEED_RATE | 증류탑 과압 폭발(overpressure_explosion) |
-> | lng_terminal | 0=TANK_PRESSURE(≤200)·1=BOG_COMPRESSOR | LNG 탱크 파열·증기운(vapor_cloud) |
+> | power_plant | TURBINE_RPM(≤4500) | 터빈 과속 파괴 |
+> | water_utility | CHLORINE_PPM(≤4) | 염소 과투입(공중보건) |
+> | refinery_plant | COLUMN_PRESSURE(≤8bar) | 증류탑 과압 폭발 |
+> | lng_terminal | TANK_PRESSURE(≤200) | LNG 탱크 파열·증기운 |
+> | smart_factory | ROBOT_SPEED(≤100) | 로봇 충돌·부상 |
+> | railway_signaling | TRAIN_SPEED(≤120) | 탈선·충돌 |
+> | airport_ot | FUEL_PRESSURE(≤50) | 급유 과압·화재 |
+> | datacenter_bms | RACK_TEMP(≤35℃) | 열 폭주 |
+> | hospital_ot | INFUSION_RATE(≤200) | 약물 과다투여 |
 >
-> **4개 트윈 모두 대칭**: 연속물리(HR2 실측 텔레메트리)·SIS 트립·지속손상→파국·Blue 인터록 재무장
-> 방어(blue_block_success)·MITRE ICS 탐지 완비. 신규 트윈은 **재사용 헬퍼**(`shared/ics/twin_modbus.py`,
-> `attach_modbus_ics(app, cfg)` 한 줄)로 섹터별 레지스터/물리/안전 프로파일만 채워 확장.
+> **9개 ICS 섹터 트윈이 실 Modbus/502 로 대칭**: 연속물리(HR2 실측 텔레메트리)·SIS 트립·지속손상→파국·
+> Blue 인터록 재무장 방어(blue_block_success)·MITRE ICS 탐지(SIEM 규칙 9종) 완비. 신규 트윈은
+> **재사용 헬퍼**(`shared/ics/twin_modbus.py`, `attach_modbus_ics(app, cfg)` 한 줄, ~15줄)로 확장.
 
 **물리 안전 결과(SIS 시뮬, `shared/ics/safety.py`)** — Modbus 쓰기가 만든 상태가 위험한지 판정한다.
 안전 인터록이 걸려 있으면 트립으로 **억제**, 공격자가 인터록을 해제하면 **억제 실패 = 물리 임팩트**:

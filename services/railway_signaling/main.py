@@ -72,6 +72,21 @@ VULNS = [
 
 app = make_ics_twin("railway_signaling", "Railway Signaling/ATS Twin", VULNS)
 
+# 실제 Modbus/TCP(P1-1) — 열차 속도. HR0=TRAIN_SPEED(km/h)·HR2=ACTUAL·HR4=DAMAGE. coil0=연동(interlocking).
+# 연동 우회 + 과속(>120) 지속 → 탈선/충돌(asset_compromised).
+from shared.ics.twin_modbus import attach_modbus_ics, ModbusIcsConfig  # noqa: E402
+from shared.ics.safety import SafetyProfile  # noqa: E402
+from shared.ics.anomaly import IcsBaseline, RegBand  # noqa: E402
+from shared.ics.process_sim import ProcessParams  # noqa: E402
+attach_modbus_ics(app, ModbusIcsConfig(
+    asset="railway_signaling", vuln_id="RWY-002", reg_names={0: "TRAIN_SPEED", 1: "BRAKE_LEVEL"},
+    holding_init=[80, 0], coils_init=[True], cmd_reg=0, actual_reg=2, damage_reg=4, interlock_coil=0,
+    safety=SafetyProfile(name="railway_signaling", limits={0: {"name": "TRAIN_SPEED", "max": 120}}, interlock_coil=0),
+    anomaly=IcsBaseline(name="railway_signaling", registers={0: RegBand("TRAIN_SPEED", 0, 120, protected=True)}, safety_coils={0}),
+    proc=ProcessParams(slew_rpm_per_s=10, nominal_rpm=0, k_heat=0.0, k_cool=0.0, redline_rpm=120,
+                       crit_temp=1e9, damage_rpm_rate=0.5, damage_temp_rate=0.0, failure_threshold=100),
+    impact="train_derailment_collision", defense_label="interlocking_rearmed"))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8205)

@@ -6,4 +6,5 @@ COPY shared/ shared/
 COPY services/smart_factory/ services/smart_factory/
 WORKDIR /app/services/smart_factory
 EXPOSE 8202
+EXPOSE 502
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8202"]

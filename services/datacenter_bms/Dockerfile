@@ -6,4 +6,5 @@ COPY shared/ shared/
 COPY services/datacenter_bms/ services/datacenter_bms/
 WORKDIR /app/services/datacenter_bms
 EXPOSE 8207
+EXPOSE 502
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8207"]

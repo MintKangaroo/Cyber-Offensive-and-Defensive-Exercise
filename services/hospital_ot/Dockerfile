@@ -6,4 +6,5 @@ COPY shared/ shared/
 COPY services/hospital_ot/ services/hospital_ot/
 WORKDIR /app/services/hospital_ot
 EXPOSE 8208
+EXPOSE 502
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8208"]

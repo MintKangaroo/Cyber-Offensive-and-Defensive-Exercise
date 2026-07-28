@@ -78,6 +78,21 @@ VULNS = [
 
 app = make_ics_twin("hospital_ot", "Hospital PACS/HIS/Medical Device Twin", VULNS)
 
+# 실제 Modbus/TCP(P1-1) — 주입펌프 유량. HR0=INFUSION_RATE(mL/h)·HR2=ACTUAL·HR4=DAMAGE. coil0=용량한계.
+# 용량한계 우회 + 과다주입(>200) 지속 → 약물 과다투여(asset_compromised, 환자안전).
+from shared.ics.twin_modbus import attach_modbus_ics, ModbusIcsConfig  # noqa: E402
+from shared.ics.safety import SafetyProfile  # noqa: E402
+from shared.ics.anomaly import IcsBaseline, RegBand  # noqa: E402
+from shared.ics.process_sim import ProcessParams  # noqa: E402
+attach_modbus_ics(app, ModbusIcsConfig(
+    asset="hospital_ot", vuln_id="HSP-003", reg_names={0: "INFUSION_RATE", 1: "DRUG_CONC"},
+    holding_init=[100, 10], coils_init=[True], cmd_reg=0, actual_reg=2, damage_reg=4, interlock_coil=0,
+    safety=SafetyProfile(name="hospital_ot", limits={0: {"name": "INFUSION_RATE", "max": 200}}, interlock_coil=0),
+    anomaly=IcsBaseline(name="hospital_ot", registers={0: RegBand("INFUSION_RATE", 0, 200, protected=True)}, safety_coils={0}),
+    proc=ProcessParams(slew_rpm_per_s=20, nominal_rpm=0, k_heat=0.0, k_cool=0.0, redline_rpm=200,
+                       crit_temp=1e9, damage_rpm_rate=0.2, damage_temp_rate=0.0, failure_threshold=100),
+    impact="infusion_overdose_patient_harm", defense_label="dose_limit_rearmed"))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8208)

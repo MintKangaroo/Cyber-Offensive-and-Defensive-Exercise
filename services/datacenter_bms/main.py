@@ -81,6 +81,21 @@ VULNS = [
 
 app = make_ics_twin("datacenter_bms", "Data Center UPS/CRAC/DCIM Twin", VULNS)
 
+# 실제 Modbus/TCP(P1-1) — 랙 온도. HR0=RACK_TEMP(°C)·HR2=ACTUAL·HR4=DAMAGE. coil0=열 인터록.
+# CRAC 설정 변조로 열 인터록 우회 + 과열(>35°C) 지속 → 열 폭주/장비 손상(asset_compromised).
+from shared.ics.twin_modbus import attach_modbus_ics, ModbusIcsConfig  # noqa: E402
+from shared.ics.safety import SafetyProfile  # noqa: E402
+from shared.ics.anomaly import IcsBaseline, RegBand  # noqa: E402
+from shared.ics.process_sim import ProcessParams  # noqa: E402
+attach_modbus_ics(app, ModbusIcsConfig(
+    asset="datacenter_bms", vuln_id="DCX-001", reg_names={0: "RACK_TEMP", 1: "CRAC_LOAD"},
+    holding_init=[24, 50], coils_init=[True], cmd_reg=0, actual_reg=2, damage_reg=4, interlock_coil=0,
+    safety=SafetyProfile(name="datacenter_bms", limits={0: {"name": "RACK_TEMP", "max": 35}}, interlock_coil=0),
+    anomaly=IcsBaseline(name="datacenter_bms", registers={0: RegBand("RACK_TEMP", 18, 35, protected=True)}, safety_coils={0}),
+    proc=ProcessParams(slew_rpm_per_s=2, nominal_rpm=0, k_heat=0.0, k_cool=0.0, redline_rpm=35,
+                       crit_temp=1e9, damage_rpm_rate=2.0, damage_temp_rate=0.0, failure_threshold=100),
+    impact="datacenter_thermal_runaway", defense_label="thermal_interlock_rearmed"))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8207)

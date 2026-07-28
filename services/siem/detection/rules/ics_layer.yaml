@@ -37,6 +37,46 @@
   match:
     vuln_id: "LNG-001"
 
+- id: ICS-MODBUS-WRITE-FAC
+  title: "ICS 미인가 Modbus 쓰기 - 스마트팩토리(로봇)"
+  severity: 4
+  mitre: [T0836, T0855]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "FAC-004" }
+
+- id: ICS-MODBUS-WRITE-RWY
+  title: "ICS 미인가 Modbus 쓰기 - 철도(연동)"
+  severity: 5
+  mitre: [T0836, T0855]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "RWY-002" }
+
+- id: ICS-MODBUS-WRITE-AIR
+  title: "ICS 미인가 Modbus 쓰기 - 공항(급유)"
+  severity: 5
+  mitre: [T0836, T0855]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "AIR-003" }
+
+- id: ICS-MODBUS-WRITE-DCX
+  title: "ICS 미인가 Modbus 쓰기 - 데이터센터(냉방)"
+  severity: 4
+  mitre: [T0836, T0855]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "DCX-001" }
+
+- id: ICS-MODBUS-WRITE-HSP
+  title: "ICS 미인가 Modbus 쓰기 - 병원(주입펌프)"
+  severity: 5
+  mitre: [T0836, T0855]
+  source_type: twin
+  kind: match
+  match: { vuln_id: "HSP-003" }
+
 - id: ICS-SAFETY-INTERLOCK-SUPPRESS
   title: "ICS 안전 인터록/알람 비활성화"
   severity: 5

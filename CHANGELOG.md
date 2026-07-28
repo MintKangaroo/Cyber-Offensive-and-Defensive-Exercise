@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 ### Added
+- **ICS 실 Modbus 전 섹터 확장(9개 트윈)**: 재사용 헬퍼(`twin_modbus.attach_modbus_ics`)로
+  smart_factory(로봇 충돌 FAC-004)·railway_signaling(탈선 RWY-002)·airport_ot(급유 화재 AIR-003)·
+  datacenter_bms(열폭주 DCX-001)·hospital_ot(약물 과다투여 HSP-003)에 실 Modbus 502 추가 → **9개 ICS
+  섹터 전부 실 Modbus**(각 ~15줄). SIEM 규칙 ICS-MODBUS-WRITE-FAC/RWY/AIR/DCX/HSP 추가(총 9종).
+  실측: 5개 신규 트윈 컨테이너 내 실 Modbus 응답, railway 공격 → 라이브 탐지(ICS-MODBUS-WRITE-RWY
+  → blue_detection_success 5×) → Blue +100.
 - **ICS 실 Modbus 트윈 확장(refinery·lng) + 재사용 헬퍼**: `shared/ics/twin_modbus.py` —
   검증된 power_plant/water_utility 배선(실 Modbus+연속물리+안전결과+MITRE 탐지+Blue 방어)을
   `attach_modbus_ics(app, cfg)` 한 줄로 패키징. **refinery_plant**(증류탑 과압→폭발, REF-004)·
