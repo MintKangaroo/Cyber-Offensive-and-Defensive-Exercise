@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 ### Added
+- **ICS 자산 회복(damage heal + asset_recovered) — 재실행 가능**: `process_sim.step()` 에 회복 추가 —
+  인터록 재무장 + 안전 상태에서 손상(damage)이 heal_rate 로 회복(누적은 인터록 해제 시에만). 손상
+  자산이 확보돼 0 으로 회복되면 트윈이 **asset_recovered** 발행(Blue 복구 크레딧). 파국 상태 고착
+  해소 → **같은 트윈으로 공격/방어 재실행 가능**. 전 9개 트윈 적용(헬퍼 + power_plant/water_utility
+  인라인). 유닛 3개(238→241). 실측: smart_factory·power_plant 공격→확보→DAMAGE 0 회복→asset_recovered.
+  검증 과정에서 발견(damage 비회복으로 재실행 불가 → 수정).
 - **ICS 실 Modbus 전 섹터 확장(9개 트윈)**: 재사용 헬퍼(`twin_modbus.attach_modbus_ics`)로
   smart_factory(로봇 충돌 FAC-004)·railway_signaling(탈선 RWY-002)·airport_ot(급유 화재 AIR-003)·
   datacenter_bms(열폭주 DCX-001)·hospital_ot(약물 과다투여 HSP-003)에 실 Modbus 502 추가 → **9개 ICS

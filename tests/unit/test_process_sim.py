@@ -84,6 +84,30 @@ def test_engaged_interlock_never_fails():
     assert not has_failed(s, P) and s.actual_rpm == P.redline_rpm
 
 
+def test_damage_heals_when_secured():
+    # 인터록 재무장 + 안전 상태 → 손상이 시간에 따라 회복(재실행 가능)
+    hp = ProcessParams(slew_rpm_per_s=500, nominal_rpm=3000, redline_rpm=4500, heal_rate=10)
+    s = ProcessState(actual_rpm=3000, coolant_temp=40, damage=50)
+    s = step(s, cmd_rpm=3000, coolant_flow=100, dt=1.0, p=hp, interlock_engaged=True)
+    assert s.damage == 40   # 50 - 10*1
+
+
+def test_damage_heals_fully_from_failure():
+    hp = ProcessParams(nominal_rpm=3000, redline_rpm=4500, heal_rate=10)
+    s = ProcessState(actual_rpm=3000, coolant_temp=40, damage=100)
+    for _ in range(20):
+        s = step(s, cmd_rpm=3000, coolant_flow=100, dt=1.0, p=hp, interlock_engaged=True)
+    assert s.damage == 0 and not has_failed(s, hp)
+
+
+def test_no_heal_while_under_attack():
+    # 인터록 해제(공격 지속) 중에는 회복 없음 — 오히려 누적
+    hp = ProcessParams(nominal_rpm=3000, redline_rpm=4500, heal_rate=10)
+    s = ProcessState(actual_rpm=6000, coolant_temp=40, damage=50)
+    s = step(s, cmd_rpm=6000, coolant_flow=100, dt=1.0, p=hp, interlock_engaged=False)
+    assert s.damage > 50
+
+
 def test_in_danger_predicate():
     assert in_danger(ProcessState(5000, 40, 0), P) is True      # 과속
     assert in_danger(ProcessState(3000, 130, 0), P) is True     # 과열

@@ -122,12 +122,24 @@ class _ModbusIcsTwin:
 
     async def _sim_loop(self):
         c = self.cfg
+        prev_damage = self.state.damage
         while True:
             cmd = float(self.bank.holding[c.cmd_reg])
             interlock = bool(self.bank.coils[c.interlock_coil])
             self.state = _step(self.state, cmd, 0.0, dt=0.5, p=c.proc, interlock_engaged=interlock)
             self.bank.holding[c.actual_reg] = int(self.state.actual_rpm)
             self.bank.holding[c.damage_reg] = int(self.state.damage)
+            # 회복: 손상이 있던 자산이 확보되어 0 으로 회복 → asset_recovered(Blue 복구 크레딧)
+            if prev_damage > 0 and self.state.damage == 0:
+                try:
+                    emit_event(event_id=Event.make_id("physics", c.asset, "RECOVERED", str(time.time())),
+                               event_type=EventType.asset_recovered, actor="blue", target_asset=c.asset,
+                               vuln_id=c.vuln_id, phase=c.red_phase, team_id="default",
+                               trace_id=Event.session_trace_id("physics", c.asset),
+                               metadata={"protocol": "modbus", "note": "asset secured and recovered"})
+                except Exception:
+                    pass
+            prev_damage = self.state.damage
             if _has_failed(self.state, c.proc) and not self.failed:
                 self.failed = True
                 try:

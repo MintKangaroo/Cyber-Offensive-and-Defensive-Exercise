@@ -134,6 +134,7 @@ _modbus_bank.holding[4] = 0                              # DAMAGE(%)
 async def _start_process_sim():
     async def _loop():
         global _proc_state, _proc_failed
+        _prev_dmg = _proc_state.damage
         while True:
             cmd = float(_modbus_bank.holding[0]); flow = float(_modbus_bank.holding[1])
             interlock = bool(_modbus_bank.coils[0])
@@ -159,6 +160,18 @@ async def _start_process_sim():
                     pass
             elif interlock and _proc_state.damage == 0:
                 _proc_failed = False   # 정상 복귀 시 재무장(다음 훈련)
+            # 회복 에지: 손상 자산이 확보돼 0 으로 회복 → asset_recovered(Blue 복구 크레딧)
+            if _prev_dmg > 0 and _proc_state.damage == 0:
+                try:
+                    emit_event(
+                        event_id=Event.make_id("physics", ASSET_NAME, "RECOVERED", str(time.time())),
+                        event_type=EventType.asset_recovered, actor="blue", target_asset=ASSET_NAME,
+                        vuln_id="PP-006", phase=RedPhase.lateral_movement, team_id="default",
+                        trace_id=Event.session_trace_id("physics", ASSET_NAME),
+                        metadata={"protocol": "modbus", "note": "asset secured and recovered"})
+                except Exception:
+                    pass
+            _prev_dmg = _proc_state.damage
             await _asyncio.sleep(0.5)
     _asyncio.create_task(_loop())
 

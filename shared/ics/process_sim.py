@@ -27,6 +27,7 @@ class ProcessParams:
     damage_rpm_rate: float = 0.01   # RPM redline 초과분당 손상률/초
     damage_temp_rate: float = 0.05  # 온도 임계 초과분당 손상률/초
     failure_threshold: float = 100.0  # 누적 손상이 이 값 도달 시 파국
+    heal_rate: float = 2.0          # 인터록 재무장+안전 상태에서 손상 회복률/초(0=회복 없음)
 
 
 @dataclass(frozen=True)
@@ -56,11 +57,14 @@ def step(state: ProcessState, cmd_rpm: float, coolant_flow: float,
     cooling = p.k_cool * max(0.0, coolant_flow)
     temp = max(p.ambient_temp, state.coolant_temp + (heat - cooling) * dt)
 
-    # 손상: 인터록 해제 상태에서 redline/임계온도 초과분에 비례해 누적
+    # 손상: 인터록 해제 상태에서 redline/임계온도 초과분에 비례해 누적,
+    #       인터록 재무장 + 안전(밴드 내) 상태에서는 회복(heal) — 자산 재실행 가능.
     damage = state.damage
     if not interlock_engaged:
         damage += p.damage_rpm_rate * max(0.0, rpm - p.redline_rpm) * dt
         damage += p.damage_temp_rate * max(0.0, temp - p.crit_temp) * dt
+    elif rpm <= p.redline_rpm and temp <= p.crit_temp:
+        damage = max(0.0, damage - p.heal_rate * dt)
     damage = min(p.failure_threshold, damage)
     return ProcessState(actual_rpm=rpm, coolant_temp=temp, damage=damage)
 

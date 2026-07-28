@@ -189,6 +189,7 @@ _wu_bank.holding[2] = int(_wu_proc.actual_rpm)   # RESERVOIR_PPM
 async def _start_wu_sim():
     async def _loop():
         global _wu_proc, _wu_failed
+        _prev_dmg = _wu_proc.damage
         while True:
             cmd = float(_wu_bank.holding[0]); interlock = bool(_wu_bank.coils[0])
             _wu_proc = _w_step(_wu_proc, cmd, 0.0, dt=0.5, p=_WU_PROC, interlock_engaged=interlock)
@@ -208,6 +209,16 @@ async def _start_wu_sim():
                     pass
             elif interlock and _wu_proc.damage == 0:
                 _wu_failed = False
+            if _prev_dmg > 0 and _wu_proc.damage == 0:
+                try:
+                    _emit(event_id=Event.make_id("physics", _ASSET, "RECOVERED", str(_time.time())),
+                          event_type=EventType.asset_recovered, actor="blue", target_asset=_ASSET,
+                          vuln_id="WTR-001", phase=RedPhase.objective, team_id="default",
+                          trace_id=Event.session_trace_id("physics", _ASSET),
+                          metadata={"protocol": "modbus", "note": "asset secured and recovered"})
+                except Exception:
+                    pass
+            _prev_dmg = _wu_proc.damage
             await _wu_asyncio.sleep(0.5)
     _wu_asyncio.create_task(_loop())
 
