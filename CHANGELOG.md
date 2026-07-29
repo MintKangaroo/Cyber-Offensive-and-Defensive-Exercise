@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 ### Added
+- **Control Tower ICS 자산 상태판**: SSE 이벤트(red_attack_started/asset_compromised/blue_block_success/
+  asset_recovered)만으로 9개 ICS 트윈 상태를 색상 추적(공격중·파괴/침해·방어됨·복구됨) + MITRE 기법
+  표시 — 백엔드 추가 없이 이벤트 스트림 파생. 실측 캡처(control-tower-ics.png): 9개 트윈 상태·라이브
+  피드(asset_compromised·asset_recovered·blue_block_success·점수) 동시 표시.
 - **복구 채점 연동 + 복구 포함 ICS 시나리오**: asset_recovered → scoring 이 Blue **복구 크레딧 +50**
   부여 확인(실측: 자산당 1회, achievements 기록). `scenarios/single/RAILWAY-MODBUS-SABOTAGE-01.yaml`
   저작 — 신호조작→Modbus 연동 우회→열차 탈선 킬체인 + Blue 탐지·**복구 목표**(blue_objective

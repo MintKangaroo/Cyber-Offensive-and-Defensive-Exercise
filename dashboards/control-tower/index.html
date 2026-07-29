@@ -161,6 +161,10 @@
       <div class="rows" id="incidents"><div class="empty">인시던트 없음</div></div>
     </div>
     <div class="panel">
+      <h2>⚙ ICS 자산 상태 <span class="count" id="icsCount">0</span></h2>
+      <div class="rows" id="ics"><div class="empty">ICS 이벤트 대기 중…</div></div>
+    </div>
+    <div class="panel">
       <h2>⛨ Safety</h2>
       <div class="rows" id="safety"><div class="empty">…</div></div>
     </div>
@@ -358,6 +362,40 @@ function addEvent(topic, d){
   feed.insertBefore(row, feed.firstChild);
   while (feed.children.length>200) feed.removeChild(feed.lastChild);
   document.getElementById("feedCount").textContent = ++feedN;
+  trackICS(d);
+}
+
+// ── ICS 자산 상태 (SSE 이벤트만으로 추적, 백엔드 추가 없음) ──────────────────
+const ICS_TWINS = new Set(["power_plant","water_utility","refinery_plant","lng_terminal",
+  "smart_factory","railway_signaling","airport_ot","datacenter_bms","hospital_ot"]);
+const ICS_STATUS = {  // event_type → {상태, 색상, 라벨}
+  red_attack_started:{s:"under_attack", c:"var(--amber)", l:"공격 중"},
+  asset_compromised: {s:"compromised",  c:"var(--red)",   l:"파괴/침해"},
+  blue_block_success:{s:"defended",     c:"var(--blue)",  l:"방어됨"},
+  asset_recovered:   {s:"recovered",    c:"var(--green)", l:"복구됨"},
+};
+const icsState = {};   // asset -> {status,color,label,technique,ts}
+function trackICS(d){
+  const asset = d.target_asset;
+  if (!asset || !ICS_TWINS.has(asset)) return;
+  const map = ICS_STATUS[d.event_type];
+  if (!map) return;
+  const md = d.metadata || {};
+  icsState[asset] = {label:map.l, color:map.c, status:map.s,
+    technique: md.ics_technique || md.safety_impact || md.impact || "",
+    ts: d.timestamp || Date.now()/1000};
+  renderICS();
+}
+function renderICS(){
+  const box = document.getElementById("ics");
+  const rows = Object.entries(icsState).sort((a,b)=>b[1].ts-a[1].ts);
+  document.getElementById("icsCount").textContent = rows.length;
+  box.innerHTML = rows.length ? rows.map(([asset,v])=>
+    `<div class="kv"><span class="k" style="color:${v.color}">●</span>`+
+    `<span class="v" style="flex:1;margin:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${asset}`+
+    `${v.technique?` <span style="color:var(--dim);font-size:10px">${v.technique.split(' ')[0]}</span>`:""}</span>`+
+    `<span class="v" style="color:${v.color}">${v.label}</span></div>`
+  ).join("") : `<div class="empty">ICS 이벤트 대기 중…</div>`;
 }
 
 // ── 컨트롤 액션 ─────────────────────────────────────────────────────────────

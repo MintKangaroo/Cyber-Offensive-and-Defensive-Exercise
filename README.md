@@ -609,6 +609,8 @@ $ python3 loadtest/sse_loadtest.py --observers 100 --teams 8 --rate 15 --duratio
 - **서비스 헬스**: 11개 서비스 도달성·지연(events/scoring/config/siem/auth/instructor/range/portal/edr/noc/aar).
 - **실시간 상황 피드**: SSE `/stream` 구독(P0-4) — events/detections/scores/safety/phase_clock 토픽 색상 구분.
 - **라이브 스코어보드 · 매치 · 인시던트 · 안전 상태**(SLA 위반 인시던트 강조·격리 점수·긴급정지).
+- **ICS 자산 상태판**: SSE 이벤트만으로 9개 ICS 트윈의 상태(공격 중·파괴/침해·방어됨·복구됨)를
+  MITRE 기법과 함께 색상 추적 — SCADA 상황 인식(백엔드 추가 없이 이벤트 스트림 파생).
 - **컨트롤 액션**: 시나리오 Start/End, 긴급정지 발동/해제, 훈련 초기화 — 각 사유는 감사 로그에 기록.
 - gateway/dev **모드 자동 감지**(`/api/*` 프록시 생존 여부로 판별), 역할 대시보드로 바로가기.
 - **워룸 모드(P2-2)**: 헤더 `▣ WARROOM` 버튼(또는 키보드 `W`)으로 프로젝터/대형 화면용 고대비·
