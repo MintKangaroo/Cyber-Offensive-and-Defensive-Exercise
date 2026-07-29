@@ -303,9 +303,21 @@ async function pollIncidents(){
     const box = document.getElementById("incidents");
     box.innerHTML = arr.length ? arr.slice(0,8).map(i=>{
       const breach = i.sla && (i.sla.response_breached||i.sla.resolution_breached);
-      return `<div class="kv"><span class="k" style="color:${SEVC[i.severity]||'var(--dim)'}">${(i.severity||'?').toUpperCase().slice(0,4)}</span><span class="v" style="flex:1;margin:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${i.title||i.id}</span><span class="v ${breach?'bad':''}">${i.status}${breach?' ⚠SLA':''}</span></div>`;
+      const nxt = ICS_NEXT[i.status];
+      return `<div class="kv" style="cursor:${nxt?'pointer':'default'}" title="${nxt?'클릭: '+i.status+' → '+nxt:''}" onclick="${nxt?`advanceIncident('${i.id}','${i.status}')`:''}"><span class="k" style="color:${SEVC[i.severity]||'var(--dim)'}">${(i.severity||'?').toUpperCase().slice(0,4)}</span><span class="v" style="flex:1;margin:0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${i.title||i.id}</span><span class="v ${breach?'bad':''}">${i.status}${breach?' ⚠SLA':''}${nxt?' ▸':''}</span></div>`;
     }).join("") : `<div class="empty">인시던트 없음</div>`;
   }catch(_){ document.getElementById("incidents").innerHTML=`<div class="empty">incident 서비스 응답 없음</div>`; }
+}
+// 인시던트 라이프사이클 다음 단계 + 콘솔에서 전이(클릭).
+const ICS_NEXT = {new:"triage", triage:"contained", contained:"eradicated", eradicated:"recovered", recovered:"closed"};
+async function advanceIncident(id, status){
+  const to = ICS_NEXT[status];
+  if (!to) return;
+  if (!confirm(`인시던트 ${id}: ${status} → ${to} 로 진행할까요?`)) return;
+  try{
+    await post("incident", `/incidents/${id}/transition`, {to, note:"Control Tower 콘솔 전이"});
+    toast(`인시던트 ${to} ✓`, "ok"); pollIncidents();
+  }catch(e){ toast("전이 실패 "+e.message, "err"); }
 }
 async function pollPlatform(){
   try{
