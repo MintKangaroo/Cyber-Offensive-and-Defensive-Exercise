@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 ### Added
+- **SIEM 알림 → Incident 자동 승격(SOC 워크플로)**: SIEM 이 고심각도 알림(severity ≥ INCIDENT_MIN_SEVERITY,
+  기본 5)을 감지하면 incident 서비스로 자동 승격(`/incidents/from-alert`). `rule_id:asset` 키로 **dedup**
+  (자산당 위협 1건, 재공격에도 미증가). SIEM 탐지 → 자동 케이스 생성 → 인시던트 라이프사이클(triage→
+  closed·SLA·MTTR) 로 연결. 실측: railway 크리티컬 공격 → 2 규칙 → 인시던트 2건 자동생성, 재공격 시
+  dedup 유지(2 고정). compose env INCIDENT_URL/AUTO_PROMOTE/MIN_SEVERITY.
 - **AAR PDF ICS 섹션**: `pdf/render.py` 가 `ics_lifecycle` 를 PDF 에 렌더 — 자산별 공격/침해/방어/
   복구/MTTR/기법 표 + 총계. 인쇄 리포트로도 ICS 공방 확인. 실측: 라이브 /report/aar/pdf 200·
   application/pdf·5816B(ICS 섹션 포함), 무회귀.

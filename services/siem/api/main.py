@@ -48,6 +48,12 @@ TWIN_ASSETS = [
 SYSLOG_UDP_PORT = int(os.environ.get("SYSLOG_UDP_PORT", "1514"))  # 514는 root 권한 필요, 기본은 비특권 포트
 EVENT_COLLECTOR_URL = os.environ.get("EVENT_COLLECTOR_URL", "http://event_collector:8010")
 PUSH_TO_LIVEFIRE = os.environ.get("PUSH_TO_LIVEFIRE", "true").lower() == "true"
+# 고심각도 알림 → 인시던트 자동 승격(SOC 워크플로). severity>=임계면 incident 서비스로.
+INCIDENT_URL = os.environ.get("INCIDENT_URL", "http://incident:8095")
+INCIDENT_AUTO_PROMOTE = os.environ.get("INCIDENT_AUTO_PROMOTE", "true").lower() == "true"
+INCIDENT_MIN_SEVERITY = int(os.environ.get("INCIDENT_MIN_SEVERITY", "5"))
+INCIDENT_TOKEN = os.environ.get("INCIDENT_TOKEN", "")
+_SEV_MAP = {5: "critical", 4: "high", 3: "medium"}
 NOISE_ENABLED = os.environ.get("SIEM_NOISE_ENABLED", "false").lower() == "true"
 NOISE_EPS = float(os.environ.get("SIEM_NOISE_EPS", "2.0"))
 
@@ -133,6 +139,26 @@ async def _process_event(event) -> None:
         })
         if PUSH_TO_LIVEFIRE:
             asyncio.create_task(_push_detection_to_livefire(alert, event))
+        if INCIDENT_AUTO_PROMOTE and alert.severity >= INCIDENT_MIN_SEVERITY:
+            asyncio.create_task(_promote_to_incident(alert, event))
+
+
+async def _promote_to_incident(alert, event) -> None:
+    """고심각도 SIEM 알림 → 인시던트 자동 승격. (rule_id:asset) 로 dedup(자산당 위협 1건)."""
+    asset = getattr(event, "asset", None) or "unknown"
+    payload = {
+        "alert_id": f"{alert.rule_id}:{asset}",   # incident 서비스가 이 키로 중복 승격 방지
+        "title": f"[SIEM] {alert.title}",
+        "severity": _SEV_MAP.get(alert.severity, "medium"),
+        "source": "siem", "host": asset,
+        "team_id": getattr(event, "team_id", None) or "default",
+    }
+    headers = {"Authorization": f"Bearer {INCIDENT_TOKEN}"} if INCIDENT_TOKEN else {}
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            await client.post(f"{INCIDENT_URL}/incidents/from-alert", json=payload, headers=headers)
+    except httpx.HTTPError:
+        pass  # 409(이미 승격)·incident 다운이어도 SIEM 은 계속 동작
 
 
 async def _push_detection_to_livefire(alert, event) -> None:

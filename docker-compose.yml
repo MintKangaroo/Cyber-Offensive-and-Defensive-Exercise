@@ -82,6 +82,9 @@ services:
       - SYSLOG_UDP_PORT=1514
       - EVENT_COLLECTOR_URL=http://event_collector:8010
       - PUSH_TO_LIVEFIRE=true
+      - INCIDENT_URL=http://incident:8095
+      - INCIDENT_AUTO_PROMOTE=true
+      - INCIDENT_MIN_SEVERITY=5
       - SIEM_NOISE_ENABLED=false
       - SIEM_NOISE_EPS=2.0
       - DATA_DIR=/data
