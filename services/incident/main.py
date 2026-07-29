@@ -266,6 +266,44 @@ def admin_reset(authorization: str = Header(default="")):
     return {"service": "incident", "cleared": {"incidents": n}}
 
 
+# ---------------------------------------------------------------------------
+# 자동 강화(이벤트 상관): 자산 복구(asset_recovered) → 관련 미해결 인시던트 타임라인에
+# 해결 힌트 주석. 자동 close 하지 않음(Blue 가 검토·종결 — SOC 훈련 주체성 유지).
+# ---------------------------------------------------------------------------
+import asyncio  # noqa: E402
+CORRELATE_ENABLED = os.environ.get("INCIDENT_CORRELATE", "true").lower() == "true"
+
+
+async def _correlate_loop():
+    while True:
+        await asyncio.sleep(10)
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as cl:
+                r = await cl.get(f"{EVENT_COLLECTOR_URL}/events?limit=300")
+                events = r.json().get("events", [])
+            recovered = {e["target_asset"] for e in events
+                         if e.get("event_type") == "asset_recovered" and e.get("target_asset")}
+            if not recovered:
+                continue
+            c = _db()
+            incs = [_row_to_dict(row) for row in
+                    c.execute("SELECT * FROM incidents WHERE status != 'closed'").fetchall()]
+            for iid in model.find_resolvable(incs, recovered):
+                inc = next(i for i in incs if i["id"] == iid)
+                inc["timeline"] = _append_timeline(inc, "system", "recovery_detected",
+                                                    f"자산 {inc['host']} 복구 감지 — 해결 검토 권장")
+                _save(c, inc)
+            c.close()
+        except Exception:
+            pass
+
+
+@app.on_event("startup")
+async def _start_correlate():
+    if CORRELATE_ENABLED:
+        asyncio.create_task(_correlate_loop())
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8095)

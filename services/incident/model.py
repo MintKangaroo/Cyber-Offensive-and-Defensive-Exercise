@@ -57,6 +57,23 @@ def sla_breaches(inc: dict, now: float) -> dict:
     }
 
 
+def find_resolvable(incidents: list, recovered_assets: set) -> list:
+    """복구된 자산(asset_recovered)과 상관되는 '미해결·미주석' 인시던트 id 목록.
+    자동 close 하지 않고 타임라인 주석 + 해결 힌트만 → Blue 가 판단(훈련 주체성 유지)."""
+    out = []
+    for inc in incidents:
+        if inc.get("status") == "closed":
+            continue
+        host = inc.get("host")
+        if not host or host not in recovered_assets:
+            continue
+        tl = inc.get("timeline") or []
+        if any(t.get("action") == "recovery_detected" for t in tl):
+            continue   # 이미 주석됨(중복 방지)
+        out.append(inc["id"])
+    return out
+
+
 def compute_metrics(inc: dict) -> dict:
     """AAR 연동 지표. MTTA(응답까지)·MTTR(해결까지). 진행 중이면 MTTR=None."""
     created = inc.get("created_at") or 0

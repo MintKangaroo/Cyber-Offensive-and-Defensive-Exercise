@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 ### Added
+- **Incident 자동 강화(이벤트 상관)**: incident 서비스가 event_collector 이벤트를 폴링해 자산 복구
+  (asset_recovered)를 관련 미해결 인시던트(host 일치)의 타임라인에 **해결 힌트 주석**(recovery_detected)
+  으로 자동 기록. **자동 close 하지 않음**(Blue 가 검토·종결 — SOC 훈련 주체성 유지). 중복 주석 방지.
+  순수 상관 로직 `model.find_resolvable()` + 유닛 6개(248→254). 실측: airport 공격→SIEM 자동인시던트→
+  복구→타임라인 `recovery_detected` 주석·status 미변경(new 유지) 확인.
 - **SIEM 알림 → Incident 자동 승격(SOC 워크플로)**: SIEM 이 고심각도 알림(severity ≥ INCIDENT_MIN_SEVERITY,
   기본 5)을 감지하면 incident 서비스로 자동 승격(`/incidents/from-alert`). `rule_id:asset` 키로 **dedup**
   (자산당 위협 1건, 재공격에도 미증가). SIEM 탐지 → 자동 케이스 생성 → 인시던트 라이프사이클(triage→
