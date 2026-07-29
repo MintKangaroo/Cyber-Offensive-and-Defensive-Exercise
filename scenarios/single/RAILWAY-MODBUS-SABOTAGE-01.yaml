@@ -1,0 +1,63 @@
+# 단일 시나리오: 철도 신호 — 실제 Modbus 연동장치 우회 → 열차 폭주 탈선 → 복구
+# ================================================================================
+# 실제 Modbus/TCP(502) ICS 사보타주 + 복구 킬체인. 신호 조작으로 침투 → 연동장치(interlocking)
+# 우회 → 열차 과속 폭주로 탈선(물리 임팩트). Blue 는 미인가 Modbus 쓰기·연동 무력화를 탐지하고,
+# 위험 중 연동장치를 재무장(blue_block_success)해 파국을 막은 뒤 자산을 복구(asset_recovered)해야 한다.
+# 취약 트윈이 실제 Modbus 를 말하므로 mbpoll/pymodbus 로 실공격 가능. 복구 후 재실행 가능.
+scenario:
+  id: "RAILWAY-MODBUS-SABOTAGE-01"
+  name: "철도 Modbus 연동 우회 사보타주·복구"
+  description: "신호 조작 → 실제 Modbus 로 연동장치 우회 → 열차 과속 탈선, Blue 탐지·방어·복구까지의 ICS 라이프사이클"
+  target_asset: "railway_signaling"
+  difficulty: "hard"
+  time_limit_sec: 1800
+
+  initial_vuln_state:
+    RWY-001: vulnerable          # 신호 현시 무단 변경
+    RWY-002: vulnerable          # 연동장치 우회(Modbus)
+
+  stages:
+    - stage: 1
+      name: "초기 접근 - 신호 현시 무단 변경"
+      objective_event: red_attack_started
+      match: { vuln_id: "RWY-001" }
+      points: 25
+      expected_sec: 300
+      mitre: [T0855]             # Unauthorized Command Message
+    - stage: 2
+      name: "연동장치 무력화 - Modbus 로 interlocking 우회"
+      objective_event: red_attack_started
+      match: { vuln_id: "RWY-002" }
+      points: 45
+      requires_stage: 1
+      expected_sec: 600
+      mitre: [T0878]             # Suppression of Alarms/Interlock
+    - stage: 3
+      name: "물리 임팩트 - 과속 폭주로 열차 탈선"
+      objective_event: asset_compromised
+      match: { vuln_id: "RWY-002" }
+      points: 80
+      requires_stage: 2
+      expected_sec: 900
+      mitre: [T0836]             # Modify Parameter (over-speed)
+      is_final: true
+
+  chain_bonus:
+    all_stages_in_order: 50
+    within_sec: 900
+
+  blue_objectives:
+    - name: "미인가 Modbus 쓰기 탐지"
+      match_alert: "ICS-MODBUS-WRITE-RWY"
+      points: 35
+    - name: "연동장치 무력화 탐지"
+      match_alert: "ICS-SAFETY-INTERLOCK-SUPPRESS"
+      points: 45
+    - name: "자산 복구 - 연동 재무장 후 정상화"
+      match_event: "asset_recovered"
+      points: 50
+      time_bonus: true
+
+  noise:
+    enabled: true
+    normal_traffic_eps: 3

@@ -71,3 +71,41 @@ def test_final_asset_compromised_requires_prior_stages():
     # asset_compromised(stage3) 를 앞 단계 없이 → 미완료(순서 강제)
     emitted = _run([_ev("asset_compromised", "PP-006")])
     assert not any(e.get("metadata", {}).get("stage") == 3 for e in emitted)
+
+
+# ── 철도(RAILWAY-MODBUS-SABOTAGE) 킬체인 + 복구 라이프사이클 ────────────────
+RWY_SCENARIO = "scenarios/single/RAILWAY-MODBUS-SABOTAGE-01.yaml"
+
+
+def _run_rwy(events):
+    emitted = []
+
+    async def _emit(**kw):
+        emitted.append(kw)
+
+    async def _go():
+        tracker = make_tracker(load_scenario_file(RWY_SCENARIO), _emit)
+        for e in events:
+            await tracker.process_event(e)
+    asyncio.run(_go())
+    return emitted
+
+
+def test_railway_full_chain_and_points():
+    emitted = _run_rwy([
+        _ev("red_attack_started", "RWY-001"),   # stage 1: 신호 조작
+        _ev("red_attack_started", "RWY-002"),   # stage 2: 연동 우회
+        _ev("asset_compromised", "RWY-002"),    # stage 3: 탈선(final)
+    ])
+    pts = {e["metadata"]["stage"]: e["metadata"]["points"]
+           for e in emitted if e.get("metadata", {}).get("stage") in (1, 2, 3)
+           and "points" in e.get("metadata", {})}
+    assert pts == {1: 25, 2: 45, 3: 80}
+    assert any(e.get("metadata", {}).get("chain_bonus") == 50 for e in emitted)
+
+
+def test_railway_recovery_objective_declared():
+    # 복구는 asset_recovered 이벤트로 scoring 에서 독립 채점(+50). 시나리오는 blue_objective 로 선언.
+    ls = load_scenario_file(RWY_SCENARIO)
+    rec = [o for o in ls.single.blue_objectives if getattr(o, "match_event", None) == "asset_recovered"]
+    assert len(rec) == 1 and rec[0].points == 50

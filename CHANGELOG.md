@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 ### Added
+- **복구 채점 연동 + 복구 포함 ICS 시나리오**: asset_recovered → scoring 이 Blue **복구 크레딧 +50**
+  부여 확인(실측: 자산당 1회, achievements 기록). `scenarios/single/RAILWAY-MODBUS-SABOTAGE-01.yaml`
+  저작 — 신호조작→Modbus 연동 우회→열차 탈선 킬체인 + Blue 탐지·**복구 목표**(blue_objective
+  `match_event: asset_recovered`). P1-3 도구 검증(lint-all 15→16 시나리오 0-error·dry-run 150점·
+  phase-clock) + 러너 테스트 2개(238→243). 완전 라이프사이클(compromise→block→recover) 저작·채점.
 - **ICS 자산 회복(damage heal + asset_recovered) — 재실행 가능**: `process_sim.step()` 에 회복 추가 —
   인터록 재무장 + 안전 상태에서 손상(damage)이 heal_rate 로 회복(누적은 인터록 해제 시에만). 손상
   자산이 확보돼 0 으로 회복되면 트윈이 **asset_recovered** 발행(Blue 복구 크레딧). 파국 상태 고착
