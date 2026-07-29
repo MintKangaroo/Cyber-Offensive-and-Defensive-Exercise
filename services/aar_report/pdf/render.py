@@ -107,7 +107,33 @@ def render_pdf(report: dict, output_path: str) -> None:
     else:
         story.append(Paragraph("전 기술 탐지 커버리지 확보", styles["BodyCustom"]))
 
+    # ICS 자산 공방 라이프사이클(실 Modbus) — ics_lifecycle 섹션이 있을 때만
+    ics = report.get("ics_lifecycle") or {}
+    ics_assets = ics.get("assets") or {}
+    if ics_assets:
+        story.append(Spacer(1, 8))
+        story.append(Paragraph("ICS 자산 공방 (실 Modbus)", styles["H2Custom"]))
+        t = ics.get("totals", {})
+        story.append(Paragraph(
+            f"ICS 공격 {t.get('ics_attacks', 0)}건 · 침해 자산 {t.get('compromised_assets', 0)} · "
+            f"복구 자산 {t.get('recovered_assets', 0)} · 평균 MTTR "
+            f"{_fmt(t.get('avg_mttr_sec'), 's')}", styles["BodyCustom"]))
+        header = ("자산", "공격", "침해", "방어", "복구", "MTTR(s)", "기법")
+        data = [header]
+        for name, v in sorted(ics_assets.items()):
+            data.append((name, str(v["attacks"]), str(v["compromised"]), str(v["blocks"]),
+                         str(v["recovered"]), _fmt(v["mttr_sec"]), ", ".join(v["techniques"]) or "-"))
+        tbl = Table(data, colWidths=[34 * mm, 14 * mm, 14 * mm, 14 * mm, 14 * mm, 20 * mm, 40 * mm])
+        tbl.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, -1), KOREAN_FONT), ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1E2A3F")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("GRID", (0, 0), (-1, -1), 0.3, colors.grey),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+        story.append(tbl)
+
     # 개선 권고
+    story.append(Spacer(1, 8))
     story.append(Paragraph("개선 권고", styles["H2Custom"]))
     for tip in report.get("recommendations", []):
         story.append(Paragraph(f"• {tip}", styles["BodyCustom"]))

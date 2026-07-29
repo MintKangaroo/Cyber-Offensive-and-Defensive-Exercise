@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 ### Added
+- **AAR PDF ICS 섹션**: `pdf/render.py` 가 `ics_lifecycle` 를 PDF 에 렌더 — 자산별 공격/침해/방어/
+  복구/MTTR/기법 표 + 총계. 인쇄 리포트로도 ICS 공방 확인. 실측: 라이브 /report/aar/pdf 200·
+  application/pdf·5816B(ICS 섹션 포함), 무회귀.
 - **AAR ICS 라이프사이클 종합**: `/report/aar` 에 `ics_lifecycle` 섹션 — 이벤트 스트림에서 9개 ICS
   자산별 공방(공격/침해/방어/복구 횟수·**MTTR**·MITRE 기법) + 총계(침해/복구 자산 수·평균 MTTR)
   집계. 순수 요약 + 유닛 5개(243→248). 실측: 라이브 AAR 에서 자산별 라이프사이클·smart_factory
