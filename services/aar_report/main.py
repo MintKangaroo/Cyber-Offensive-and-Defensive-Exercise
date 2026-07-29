@@ -24,6 +24,7 @@ from services.aar_report.recommendations import generate_recommendations  # noqa
 from services.aar_report.pdf.render import render_pdf  # noqa: E402
 from services.aar_report.integrations import (  # noqa: E402
     summarize_incidents, summarize_injects, summarize_integrity, summarize_protocol_attacks,
+    summarize_ics_lifecycle,
 )
 
 EVENT_COLLECTOR_URL = os.environ.get("EVENT_COLLECTOR_URL", "http://event_collector:8010")
@@ -119,6 +120,7 @@ async def get_aar_report(scenario_id: str = "default"):
         "crisis_comms": summarize_injects(inject_board),
         "integrity": summarize_integrity(flagged),
         "ics_protocol_attacks": summarize_protocol_attacks(events),
+        "ics_lifecycle": summarize_ics_lifecycle(events),
     }
 
 

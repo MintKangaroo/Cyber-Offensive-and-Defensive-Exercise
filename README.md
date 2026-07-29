@@ -940,6 +940,7 @@ MAIL FROM:<spammer@evil.com> ; RCPT TO:<victim@external.org>  → 250 (오픈 �
 | `crisis_comms` | 인젝트 대응률·정시율·평균 점수%(P1-4 Injects) |
 | `integrity` | 플래그 공유(담합) 케이스(P1-5 Anti-cheat), clean 여부 |
 | `ics_protocol_attacks` | 실제 프로토콜(Modbus 등) 공격 총계·프로토콜별·레지스터별(P1-1) |
+| `ics_lifecycle` | ICS 자산별 공방 라이프사이클 — 공격·침해·방어·복구 횟수·**MTTR**·MITRE 기법 + 총계(침해/복구 자산 수·평균 MTTR) |
 
 ```text
 # 실측(/report/aar)

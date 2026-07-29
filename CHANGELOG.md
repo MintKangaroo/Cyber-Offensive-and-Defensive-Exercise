@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 ### Added
+- **AAR ICS 라이프사이클 종합**: `/report/aar` 에 `ics_lifecycle` 섹션 — 이벤트 스트림에서 9개 ICS
+  자산별 공방(공격/침해/방어/복구 횟수·**MTTR**·MITRE 기법) + 총계(침해/복구 자산 수·평균 MTTR)
+  집계. 순수 요약 + 유닛 5개(243→248). 실측: 라이브 AAR 에서 자산별 라이프사이클·smart_factory
+  MTTR 402s 등 집계 확인.
 - **Control Tower ICS 자산 상태판**: SSE 이벤트(red_attack_started/asset_compromised/blue_block_success/
   asset_recovered)만으로 9개 ICS 트윈 상태를 색상 추적(공격중·파괴/침해·방어됨·복구됨) + MITRE 기법
   표시 — 백엔드 추가 없이 이벤트 스트림 파생. 실측 캡처(control-tower-ics.png): 9개 트윈 상태·라이브
