@@ -207,6 +207,20 @@ services:
     ports: ["8097:8097"]
     networks: [range_control]
 
+  # 클라우드 네이티브 공격면 트윈(IMDS SSRF·Docker API·kubelet·secrets·SSTI). ICS 아님.
+  cloud_native:
+    build: { context: ., dockerfile: services/cloud_native/Dockerfile }
+    container_name: cloud_native
+    ports: ["8209:8209"]
+    environment:
+      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - CONFIG_SERVICE_URL=http://config_service:8030
+      - SIEM_LOG_DIR=/var/log/siem
+    volumes:
+      - siem_logs:/var/log/siem
+    depends_on: [event_collector, config_service]
+    networks: [range_control]
+
   challenge_portal:
     build: { context: ., dockerfile: services/challenge_portal/Dockerfile }
     container_name: challenge_portal

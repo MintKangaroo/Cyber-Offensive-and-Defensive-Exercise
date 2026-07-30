@@ -1,0 +1,42 @@
+# 클라우드 네이티브 공격면 탐지 규칙(cloud_native 트윈) — MITRE ATT&CK Enterprise.
+# 트윈이 vuln_id(CLD-*) 로 SIEM access 로그를 발행하면 매칭 → blue_detection_success.
+
+- id: CLD-IMDS-SSRF
+  title: "클라우드 메타데이터(IMDS) SSRF 자격증명 탈취"
+  severity: 5
+  mitre: [T1552.005]        # Unsecured Credentials: Cloud Instance Metadata API
+  source_type: twin
+  kind: match
+  match: { vuln_id: "CLD-001" }
+
+- id: CLD-DOCKER-API
+  title: "노출된 Docker API 무인증 exec"
+  severity: 5
+  mitre: [T1610]            # Deploy Container
+  source_type: twin
+  kind: match
+  match: { vuln_id: "CLD-002" }
+
+- id: CLD-KUBELET-ANON
+  title: "kubelet 익명 인증 파드 exec"
+  severity: 5
+  mitre: [T1609]            # Container Administration Command
+  source_type: twin
+  kind: match
+  match: { vuln_id: "CLD-003" }
+
+- id: CLD-SECRETS-EXPOSURE
+  title: "env/ConfigMap 평문 시크릿 노출"
+  severity: 4
+  mitre: [T1552.001]        # Unsecured Credentials: Credentials In Files
+  source_type: twin
+  kind: match
+  match: { vuln_id: "CLD-004" }
+
+- id: CLD-SSTI-RCE
+  title: "서버측 템플릿 인젝션 원격 코드 실행"
+  severity: 5
+  mitre: [T1059]            # Command and Scripting Interpreter
+  source_type: twin
+  kind: match
+  match: { vuln_id: "CLD-005" }

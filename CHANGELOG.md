@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 ### Added
+- **클라우드 네이티브 공격면 트윈(신규 도메인)**: `services/cloud_native`(8209) — ICS 일변도에서
+  현대 클라우드/컨테이너 공격면 추가. 5개 취약점: IMDS SSRF 자격증명 탈취(CLD-001, T1552.005)·
+  노출된 Docker API exec(CLD-002, T1610)·kubelet 익명 exec(CLD-003, T1609)·시크릿 노출(CLD-004,
+  T1552.001)·SSTI RCE(CLD-005, T1059). SIEM 규칙 5종(`cloud_layer.yaml`) + TWIN_ASSETS 등록. 컨트랙트
+  유닛 8개(254→262). 실측: 5개 vuln 익스플로잇·이벤트 발행, 라이브 SIEM 탐지 5규칙 → blue_detection
+  7건 → Blue +220.
+- **Control Tower 인시던트 콘솔 전이**: 인시던트 행 클릭 → 라이프사이클 다음 단계 전이(new→triage→…→
+  closed). 실측(Playwright): new→triage 전이·API 반영 확인.
 - **Incident 자동 강화(이벤트 상관)**: incident 서비스가 event_collector 이벤트를 폴링해 자산 복구
   (asset_recovered)를 관련 미해결 인시던트(host 일치)의 타임라인에 **해결 힌트 주석**(recovery_detected)
   으로 자동 기록. **자동 close 하지 않음**(Blue 가 검토·종결 — SOC 훈련 주체성 유지). 중복 주석 방지.
