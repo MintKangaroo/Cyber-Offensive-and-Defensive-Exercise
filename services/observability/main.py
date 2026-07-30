@@ -41,6 +41,7 @@ _DEFAULT_TARGETS = {
     "edr_backend": "http://edr_backend:8080",
     "incident": "http://incident:8095",
     "injects": "http://injects:8096",
+    "attack_defense": "http://attack_defense:8100",
 }
 
 

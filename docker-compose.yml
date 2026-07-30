@@ -8,6 +8,17 @@
 # range_control 네트워크로만 통신한다(이벤트/점수/패치/텔레메트리 전용 경로).
 version: "3.8"
 
+x-ad-service-security: &ad-service-security
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=32m
+  cap_drop: ["ALL"]
+  security_opt: ["no-new-privileges:true"]
+  pids_limit: 128
+  mem_limit: 256m
+  cpus: 0.50
+  restart: unless-stopped
+
 services:
   event_collector:
     build: { context: ., dockerfile: services/event_collector/Dockerfile }
@@ -174,8 +185,8 @@ services:
     ports: ["8051:8051"]
     environment:
       - DATA_DIR=/data
-      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-}
-      - AUTH_ADMIN_PASSWORD=${AUTH_ADMIN_PASSWORD:-}
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-demo-jwt-secret-change-before-production-32bytes}
+      - AUTH_ADMIN_PASSWORD=${AUTH_ADMIN_PASSWORD:-demo-operator-change-me}
     volumes: [ auth_data:/data ]
     networks: [range_control]
 
@@ -205,7 +216,138 @@ services:
     build: { context: ., dockerfile: services/observability/Dockerfile }
     container_name: observability
     ports: ["8097:8097"]
-    networks: [range_control]
+    networks: [range_control, ad_scoreboard_api]
+
+  # DEF CON-style symmetric Attack/Defense mode. This is an additive service;
+  # legacy exercise services and their databases remain unchanged.
+  attack_defense:
+    build: { context: ., dockerfile: services/attack_defense/Dockerfile }
+    container_name: attack_defense
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 512m
+    cpus: 1.0
+    ports: ["8100:8100"]
+    volumes:
+      - ad_data:/data
+    environment:
+      - ATTACK_DEFENSE_ENABLED=${ATTACK_DEFENSE_ENABLED:-true}
+      - ATTACK_DEFENSE_DATA_DIR=/data
+      - ATTACK_DEFENSE_FLAG_SECRET=${ATTACK_DEFENSE_FLAG_SECRET:-attack-defense-dev-flag-secret-change-me}
+      - ATTACK_DEFENSE_FLAG_HASH_SECRET=${ATTACK_DEFENSE_FLAG_HASH_SECRET:-attack-defense-dev-hash-secret-change-me}
+      - ATTACK_DEFENSE_MANAGEMENT_TOKEN=${ATTACK_DEFENSE_MANAGEMENT_TOKEN:-attack-defense-dev-management-token}
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-demo-jwt-secret-change-before-production-32bytes}
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-dev-instructor-token}
+      - OPERATOR_TOKEN=${OPERATOR_TOKEN:-}
+      - ROUND_DURATION_SECONDS=${ROUND_DURATION_SECONDS:-120}
+      - ACTIVE_FLAG_WINDOW_ROUNDS=${ACTIVE_FLAG_WINDOW_ROUNDS:-3}
+      - CHECK_INTERVAL_SECONDS=${CHECK_INTERVAL_SECONDS:-30}
+      - CHECK_TIMEOUT_SECONDS=${CHECK_TIMEOUT_SECONDS:-10}
+      - CHECK_RETRY_COUNT=${CHECK_RETRY_COUNT:-2}
+      - SCOREBOARD_DELAY_ROUNDS=${SCOREBOARD_DELAY_ROUNDS:-0}
+      - ATTACK_SCORE_PER_FLAG=${ATTACK_SCORE_PER_FLAG:-10}
+      - DEFENSE_SCORE_PER_FLAG=${DEFENSE_SCORE_PER_FLAG:-5}
+      - AVAILABILITY_SCORE_PER_ROUND=${AVAILABILITY_SCORE_PER_ROUND:-5}
+      - MAX_FLAG_SUBMISSIONS_PER_MINUTE=${MAX_FLAG_SUBMISSIONS_PER_MINUTE:-120}
+      - MAX_PATCH_SUBMISSIONS_PER_HOUR=${MAX_PATCH_SUBMISSIONS_PER_HOUR:-10}
+      - PATCH_VALIDATION_TIMEOUT_SECONDS=${PATCH_VALIDATION_TIMEOUT_SECONDS:-180}
+      - PATCH_MAX_IMAGE_SIZE_MB=${PATCH_MAX_IMAGE_SIZE_MB:-1024}
+      - PATCH_ALLOWED_REGISTRY=${PATCH_ALLOWED_REGISTRY:-registry.local:5000}
+      - PATCH_RUNTIME_REGISTRY=${PATCH_RUNTIME_REGISTRY:-localhost:5000}
+      - GAME_RUNTIME=${GAME_RUNTIME:-docker_compose}
+    depends_on:
+      - ad_team_01_notes
+      - ad_team_01_vault
+      - ad_team_02_notes
+      - ad_team_02_vault
+      - ad_team_03_notes
+      - ad_team_03_vault
+      - ad_registry
+    networks: [range_control, ad_management, ad_scoreboard_api]
+
+  ad_registry:
+    image: registry:2
+    container_name: ad_registry
+    ports: ["127.0.0.1:5000:5000"]
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    volumes: [ad_registry_data:/var/lib/registry]
+    networks:
+      ad_management:
+        aliases: [registry.local]
+      ad_registry_host: {}
+
+  ad_team_01_notes:
+    <<: *ad-service-security
+    image: ${AD_IMAGE_AD_TEAM_01_NOTES:-cyber-range/ad-vulnerable-notes:base}
+    build: { context: ., dockerfile: services/attack_defense/demo_services/vulnerable_notes/Dockerfile }
+    ports: ["9101:9000"]
+    environment: &ad-service-env
+      ATTACK_DEFENSE_MANAGEMENT_TOKEN: ${ATTACK_DEFENSE_MANAGEMENT_TOKEN:-attack-defense-dev-management-token}
+    volumes: [ad_team_01_notes_data:/data]
+    networks: [ad_team_access, ad_game_attack, ad_management]
+
+  ad_team_01_vault:
+    <<: *ad-service-security
+    image: ${AD_IMAGE_AD_TEAM_01_VAULT:-cyber-range/ad-file-vault:base}
+    build: { context: ., dockerfile: services/attack_defense/demo_services/file_vault/Dockerfile }
+    ports: ["9201:9000"]
+    environment: *ad-service-env
+    volumes: [ad_team_01_vault_data:/data]
+    networks: [ad_team_access, ad_game_attack, ad_management]
+
+  ad_team_02_notes:
+    <<: *ad-service-security
+    image: ${AD_IMAGE_AD_TEAM_02_NOTES:-cyber-range/ad-vulnerable-notes:base}
+    build: { context: ., dockerfile: services/attack_defense/demo_services/vulnerable_notes/Dockerfile }
+    ports: ["9102:9000"]
+    environment: *ad-service-env
+    volumes: [ad_team_02_notes_data:/data]
+    networks: [ad_team_access, ad_game_attack, ad_management]
+
+  ad_team_02_vault:
+    <<: *ad-service-security
+    image: ${AD_IMAGE_AD_TEAM_02_VAULT:-cyber-range/ad-file-vault:base}
+    build: { context: ., dockerfile: services/attack_defense/demo_services/file_vault/Dockerfile }
+    ports: ["9202:9000"]
+    environment: *ad-service-env
+    volumes: [ad_team_02_vault_data:/data]
+    networks: [ad_team_access, ad_game_attack, ad_management]
+
+  ad_team_03_notes:
+    <<: *ad-service-security
+    image: ${AD_IMAGE_AD_TEAM_03_NOTES:-cyber-range/ad-vulnerable-notes:base}
+    build: { context: ., dockerfile: services/attack_defense/demo_services/vulnerable_notes/Dockerfile }
+    ports: ["9103:9000"]
+    environment: *ad-service-env
+    volumes: [ad_team_03_notes_data:/data]
+    networks: [ad_team_access, ad_game_attack, ad_management]
+
+  ad_team_03_vault:
+    <<: *ad-service-security
+    image: ${AD_IMAGE_AD_TEAM_03_VAULT:-cyber-range/ad-file-vault:base}
+    build: { context: ., dockerfile: services/attack_defense/demo_services/file_vault/Dockerfile }
+    ports: ["9203:9000"]
+    environment: *ad-service-env
+    volumes: [ad_team_03_vault_data:/data]
+    networks: [ad_team_access, ad_game_attack, ad_management]
+
+  # Fixed management-only sandbox. The trusted host runtime runner starts this
+  # profile with a digest-pinned candidate image; no port is published.
+  ad_patch_sandbox:
+    <<: *ad-service-security
+    profiles: ["patch-runner"]
+    image: ${AD_IMAGE_AD_PATCH_SANDBOX:-cyber-range/ad-vulnerable-notes:base}
+    environment: *ad-service-env
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+      - /data:rw,noexec,nosuid,size=64m,uid=65532,gid=65532,mode=0700
+    networks: [ad_management]
 
   # 클라우드 네이티브 공격면 트윈(IMDS SSRF·Docker API·kubelet·secrets·SSTI). ICS 아님.
   cloud_native:
@@ -777,6 +919,14 @@ networks:
   twin_datacenter_bms: { driver: bridge, internal: true }
   twin_hospital_ot: { driver: bridge, internal: true }
   range_control: { driver: bridge }
+  # Logical A/D planes. Docker Compose cannot enforce directional egress;
+  # production NetworkPolicy examples live under infra/attack_defense/.
+  ad_team_access: { driver: bridge }
+  ad_game_attack: { driver: bridge, internal: true }
+  ad_scoreboard_api: { driver: bridge }
+  ad_management: { driver: bridge, internal: true }
+  # Host-side push/pull path. Game service containers are deliberately absent.
+  ad_registry_host: { driver: bridge }
 
 volumes:
   auth_data: {}
@@ -791,4 +941,12 @@ volumes:
   noc_data: {}
   cp_data: {}
   rc_data: {}
+  ad_data: {}
+  ad_registry_data: {}
+  ad_team_01_notes_data: {}
+  ad_team_01_vault_data: {}
+  ad_team_02_notes_data: {}
+  ad_team_02_vault_data: {}
+  ad_team_03_notes_data: {}
+  ad_team_03_vault_data: {}
   siem_logs:

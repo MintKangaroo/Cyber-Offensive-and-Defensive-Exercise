@@ -1,0 +1,1 @@
+"""File Vault demo image."""

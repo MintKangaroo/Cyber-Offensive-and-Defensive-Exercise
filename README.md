@@ -10,6 +10,58 @@
 > **SSE 실시간 상황판 + 단일 관리 콘솔(Control Tower)**, **인시던트·안티치트·위기 인젝트**,
 > **Prometheus 관측성·시나리오 저작 도구**까지 갖춘 운영형 레인지입니다.
 
+## 경기 모드
+
+기존 CCE 스타일 기능을 유지하면서 다음 세 모드를 독립적으로 지원합니다.
+
+| 모드 | 설명 |
+|---|---|
+| `exercise` | 기존 Red Team 대 Blue Team 훈련. 운영진 시나리오·위기 인젝트와 Blue 탐지·차단·복구·보고 |
+| `attack_defense` | DEF CON Finals 스타일 대칭 공방. 전 팀 동일 서비스, 라운드 플래그, SLA checker, 패치, Attack/Defense/Availability ledger |
+| `hybrid_live_fire` | 대칭 공방에 운영진 Red 시나리오·인젝트를 명시적으로 결합. Detection/Containment/Recovery/Incident Response/Mission Inject를 별도 채점 |
+
+`exercise`는 기존 `range_control`/scenario/inject/scoring 경로를 그대로
+사용합니다. 신규 엔진은 exercise에 라운드 플래그나 팀 대 팀 공격을 강제하지
+않으며, `attack_defense`에는 위기 인젝트를 필수로 적용하지 않습니다.
+
+### Attack/Defense 로컬 데모
+
+```bash
+make attack-defense-demo
+```
+
+이 명령은 3팀 × 동일한 2개 서비스(Vulnerable Notes, File Vault), 로컬
+registry, 자동 라운드/checker와 공개 scoreboard를 기동합니다.
+
+데모 계정(로컬 전용):
+
+- Operator: `instructor` / `demo-operator-change-me`
+- Competitors: `team01` / `demo-team-01-change-me`,
+  `team02` / `demo-team-02-change-me`,
+  `team03` / `demo-team-03-change-me`
+
+API는 `http://localhost:8100`이며 주요 경로는
+`POST /api/attack-defense/matches/{id}/flags/submit`,
+`POST /api/attack-defense/matches/{id}/services/{service}/patches`,
+`GET /api/attack-defense/matches/{id}/scoreboard`입니다. 전체 실행 절차는
+[Attack/Defense Demo](docs/attack-defense-demo.md), 구조는
+[Architecture](docs/attack-defense-architecture.md), 보안 경계와 현재 한계는
+[Security Review](docs/attack-defense-security.md)를 참고하십시오.
+
+> **보안 주의:** 데모 비밀번호·JWT/HMAC 키는 공유 또는 운영 환경에서 반드시
+> 교체해야 합니다. Docker Compose의 네트워크 분리는 대회급 방향성 egress,
+> bandwidth/connection 제한을 완전히 보장하지 않습니다. API 컨테이너에는 Docker
+> socket을 절대 마운트하지 마십시오.
+
+Live Fire UI 실제 API 캡처:
+
+| Competitor Battle Overview | Operator Command Center |
+|---|---|
+| ![Competitor battle overview](docs/ui/screenshots/competitor-battle-1920x1080.png) | ![Operator command center](docs/ui/screenshots/operator-command-1920x1080.png) |
+
+Observer/broadcast-safe 화면과 노트북 viewport 캡처는
+[Live Fire Screen Specification](docs/ui/live-fire-screen-specification.md)에 있습니다.
+
 <p align="center">
   <img src="docs/images/livefire-overview.png" alt="Live Fire Range 대시보드" width="900"/>
   <br/>
@@ -104,7 +156,8 @@ flowchart TB
 
 **포트 요약**: 트윈 8001–8003·8201–8208(nginx 게이트웨이 경유) · Event 8010 · Scoring 8020 · Config 8030 ·
 SIEM 8040 · Scenario 8045 · Instructor 8050 · **Range Control 8055** · **Challenge Portal 8060** · NOC 8070 ·
-EDR 8080 · AAR 8090 · **Match vhost 8088** · 대시보드 5173–5177(EDR/LiveFire/SIEM/**RedPortal**/**BluePortal**).
+EDR 8080 · AAR 8090 · **Attack/Defense 8100** · **Match vhost 8088** · 대시보드
+5173–5177(EDR/LiveFire/SIEM/**RedPortal**/**BluePortal**).
 
 ---
 

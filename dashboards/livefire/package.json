@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:ui": "playwright test",
+    "visual:capture": "node scripts/capture-live-fire.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -15,14 +17,15 @@
     "zustand": "^4.5.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.3.1",
+    "@vitejs/plugin-react": "^5.2.0",
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "typescript": "^5.5.2",
-    "vite": "^5.3.1",
-    "vitest": "^2.1.9"
+    "vite": "^7.3.6",
+    "vitest": "^3.2.7"
   }
 }

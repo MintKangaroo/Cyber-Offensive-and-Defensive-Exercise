@@ -1,0 +1,102 @@
+# Production-oriented example. Labels and namespaces must be applied by the
+# Kubernetes runtime adapter; this file is not claimed to make Docker Compose
+# tournament-grade.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ad-default-deny
+  namespace: cyber-range-ad
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: game-service-public-ingress
+  namespace: cyber-range-ad
+spec:
+  podSelector:
+    matchLabels:
+      ad.cyber-range/plane: game-service
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              ad.cyber-range/plane: game-attack
+      ports:
+        - { protocol: TCP, port: 9000 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: game-service-management-ingress
+  namespace: cyber-range-ad
+spec:
+  podSelector:
+    matchLabels:
+      ad.cyber-range/plane: game-service
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: ad.cyber-range/component
+                operator: In
+                values: [checker, flag-injector]
+      ports:
+        - { protocol: TCP, port: 9001 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: checker-to-game-services
+  namespace: cyber-range-ad
+spec:
+  podSelector:
+    matchExpressions:
+      - key: ad.cyber-range/component
+        operator: In
+        values: [checker, flag-injector]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              ad.cyber-range/plane: game-service
+      ports:
+        - { protocol: TCP, port: 9000 }
+        - { protocol: TCP, port: 9001 }
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: scoreboard-api-ingress
+  namespace: cyber-range-ad
+spec:
+  podSelector:
+    matchLabels:
+      ad.cyber-range/component: api
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              ad.cyber-range/plane: scoreboard-api
+      ports:
+        - { protocol: TCP, port: 8100 }
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              ad.cyber-range/plane: management
+      ports:
+        - { protocol: TCP, port: 8100 }

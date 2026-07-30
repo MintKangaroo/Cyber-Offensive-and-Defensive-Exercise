@@ -31,7 +31,7 @@ DB_PATH = Path(os.environ.get("DATA_DIR", str(APP_DIR))) / "auth.db"
 JWT_SECRET = os.environ.get("AUTH_JWT_SECRET", "").strip() or secrets.token_hex(32)
 ACCESS_TTL = int(os.environ.get("AUTH_ACCESS_TTL", "900"))       # 15분
 REFRESH_TTL = int(os.environ.get("AUTH_REFRESH_TTL", "28800"))   # 8시간
-ROLES = ("instructor", "red", "blue", "observer")
+ROLES = ("instructor", "operator", "competitor", "red", "blue", "observer")
 COOKIE = "cr_token"
 
 app = FastAPI(title="Auth")

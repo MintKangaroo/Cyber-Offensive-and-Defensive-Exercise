@@ -21,7 +21,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-ROLES = ("instructor", "red", "blue", "observer")
+ROLES = ("instructor", "operator", "competitor", "red", "blue", "observer")
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,8 @@ class Identity:
     actor: str          # 감사 로그용 식별자(토큰 자체는 노출하지 않음)
     role: str           # ROLES 중 하나
     dev_mode: bool = False   # 토큰 미설정 로컬 개발 여부(역할 검사 우회)
+    team_id: str = ""        # JWT 멤버십 클레임(정적 토큰에는 없음)
+    match_id: str = ""       # JWT 멤버십 클레임(정적 토큰에는 없음)
 
 
 def _token_role_map() -> dict[str, str]:
@@ -69,7 +71,12 @@ def _decode_jwt(token: str) -> "Identity | None":
     role = claims.get("role")
     if claims.get("type") not in (None, "access") or role not in ROLES:
         return None
-    return Identity(actor=claims.get("sub", role), role=role)
+    return Identity(
+        actor=claims.get("sub", role),
+        role=role,
+        team_id=str(claims.get("team_id", "") or ""),
+        match_id=str(claims.get("match_id", "") or ""),
+    )
 
 
 def authenticate(authorization: str) -> Identity:
