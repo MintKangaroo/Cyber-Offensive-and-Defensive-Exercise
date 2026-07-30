@@ -82,7 +82,12 @@ def build_components(
     scoring = ScoringService(db, repo, settings, evidence)
     injector = HttpFlagInjector(settings)
     checker = HttpWorkflowChecker(settings, injector)
-    runtime = runtime or DeclaredComposeRuntime()
+    if runtime is None:
+        if settings.game_runtime == "kubernetes":
+            from .k8s_runtime import KubernetesRuntime
+            runtime = KubernetesRuntime(settings.allowed_registry, dry_run=True)
+        else:
+            runtime = DeclaredComposeRuntime()
     patches = PatchPipeline(
         db, repo, settings, evidence,
         inspector or HttpRegistryInspector(settings.patch_validation_timeout_seconds),

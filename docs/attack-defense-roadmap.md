@@ -12,6 +12,14 @@ The MVP deliberately leaves these next tasks in this order:
    (tap → structured flow records) and per-recipient delivery/storage.
 2. **Kubernetes runtime** — namespaces, NetworkPolicy, resource quotas,
    readiness-gated rollout, immutable secrets and signed images.
+   **Status: adapter + manifest generation delivered.** `k8s_runtime.py`
+   implements the `ServiceRuntime` protocol and generates per-team namespaces,
+   digest-pinned images, hardened non-root securityContext, `/health`
+   readiness-gated RollingUpdate (maxUnavailable 0), default-deny NetworkPolicy
+   and ResourceQuota. `validate_manifests` gates registry/digest/hardening.
+   Selected by `GAME_RUNTIME=kubernetes`; runs dry-run by default (API never
+   holds cluster credentials). Remaining: live `kubectl apply` via a trusted
+   host runner, immutable Secret objects, and signed-image admission.
 3. **Highly available game engine** — PostgreSQL advisory locks, replicated
    workers, durable distributed rate limits and clock discipline.
 4. **KOTH** — ownership leases and separate scoring strategy.
