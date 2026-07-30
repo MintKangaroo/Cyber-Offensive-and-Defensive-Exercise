@@ -45,6 +45,8 @@ class AttackDefenseSettings:
     engine_lock_seconds: int = 20
     allow_insecure_dev_auth: bool = False
     auto_engine: bool = True
+    pcap_release_delay_seconds: int = 900        # 캡처 공개 지연(라이브 익스플로잇 방지)
+    pcap_anonymize_salt: str = "attack-defense-dev-pcap-salt-change-me"
 
     @classmethod
     def from_env(cls) -> "AttackDefenseSettings":
@@ -79,6 +81,9 @@ class AttackDefenseSettings:
             engine_lock_seconds=_int("ATTACK_DEFENSE_ENGINE_LOCK_SECONDS", 20, 5),
             allow_insecure_dev_auth=_bool("ATTACK_DEFENSE_ALLOW_INSECURE_DEV_AUTH", False),
             auto_engine=_bool("ATTACK_DEFENSE_AUTO_ENGINE", True),
+            pcap_release_delay_seconds=_int("PCAP_RELEASE_DELAY_SECONDS", 900, 0),
+            pcap_anonymize_salt=os.environ.get(
+                "PCAP_ANONYMIZE_SALT", cls.pcap_anonymize_salt).strip(),
         )
 
     def validate(self) -> None:

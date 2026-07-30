@@ -31,9 +31,11 @@ from .game_engine import GameEngine
 from .metrics import render_metrics
 from .patch_pipeline import HttpRegistryInspector, PatchPipeline, RegistryInspector
 from .repositories import AttackDefenseRepository
+from .pcap_privacy import sanitize_capture
 from .schemas import (
     AnnouncementRequest,
     AdjustmentRequest,
+    CaptureSanitizeRequest,
     ExtendRoundRequest,
     FlagSubmitRequest,
     MatchCreateRequest,
@@ -210,6 +212,29 @@ def create_app(components: Components | None = None) -> FastAPI:
     @app.get("/api/attack-defense/operator/matches")
     def operator_matches(_: Identity = Depends(operator)):
         return {"matches": c.repo.list_matches()}
+
+    @app.post("/api/attack-defense/captures/sanitize")
+    def sanitize_pcap(req: CaptureSanitizeRequest, identity: Identity = Depends(operator)):
+        """PCAP/캡처 프라이버시(roadmap #1): 플래그 스크럽·팀 익명화·지연 게이팅·워터마크 후
+        수신 팀에 배포 가능한 정제본 반환. 지연 전이면 released=false 로 보류."""
+        result = sanitize_capture(
+            [f.model_dump() for f in req.flows],
+            active_flags=set(req.active_flags),
+            team_ips=req.team_ips,
+            recipient_id=req.recipient_team_id,
+            capture_ts=req.capture_ts,
+            now=time.time(),
+            delay_sec=c.settings.pcap_release_delay_seconds,
+            salt=c.settings.pcap_anonymize_salt,
+        )
+        from .evidence import AuditContext
+        c.evidence.record(AuditContext(
+            actor=identity.actor, event_type="capture.sanitize",
+            result="released" if result["released"] else "withheld",
+            team_id=req.recipient_team_id,
+            metadata={"flows": len(req.flows), "released": result["released"],
+                      "reason": req.reason}))
+        return result
 
     @app.post("/api/attack-defense/matches/{match_id}/teams", status_code=201)
     def create_team(match_id: str, req: TeamCreateRequest, _: Identity = Depends(operator)):

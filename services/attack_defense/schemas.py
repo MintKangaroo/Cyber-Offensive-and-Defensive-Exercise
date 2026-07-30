@@ -68,6 +68,21 @@ class RuntimeCompleteRequest(BaseModel):
 
 class ExtendRoundRequest(BaseModel):
     seconds: int = Field(ge=1, le=3600)
+
+
+class CaptureFlow(BaseModel):
+    ts: float = 0.0
+    src_ip: str = Field(default="", max_length=64)
+    dst_ip: str = Field(default="", max_length=64)
+    payload: str = Field(default="", max_length=16384)
+
+
+class CaptureSanitizeRequest(BaseModel):
+    recipient_team_id: str = Field(min_length=1, max_length=64)
+    capture_ts: float
+    flows: list[CaptureFlow] = Field(default_factory=list, max_length=2000)
+    active_flags: list[str] = Field(default_factory=list, max_length=5000)
+    team_ips: dict[str, str] = Field(default_factory=dict)
     reason: str = Field(min_length=3, max_length=500)
 
 
