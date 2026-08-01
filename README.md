@@ -24,6 +24,73 @@
 사용합니다. 신규 엔진은 exercise에 라운드 플래그나 팀 대 팀 공격을 강제하지
 않으며, `attack_defense`에는 위기 인젝트를 필수로 적용하지 않습니다.
 
+### 모드별 실행 경계
+
+```mermaid
+flowchart LR
+    EX[exercise] --> LEGACY[기존 Range · Scenario · Inject · Scoring]
+    AD[attack_defense] --> ADF[A/D Game Engine · Checker · Flag · Patch]
+    HY[hybrid_live_fire] --> ADF
+    HY --> LEGACY
+
+    LEGACY --> CCE[Detection · Containment · Recovery · IR · Mission Inject]
+    ADF --> DEFCON[Attack · Flag Defense · Availability]
+    CCE --> LEDGER[Category-separated Score Ledger]
+    DEFCON --> LEDGER
+```
+
+- `MatchModeStrategy`, `ScoringPolicy`, `AttackPolicy`, `CheckerPolicy`,
+  `InjectPolicy`, `ServiceDeploymentPolicy`, `ScoreVisibilityPolicy`가 모드별
+  동작을 분리합니다.
+- `hybrid_live_fire`는 두 모델을 명시적으로 조합하며, 경기 설정에서 사용할
+  점수 카테고리와 가중치를 선택합니다.
+- 모든 점수 변경은 합계 테이블을 직접 수정하지 않고 idempotency key가 있는
+  append-only `ScoreLedger`에 기록됩니다.
+
+### Attack/Defense 경기 루프
+
+```mermaid
+flowchart LR
+    R[Round 생성] --> F[팀 × 서비스 Flag 발급]
+    F --> I[Management plane 주입]
+    I --> C[기능 · SLA Checker]
+    C --> L[Round LIVE]
+    L --> S[상대 Flag 제출]
+    S --> E[Round 종료 · 재계산]
+    E --> P[Attack · Defense · Availability Ledger]
+    P --> R
+```
+
+MVP는 3개 팀에 동일한 두 서비스인 **Vulnerable Notes**와 **File Vault**를
+배포합니다. 플래그는 `match × round × victim team × service` 범위의 HMAC
+opaque token이며 평문을 DB, 일반 로그, metric label, 이벤트 payload에 남기지
+않습니다. 패치는 허용 registry와 팀 namespace를 확인한 뒤 digest로 고정하고,
+sandbox 정상 기능·flag put/get 검사 후 live 교체하며 실패 시 이전 digest로
+rollback합니다.
+
+### Live Fire Operations UI
+
+| 역할 | 기본 화면 | 공개 범위 |
+|---|---|---|
+| Competitor | Battle Overview, Attack/Defense Console, Services, Patches, Scoreboard | 자기 서비스 상세와 공개 공격면 |
+| Operator | Command Center, Team × Service Matrix, Round/Flag/Checker/Patch/Score/Evidence | 실시간 운영 정보와 감사 사유가 필요한 제어 액션 |
+| Observer | Live Overview, 지연 Scoreboard, Timeline, 서비스 aggregate | 팀 내부 상태·endpoint·checker 증거·image reference 제외 |
+
+상단 Live Match Header에서 경기 상태, 현재 라운드, 서버 기준 남은 시간, 전체
+경과 시간, SSE 연결 지연을 확인할 수 있습니다. 이벤트 스트림은
+`Last-Event-ID`, 중복 제거, out-of-order 정렬, exponential backoff reconnect를
+지원하며 `prefers-reduced-motion`, 키보드 탐색과 `Ctrl/Cmd + K` command palette를
+제공합니다.
+
+검증된 상태:
+
+- 기존 exercise/ICS를 포함한 Python 전체 회귀: **296 passed**
+- React/Vitest 컴포넌트 테스트: **16 passed**
+- Playwright 역할·권한·키보드·시각 회귀: **3 passed**
+- 3팀 × 2서비스 실제 Compose health, round 재시작 복구, flag 제출·중복 차단,
+  digest-pinned patch 배포·rollback 경로 검증
+- Vite production build 및 `npm audit` 통과
+
 ### Attack/Defense 로컬 데모
 
 ```bash
@@ -48,6 +115,26 @@ API는 `http://localhost:8100`이며 주요 경로는
 [Architecture](docs/attack-defense-architecture.md), 보안 경계와 현재 한계는
 [Security Review](docs/attack-defense-security.md)를 참고하십시오.
 
+Live Fire UI 실행:
+
+```bash
+cd dashboards/livefire
+npm install
+npm run dev -- --host 0.0.0.0 --port 5178
+```
+
+- 일반 UI: `http://localhost:5178/?mode=attack_defense`
+- Hybrid UI: `http://localhost:5178/?mode=hybrid_live_fire`
+- 방송 안전 Observer: `http://localhost:5178/observer/live?mode=attack_defense`
+
+운영 CLI와 trusted patch runner:
+
+```bash
+python3 -m services.attack_defense.cli ad round-status ad-demo
+python3 -m services.attack_defense.cli ad flag-submit ad-demo 'FLAG{...}'
+make attack-defense-runtime-work
+```
+
 > **보안 주의:** 데모 비밀번호·JWT/HMAC 키는 공유 또는 운영 환경에서 반드시
 > 교체해야 합니다. Docker Compose의 네트워크 분리는 대회급 방향성 egress,
 > bandwidth/connection 제한을 완전히 보장하지 않습니다. API 컨테이너에는 Docker
@@ -61,6 +148,19 @@ Live Fire UI 실제 API 캡처:
 
 Observer/broadcast-safe 화면과 노트북 viewport 캡처는
 [Live Fire Screen Specification](docs/ui/live-fire-screen-specification.md)에 있습니다.
+
+### 현재 MVP 보안 경계
+
+- Compose bridge는 방향성 egress, 대회급 bandwidth/connection quota를 완전히
+  강제하지 못합니다. 운영 환경에서는 CNI 기반 deny-by-default NetworkPolicy가
+  필요합니다.
+- SQLite lease는 단일 호스트 개발·데모용입니다. 다중 game-engine HA는
+  PostgreSQL advisory lock과 분산 rate limit으로 교체해야 합니다.
+- 로컬 registry는 운영용 trust boundary가 아닙니다. 운영 전 image signature,
+  provenance/SBOM, 인증 registry와 microVM/gVisor 계열 sandbox가 필요합니다.
+- API 컨테이너에 Docker socket, privileged, host network/PID/IPC 또는 host mount를
+  제공하지 않습니다. 배포 명령은 별도의 trusted host runner가 durable job으로
+  처리합니다.
 
 <p align="center">
   <img src="docs/images/livefire-overview.png" alt="Live Fire Range 대시보드" width="900"/>
@@ -113,8 +213,8 @@ Observer/broadcast-safe 화면과 노트북 viewport 캡처는
 
 ```mermaid
 flowchart TB
-    subgraph Users["🔴 Red / 🔵 Blue / 👀 Observer / 🎓 Instructor"]
-        RT["Red 팀"]; BT["Blue 팀"]; OB["관전자"]; IN["교관"]
+    subgraph Users["🔴 Red / 🔵 Blue / ⚔️ Competitor / 👀 Observer / 🎓 Operator"]
+        RT["Red 팀"]; BT["Blue 팀"]; CP["A/D 참가팀"]; OB["관전자"]; IN["교관·운영자"]
     end
 
     subgraph Dashboards["대시보드 (Vite/React)"]
@@ -134,12 +234,19 @@ flowchart TB
         EDR["EDR Backend :8080"]; SIEM["SIEM Core :8040"]; AAR["AAR Report :8090"]
     end
 
+    subgraph AttackDefense["⚔️ 대칭형 Attack/Defense :8100"]
+        GE["Tick Game Engine"]; FS["Flag · Checker"]
+        SL["Score Ledger"]; PP["Patch Pipeline"]
+        GSVC["3팀 × Notes / Vault"]
+    end
+
     subgraph Sensors["📡 네트워크 센서"]
         SUR["Suricata ×11"]; ZK["Zeek ×11"]; PF["pfSense syslog"]
     end
 
     RT -->|익스플로잇| Twins
     BT --> EDRUI & SIEMUI
+    CP -->|공격·방어·패치| LF
     OB & IN --> LF
     Twins -->|텔레메트리·이벤트| EC
     Twins -->|access log| SIEM
@@ -150,6 +257,10 @@ flowchart TB
     SE --> EC
     SIEM -->|blue_detection| EC
     SC & EC & SIEM --> AAR
+    LF --> GE
+    GE --> FS --> GSVC
+    GE --> SL
+    PP --> GSVC
     Dashboards -.read.-> Core
     Dashboards -.read.-> Defense
 ```
