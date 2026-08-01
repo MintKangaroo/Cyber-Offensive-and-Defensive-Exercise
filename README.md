@@ -10,6 +10,67 @@
 > **SSE 실시간 상황판 + 단일 관리 콘솔(Control Tower)**, **인시던트·안티치트·위기 인젝트**,
 > **Prometheus 관측성·시나리오 저작 도구**까지 갖춘 운영형 레인지입니다.
 
+## 처음 시작하기
+
+Docker와 Docker Compose v2, Node.js 20+가 설치돼 있다면 아래 순서만 따라 하면
+됩니다. 첫 실행은 image build 때문에 시간이 조금 걸릴 수 있습니다.
+
+### 1. 경기 서버 시작
+
+```bash
+git clone https://github.com/MintKangaroo/Cyber-Offensive-and-Defensive-Exercise.git
+cd Cyber-Offensive-and-Defensive-Exercise
+make attack-defense-demo
+```
+
+이 명령 하나가 다음을 준비합니다.
+
+- Attack/Defense API와 자동 round engine
+- Operator 1명, 참가팀 3개
+- 모든 팀에 동일한 Vulnerable Notes와 File Vault
+- flag injector와 기능/SLA checker
+- 패치 검증용 local registry
+
+정상 기동 확인:
+
+```bash
+curl http://localhost:8100/health
+python3 -m services.attack_defense.cli ad round-status ad-demo
+docker compose ps
+```
+
+### 2. Live Fire 화면 시작
+
+새 터미널을 열고 실행합니다.
+
+```bash
+cd Cyber-Offensive-and-Defensive-Exercise/dashboards/livefire
+npm install
+npm run dev -- --host 0.0.0.0 --port 5178
+```
+
+브라우저에서 `http://localhost:5178/?mode=attack_defense`를 엽니다.
+
+| 사용 목적 | 아이디 | 비밀번호 |
+|---|---|---|
+| 경기 운영 | `instructor` | `demo-operator-change-me` |
+| Team 01 참가 | `team01` | `demo-team-01-change-me` |
+| Team 02 참가 | `team02` | `demo-team-02-change-me` |
+| Team 03 참가 | `team03` | `demo-team-03-change-me` |
+
+> 위 계정과 기본 secret은 로컬 데모 전용입니다. 공유 서버나 실제 경기에서는
+> 반드시 `.env`의 비밀번호·JWT·HMAC secret을 교체하십시오.
+
+### 3. 바로 체험하기
+
+1. `team01`로 로그인해 **Battle Overview**에서 자기 서비스가 정상인지 확인합니다.
+2. `http://localhost:9102` 또는 `http://localhost:9202`처럼 상대 팀 서비스를
+   테스트합니다. 데모는 공격 exploit을 자동 실행하지 않습니다.
+3. 획득한 `FLAG{...}`를 **Attack Console**에 붙여넣습니다.
+4. **Defense Console**에서 checker, image digest와 patch 상태를 확인합니다.
+5. `instructor`로 로그인하면 **Command Center**에서 전체 팀×서비스 상태,
+   round 제어, restart/rollback과 감사 로그를 확인할 수 있습니다.
+
 ## 경기 모드
 
 기존 CCE 스타일 기능을 유지하면서 다음 세 모드를 독립적으로 지원합니다.
@@ -91,7 +152,7 @@ rollback합니다.
   digest-pinned patch 배포·rollback 경로 검증
 - Vite production build 및 `npm audit` 통과
 
-### Attack/Defense 로컬 데모
+### 상세 명령과 접속 정보
 
 ```bash
 make attack-defense-demo
@@ -149,7 +210,120 @@ Live Fire UI 실제 API 캡처:
 Observer/broadcast-safe 화면과 노트북 viewport 캡처는
 [Live Fire Screen Specification](docs/ui/live-fire-screen-specification.md)에 있습니다.
 
-### 현재 MVP 보안 경계
+## 경기 운영 방법
+
+### 참가자: 공격과 방어
+
+- **공격:** 상대 서비스에서 획득한 flag를 `Attack Console`에 제출합니다. 같은
+  팀이 동일 flag를 다시 제출하거나 자기 flag를 제출하면 점수가 지급되지 않습니다.
+- **방어:** 자기 서비스의 정상 기능을 유지하면서 취약점을 패치합니다. 단순
+  `/health`가 아니라 회원가입·로그인·데이터 생성/조회와 flag put/get까지 checker가
+  수행합니다.
+- **점수:** 상대 flag 최초 제출은 Attack, 자기 flag 보호는 Defense, 정상 기능
+  유지는 Availability로 각각 기록됩니다.
+
+서비스 접속 주소:
+
+| 팀 | Vulnerable Notes | File Vault |
+|---|---:|---:|
+| Team 01 | `http://localhost:9101` | `http://localhost:9201` |
+| Team 02 | `http://localhost:9102` | `http://localhost:9202` |
+| Team 03 | `http://localhost:9103` | `http://localhost:9203` |
+
+CLI로 flag를 제출하려면 Auth API에서 받은 access token을 사용합니다.
+
+```bash
+curl -s http://localhost:8051/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"team01","password":"demo-team-01-change-me"}'
+
+export ATTACK_DEFENSE_COMPETITOR_TOKEN='<응답의 access_token>'
+python3 -m services.attack_defense.cli ad flag-submit ad-demo 'FLAG{...}'
+```
+
+### 운영자: 경기 제어
+
+데모는 bootstrap 직후 자동으로 첫 round를 시작합니다. 운영자는 UI 또는 다음
+CLI로 상태를 확인하고 경기를 제어할 수 있습니다.
+
+```bash
+# 현재 round와 전체 서비스 확인
+python3 -m services.attack_defense.cli ad round-status ad-demo
+python3 -m services.attack_defense.cli ad service-list ad-demo
+
+# 인프라 장애 조사 시 일시정지/재개
+python3 -m services.attack_defense.cli ad match-pause ad-demo \
+  --reason "checker infrastructure investigation"
+python3 -m services.attack_defense.cli ad match-resume ad-demo \
+  --reason "checker infrastructure recovered"
+
+# 현재 round 강제 종료 또는 전체 점수 재계산
+python3 -m services.attack_defense.cli ad round-finalize ad-demo
+python3 -m services.attack_defense.cli ad score-recalculate ad-demo
+```
+
+운영 액션에는 반드시 영향 범위를 확인하고 감사 사유를 입력합니다. 팀 서비스
+문제로 인한 장애와 checker/database 같은 경기 인프라 장애를 구분하고, 운영
+인프라 장애라면 팀이 불이익을 받기 전에 경기를 pause하는 것이 기본 운영 원칙입니다.
+
+### 패치 제출과 배포
+
+1. 참가팀이 자기 namespace에 patch image를 build합니다. 호스트에서 push할 때는
+   `localhost:5000/<team>/<service>:<tag>`를 사용합니다.
+2. UI의 **Patches**에는 control-plane 주소인
+   `registry.local:5000/<team>/<service>:<tag>`를 제출합니다. `latest` tag는 사용할
+   수 없습니다.
+3. 운영 호스트에서 아래 명령을 실행해 sandbox와 live deploy job을 처리합니다.
+
+```bash
+make attack-defense-runtime-work
+```
+
+한 번 실행할 때 durable job 하나를 처리합니다. 다음 단계가 남아 있으면 다시
+실행합니다. 정상 기능 또는 flag workflow 검사가 실패하면 live image를 바꾸지
+않거나 이전 digest로 rollback합니다. API 컨테이너에 Docker socket을 연결하지
+마십시오.
+
+### 관전과 운영 모니터링
+
+- Observer 화면: `http://localhost:5178/observer/live?mode=attack_defense`
+- API health: `curl http://localhost:8100/health`
+- Prometheus metrics: `curl http://localhost:8100/metrics`
+- Engine 로그: `docker compose logs -f attack_defense`
+- 특정 서비스 로그: `docker compose logs -f ad_team_01_notes`
+
+Observer는 공개 scoreboard, round 시간과 서비스 aggregate만 봅니다. 실제 flag,
+팀별 내부 상태, endpoint, checker 상세 증거와 patch image 정보는 공개하지 않습니다.
+
+### 기존 Exercise 모드 사용
+
+기존 CCE 스타일 Red Team 대 Blue Team 훈련은 전체 플랫폼을 기동한 뒤 Live Fire
+UI에서 `Exercise / CCE`를 선택합니다.
+
+```bash
+docker compose up -d --build
+```
+
+이 모드에서는 기존 Scenario/Inject/EDR/SIEM/Incident/AAR 흐름을 사용하며,
+Attack/Defense round flag나 팀 대 팀 채점을 강제로 적용하지 않습니다.
+
+### 안전하게 종료
+
+```bash
+# A/D 데모만 중지
+docker compose stop attack_defense ad_registry \
+  ad_team_01_notes ad_team_01_vault \
+  ad_team_02_notes ad_team_02_vault \
+  ad_team_03_notes ad_team_03_vault
+
+# 전체 플랫폼 중지
+docker compose down
+```
+
+일반 종료 시 `docker compose down -v`를 사용하지 마십시오. `-v`는 경기 상태,
+점수 ledger, 감사 기록과 서비스 데이터를 담은 volume까지 삭제합니다.
+
+## 현재 MVP 보안 경계
 
 - Compose bridge는 방향성 egress, 대회급 bandwidth/connection quota를 완전히
   강제하지 못합니다. 운영 환경에서는 CNI 기반 deny-by-default NetworkPolicy가
@@ -177,7 +351,8 @@ Observer/broadcast-safe 화면과 노트북 viewport 캡처는
 - [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (69종)](#챌린지-카탈로그-69종)
 
 **시작 · 품질 · 접근제어**
-- [빠른 시작](#빠른-시작) · [검증 · 품질 게이트](#검증--품질-게이트) · [RBAC](#rbac-역할-기반-접근제어)
+- [처음 시작하기](#처음-시작하기) · [경기 운영 방법](#경기-운영-방법) · [빠른 시작](#빠른-시작)
+- [검증 · 품질 게이트](#검증--품질-게이트) · [RBAC](#rbac-역할-기반-접근제어)
 
 **플랫폼 · 운영 도구**
 - [실시간 푸시 (SSE, P0-4)](#실시간-푸시-p0-4--폴링-제거) · [통합 관리 콘솔 — Control Tower](#통합-관리-콘솔--control-tower-단일-화면-운영)
