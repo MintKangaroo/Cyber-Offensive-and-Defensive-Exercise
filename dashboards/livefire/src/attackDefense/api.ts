@@ -1,6 +1,6 @@
 import type {
-  AttackSurface, LiveRole, MatchState, PatchRecord, ScoreboardResponse,
-  ServiceInstance, SubmissionResult,
+  AttackSurface, CaptureRecord, KothState, LiveRole, MatchState, PatchRecord, ScoreboardResponse,
+  ServiceInstance, StealthState, SubmissionResult,
 } from "./types";
 
 const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
@@ -31,6 +31,13 @@ export interface AttackDefenseApi {
   getScoreboard(matchId: string, role: LiveRole, token: string): Promise<ScoreboardResponse>;
   getAttackSurface(matchId: string, token: string): Promise<AttackSurface>;
   getPatches(matchId: string, role: LiveRole, token: string): Promise<PatchRecord[]>;
+  getCaptures(matchId: string, role: LiveRole, token: string): Promise<CaptureRecord[]>;
+  getKoth(matchId: string, role: LiveRole, token: string): Promise<KothState>;
+  getStealth(matchId: string, role: LiveRole, token: string): Promise<StealthState>;
+  submitStealthDetection(
+    matchId: string, token: string, serviceId: string,
+    indicatorHash: string, evidenceSummary: string,
+  ): Promise<{ recorded: boolean; status: string; report_id: string }>;
   submitFlag(matchId: string, token: string, flag: string): Promise<SubmissionResult>;
   submitPatch(matchId: string, serviceId: string, token: string, imageReference: string): Promise<PatchRecord>;
   operatorAction(matchId: string, action: string, token: string, reason: string): Promise<unknown>;
@@ -38,6 +45,12 @@ export interface AttackDefenseApi {
     matchId: string, teamId: string, serviceId: string,
     action: "restart" | "rollback", token: string, reason: string,
   ): Promise<unknown>;
+  uploadCapture(
+    matchId: string, token: string, file: File, reason: string,
+  ): Promise<CaptureRecord>;
+  downloadCapture(
+    matchId: string, captureId: string, token: string,
+  ): Promise<{ blob: Blob; filename: string }>;
 }
 
 export const httpAttackDefenseApi: AttackDefenseApi = {
@@ -81,6 +94,42 @@ export const httpAttackDefenseApi: AttackDefenseApi = {
     const result = await request<{ patches: PatchRecord[] }>(path, token);
     return result.patches;
   },
+  async getCaptures(matchId, role, token) {
+    if (role === "observer") return [];
+    const path = role === "operator"
+      ? `/api/attack-defense/operator/matches/${matchId}/captures`
+      : `/api/attack-defense/matches/${matchId}/captures`;
+    const result = await request<{ captures: CaptureRecord[] }>(path, token);
+    return result.captures;
+  },
+  getKoth(matchId, role, token) {
+    const path = role === "operator"
+      ? `/api/attack-defense/operator/matches/${matchId}/koth`
+      : `/api/attack-defense/matches/${matchId}/koth`;
+    return request(path, token);
+  },
+  getStealth(matchId, role, token) {
+    const path = role === "operator"
+      ? `/api/attack-defense/operator/matches/${matchId}/stealth`
+      : role === "observer"
+        ? `/api/attack-defense/public/matches/${matchId}/stealth/summary`
+        : `/api/attack-defense/matches/${matchId}/stealth`;
+    return request(path, token);
+  },
+  submitStealthDetection(matchId, token, serviceId, indicatorHash, evidenceSummary) {
+    return request(
+      `/api/attack-defense/matches/${matchId}/stealth/detections`, token,
+      {
+        method: "POST",
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+        body: JSON.stringify({
+          service_id: serviceId,
+          indicator_hash: indicatorHash,
+          evidence_summary: evidenceSummary,
+        }),
+      },
+    );
+  },
   submitFlag(matchId, token, flag) {
     return request(`/api/attack-defense/matches/${matchId}/flags/submit`, token, {
       method: "POST", body: JSON.stringify({ flag }),
@@ -107,6 +156,33 @@ export const httpAttackDefenseApi: AttackDefenseApi = {
       token,
       { method: "POST", body: JSON.stringify({ reason }) },
     );
+  },
+  async uploadCapture(matchId, token, file, reason) {
+    const response = await fetch(
+      `${AD_API}/api/attack-defense/operator/matches/${matchId}/captures`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/vnd.tcpdump.pcap",
+          "X-Operation-Reason": reason,
+        },
+        body: file,
+      },
+    );
+    if (!response.ok) throw new Error(`${response.status} capture upload failed`);
+    return response.json() as Promise<CaptureRecord>;
+  },
+  async downloadCapture(matchId, captureId, token) {
+    const response = await fetch(
+      `${AD_API}/api/attack-defense/matches/${matchId}/captures/${captureId}/download`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) throw new Error(`${response.status} capture download failed`);
+    const disposition = response.headers.get("Content-Disposition") ?? "";
+    const filename = disposition.match(/filename="([^"]+)"/)?.[1]
+      ?? `capture-${captureId}.pcap`;
+    return { blob: await response.blob(), filename };
   },
 };
 

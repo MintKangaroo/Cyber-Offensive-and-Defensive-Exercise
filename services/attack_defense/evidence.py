@@ -7,7 +7,6 @@ from typing import Any
 from .db import Database
 from .utils import canonical_json, evidence_hash, stable_id
 
-
 SENSITIVE_KEYS = {
     "flag", "token", "secret", "password", "authorization", "management_token",
     "encrypted_token",
@@ -63,6 +62,11 @@ class EvidenceRecorder:
                     ctx.round_id, ctx.service_id, ctx.event_type, ctx.result, digest,
                     canonical_json(clean), now,
                 ),
+            )
+            c.execute(
+                """INSERT OR IGNORE INTO audit_event_stream(event_id)
+                   VALUES(?)""",
+                (event_id,),
             )
 
         if conn is not None:

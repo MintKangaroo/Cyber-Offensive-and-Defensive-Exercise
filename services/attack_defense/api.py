@@ -6,7 +6,7 @@ import threading
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any
+from urllib.parse import urlsplit
 
 from fastapi import (
     BackgroundTasks,
@@ -25,29 +25,42 @@ from shared.rbac import Identity, authenticate, require_role
 from .checker import HttpFlagInjector, HttpWorkflowChecker
 from .config import AttackDefenseSettings
 from .db import Database
-from .evidence import EvidenceRecorder
+from .evidence import AuditContext, EvidenceRecorder
 from .flag_service import FlagService
 from .game_engine import GameEngine
+from .koth import KothService
 from .metrics import render_metrics
 from .patch_pipeline import HttpRegistryInspector, PatchPipeline, RegistryInspector
+from .pcap_privacy import (
+    CaptureIntegrityError,
+    CaptureNotReleased,
+    CaptureService,
+    PcapPrivacyError,
+)
+from .rate_limit import DistributedRateLimiter
 from .repositories import AttackDefenseRepository
 from .schemas import (
-    AnnouncementRequest,
     AdjustmentRequest,
+    AnnouncementRequest,
     ExtendRoundRequest,
     FlagSubmitRequest,
+    KothConfigureRequest,
     MatchCreateRequest,
     PatchSubmitRequest,
     ReasonRequest,
     RuntimeCompleteRequest,
+    RuntimeInstanceResultRequest,
     ScoreEventRequest,
-    ServiceEnableRequest,
     ServiceCreateRequest,
+    ServiceEnableRequest,
+    StealthConfigureRequest,
+    StealthDetectionReportRequest,
     TeamCreateRequest,
 )
 from .scoring import ScoringService
 from .service_fabric import DeclaredComposeRuntime, ServiceRuntime
-from .utils import canonical_json, json_load, stable_id
+from .stealth import StealthService
+from .utils import json_load, stable_id
 
 
 @dataclass
@@ -56,11 +69,15 @@ class Components:
     db: Database
     repo: AttackDefenseRepository
     evidence: EvidenceRecorder
+    koth: KothService
+    stealth: StealthService
     flags: FlagService
     scoring: ScoringService
     checker: HttpWorkflowChecker
     runtime: ServiceRuntime
     patches: PatchPipeline
+    captures: CaptureService
+    rate_limiter: DistributedRateLimiter
     engine: GameEngine
 
 
@@ -72,12 +89,20 @@ def build_components(
 ) -> Components:
     settings = settings or AttackDefenseSettings.from_env()
     settings.validate()
-    db = Database(settings.database_path)
+    db = Database(
+        settings.database_path,
+        settings.database_url,
+        connect_timeout_seconds=settings.database_connect_timeout_seconds,
+        statement_timeout_ms=settings.database_statement_timeout_ms,
+        application_name=settings.database_application_name,
+    )
     db.migrate()
     repo = AttackDefenseRepository(db)
     evidence = EvidenceRecorder(db)
-    flags = FlagService(db, repo, settings, evidence)
-    scoring = ScoringService(db, repo, settings, evidence)
+    koth = KothService(db, repo, evidence)
+    stealth = StealthService(db, repo, evidence)
+    flags = FlagService(db, repo, settings, evidence, koth, stealth)
+    scoring = ScoringService(db, repo, settings, evidence, koth, stealth)
     injector = HttpFlagInjector(settings)
     checker = HttpWorkflowChecker(settings, injector)
     runtime = runtime or DeclaredComposeRuntime()
@@ -86,11 +111,15 @@ def build_components(
         inspector or HttpRegistryInspector(settings.patch_validation_timeout_seconds),
         checker,
     )
+    captures = CaptureService(db, repo, flags, settings, evidence)
+    rate_limiter = DistributedRateLimiter(db)
     engine = GameEngine(
-        db, repo, flags, scoring, checker, runtime, evidence, settings
+        db, repo, flags, scoring, checker, runtime, evidence, settings,
+        koth=koth,
     )
     return Components(
-        settings, db, repo, evidence, flags, scoring, checker, runtime, patches, engine
+        settings, db, repo, evidence, koth, stealth, flags, scoring, checker, runtime, patches,
+        captures, rate_limiter, engine,
     )
 
 
@@ -122,7 +151,14 @@ def create_app(components: Components | None = None) -> FastAPI:
             r"[\w-]+\.ts\.net)(:\d+)?"
         ),
         allow_credentials=True, allow_methods=["GET", "POST"],
-        allow_headers=["Authorization", "Content-Type", "Last-Event-ID", "Idempotency-Key"],
+        allow_headers=[
+            "Authorization", "Content-Type", "Last-Event-ID", "Idempotency-Key",
+            "X-Operation-Reason", "X-Round-Id", "X-Service-Id",
+        ],
+        expose_headers=[
+            "Content-Disposition", "Retry-After", "X-Capture-SHA256",
+            "X-Capture-Watermark",
+        ],
     )
 
     @app.middleware("http")
@@ -132,7 +168,16 @@ def create_app(components: Components | None = None) -> FastAPI:
                 length = int(request.headers.get("content-length", "0"))
             except ValueError:
                 length = 0
-            if length > 16_384:
+            is_capture_ingest = (
+                request.method == "POST"
+                and "/api/attack-defense/operator/matches/" in request.url.path
+                and request.url.path.endswith("/captures")
+            )
+            maximum = (
+                c.settings.pcap_max_upload_mb * 1024 * 1024
+                if is_capture_ingest else 16_384
+            )
+            if length > maximum:
                 return Response(status_code=413, content="payload too large")
         return await call_next(request)
 
@@ -156,22 +201,19 @@ def create_app(components: Components | None = None) -> FastAPI:
         return team
 
     def rate_limit(subject: str, action: str, seconds: int, maximum: int) -> None:
-        with c.db.transaction(immediate=True) as conn:
-            now = c.db.server_time(conn)
-            bucket = int(now // seconds)
-            conn.execute(
-                """INSERT INTO rate_limits(subject_key,action,window_start,count)
-                   VALUES(?,?,?,1) ON CONFLICT(subject_key,action,window_start)
-                   DO UPDATE SET count=count+1""",
-                (subject, action, bucket),
+        decision = c.rate_limiter.consume(subject, action, seconds, maximum)
+        if not decision.allowed:
+            raise HTTPException(
+                429, "rate limit exceeded",
+                headers={"Retry-After": str(decision.retry_after_seconds)},
             )
-            count = conn.execute(
-                """SELECT count FROM rate_limits
-                   WHERE subject_key=? AND action=? AND window_start=?""",
-                (subject, action, bucket),
-            ).fetchone()[0]
-        if count > maximum:
-            raise HTTPException(429, "rate limit exceeded", headers={"Retry-After": str(seconds)})
+
+    def server_now() -> float:
+        conn = c.db.connect()
+        try:
+            return c.db.server_time(conn)
+        finally:
+            conn.close()
 
     @app.get("/health")
     def health():
@@ -182,7 +224,30 @@ def create_app(components: Components | None = None) -> FastAPI:
         return {
             "service": "attack_defense", "enabled": c.settings.enabled,
             "matches": matches, "running_matches": running,
+            "database_backend": c.db.backend_name,
         }
+
+    @app.get("/ready")
+    def readiness():
+        try:
+            database_time = server_now()
+            skew = abs(time.time() - database_time)
+        except Exception:
+            return Response(
+                status_code=503, media_type="application/json",
+                content='{"ready":false,"reason":"database_unavailable"}',
+            )
+        ready = skew <= c.settings.max_database_clock_skew_seconds
+        body = {
+            "ready": ready, "database_backend": c.db.backend_name,
+            "clock_skew_seconds": round(skew, 3),
+        }
+        if not ready:
+            body["reason"] = "clock_skew_exceeded"
+        return Response(
+            status_code=200 if ready else 503,
+            media_type="application/json", content=json.dumps(body),
+        )
 
     @app.get("/metrics", response_class=PlainTextResponse)
     def metrics():
@@ -210,6 +275,28 @@ def create_app(components: Components | None = None) -> FastAPI:
     @app.get("/api/attack-defense/operator/matches")
     def operator_matches(_: Identity = Depends(operator)):
         return {"matches": c.repo.list_matches()}
+
+    @app.get("/api/attack-defense/operator/ha/status")
+    def ha_status(_: Identity = Depends(operator)):
+        conn = c.db.connect()
+        try:
+            database_time = c.db.server_time(conn)
+            migrations = [row[0] for row in conn.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            )]
+            running = int(conn.execute(
+                "SELECT COUNT(*) FROM matches WHERE status='running'"
+            ).fetchone()[0])
+        finally:
+            conn.close()
+        return {
+            "database_backend": c.db.backend_name,
+            "ha_capable": c.db.backend_name == "postgresql",
+            "database_time": database_time,
+            "clock_skew_seconds": round(abs(time.time() - database_time), 3),
+            "running_matches": running, "migrations": migrations,
+            "engine_owner": c.engine.owner_id,
+        }
 
     @app.post("/api/attack-defense/matches/{match_id}/teams", status_code=201)
     def create_team(match_id: str, req: TeamCreateRequest, _: Identity = Depends(operator)):
@@ -284,33 +371,40 @@ def create_app(components: Components | None = None) -> FastAPI:
     def extend_round(
         match_id: str, req: ExtendRoundRequest, ident: Identity = Depends(operator)
     ):
-        current = c.repo.current_round(match_id)
-        if not current or current["status"] != "active":
-            raise HTTPException(409, "active round required")
-        with c.db.transaction(immediate=True) as conn:
-            now = c.db.server_time(conn)
-            conn.execute(
-                "UPDATE rounds SET ends_at=ends_at+? WHERE id=?",
-                (req.seconds, current["id"]),
-            )
-            conn.execute(
-                """UPDATE flags SET valid_until=valid_until+? WHERE match_id=?
-                   AND status IN ('issued','injected','compromised')""",
-                (req.seconds, match_id),
-            )
-            c.evidence.record(
-                __import__(
-                    "services.attack_defense.evidence", fromlist=["AuditContext"]
-                ).AuditContext(
-                    actor=ident.actor, event_type="round_extended", result="success",
-                    correlation_id=current["correlation_id"], match_id=match_id,
-                    round_id=current["id"],
-                    metadata={"seconds": req.seconds, "reason": req.reason},
-                    event_id=stable_id("audit", "round-extend", current["id"], req.seconds, req.reason),
-                ),
-                conn,
-            )
-        return c.repo.get_round(current["id"])
+        try:
+            with c.engine.exclusive_match(match_id):
+                current = c.repo.current_round(match_id)
+                if not current or current["status"] != "active":
+                    raise ValueError("active round required")
+                with c.db.transaction(immediate=True) as conn:
+                    conn.execute(
+                        "UPDATE rounds SET ends_at=ends_at+? WHERE id=?",
+                        (req.seconds, current["id"]),
+                    )
+                    conn.execute(
+                        """UPDATE flags SET valid_until=valid_until+? WHERE match_id=?
+                           AND status IN ('issued','injected','compromised')""",
+                        (req.seconds, match_id),
+                    )
+                    c.evidence.record(
+                        AuditContext(
+                            actor=ident.actor, event_type="round_extended",
+                            result="success",
+                            correlation_id=current["correlation_id"],
+                            match_id=match_id, round_id=current["id"],
+                            metadata={
+                                "seconds": req.seconds, "reason": req.reason,
+                            },
+                            event_id=stable_id(
+                                "audit", "round-extend", current["id"],
+                                req.seconds, req.reason,
+                            ),
+                        ),
+                        conn,
+                    )
+                return c.repo.get_round(current["id"])
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
 
     @app.post("/api/attack-defense/matches/{match_id}/rounds/current/tick")
     def tick_round(match_id: str, _: Identity = Depends(operator)):
@@ -330,11 +424,19 @@ def create_app(components: Components | None = None) -> FastAPI:
         row = c.repo.get_round(round_id)
         if not row or row["match_id"] != match_id:
             raise HTTPException(404, "round not found")
-        return c.scoring.calculate_round(round_id, ident.actor)
+        try:
+            with c.engine.exclusive_match(match_id):
+                return c.scoring.calculate_round(round_id, ident.actor)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
 
     @app.post("/api/attack-defense/matches/{match_id}/score/recalculate")
     def recalculate_match(match_id: str, ident: Identity = Depends(operator)):
-        return c.scoring.recalculate_match(match_id, ident.actor)
+        try:
+            with c.engine.exclusive_match(match_id):
+                return c.scoring.recalculate_match(match_id, ident.actor)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
 
     @app.post("/api/attack-defense/matches/{match_id}/score/adjust")
     def adjust_score(
@@ -453,6 +555,102 @@ def create_app(components: Components | None = None) -> FastAPI:
         ))
         return {"event_id": event_id, "published": True}
 
+    @app.post(
+        "/api/attack-defense/operator/matches/{match_id}/koth/configure"
+    )
+    def configure_koth(
+        match_id: str,
+        req: KothConfigureRequest,
+        ident: Identity = Depends(operator),
+    ):
+        try:
+            with c.engine.exclusive_match(match_id):
+                return c.koth.configure(
+                    match_id,
+                    enabled=req.enabled,
+                    service_ids=req.service_ids,
+                    lease_rounds=(
+                        req.lease_rounds
+                        if req.lease_rounds is not None
+                        else c.settings.koth_default_lease_rounds
+                    ),
+                    points_per_round=(
+                        req.points_per_round
+                        if req.points_per_round is not None
+                        else c.settings.koth_default_points_per_round
+                    ),
+                    score_weight=req.score_weight,
+                    actor=ident.actor,
+                    reason=req.reason,
+                )
+        except KeyError:
+            raise HTTPException(404, "match not found")
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
+
+    @app.get("/api/attack-defense/operator/matches/{match_id}/koth")
+    def operator_koth_state(
+        match_id: str, _: Identity = Depends(operator)
+    ):
+        try:
+            return c.koth.state(match_id, operator=True)
+        except KeyError:
+            raise HTTPException(404, "match not found")
+
+    @app.post(
+        "/api/attack-defense/operator/matches/{match_id}/stealth/configure"
+    )
+    def configure_stealth(
+        match_id: str,
+        req: StealthConfigureRequest,
+        ident: Identity = Depends(operator),
+    ):
+        try:
+            with c.engine.exclusive_match(match_id):
+                delay = (
+                    req.alert_delay_rounds
+                    if req.alert_delay_rounds is not None
+                    else c.settings.stealth_alert_delay_rounds
+                )
+                window = (
+                    req.detection_window_rounds
+                    if req.detection_window_rounds is not None
+                    else c.settings.stealth_detection_window_rounds
+                )
+                return c.stealth.configure(
+                    match_id,
+                    enabled=req.enabled,
+                    alert_delay_rounds=delay,
+                    detection_window_rounds=window,
+                    attacker_undetected_points=(
+                        req.attacker_undetected_points
+                        if req.attacker_undetected_points is not None
+                        else c.settings.stealth_attacker_undetected_points
+                    ),
+                    defender_detection_points=(
+                        req.defender_detection_points
+                        if req.defender_detection_points is not None
+                        else c.settings.stealth_defender_detection_points
+                    ),
+                    attack_score_weight=req.attack_score_weight,
+                    detection_score_weight=req.detection_score_weight,
+                    actor=ident.actor,
+                    reason=req.reason,
+                )
+        except KeyError:
+            raise HTTPException(404, "match not found")
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
+
+    @app.get("/api/attack-defense/operator/matches/{match_id}/stealth")
+    def operator_stealth_state(
+        match_id: str, _: Identity = Depends(operator)
+    ):
+        try:
+            return c.stealth.state(match_id, operator=True)
+        except KeyError:
+            raise HTTPException(404, "match not found")
+
     @app.post("/api/attack-defense/internal/matches/{match_id}/score-events")
     def ingest_hybrid_score_event(
         match_id: str, req: ScoreEventRequest, ident: Identity = Depends(operator)
@@ -513,6 +711,70 @@ def create_app(components: Components | None = None) -> FastAPI:
             row["metadata"] = json_load(row["metadata"])
         return {"events": rows}
 
+    # ---- Sanitized PCAP evidence -----------------------------------------
+    @app.post(
+        "/api/attack-defense/operator/matches/{match_id}/captures",
+        status_code=201,
+    )
+    async def ingest_capture(
+        request: Request,
+        match_id: str,
+        operation_reason: str = Header(
+            min_length=3, max_length=500, alias="X-Operation-Reason"
+        ),
+        round_id: str | None = Header(
+            default=None, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$",
+            alias="X-Round-Id",
+        ),
+        service_id: str | None = Header(
+            default=None, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$",
+            alias="X-Service-Id",
+        ),
+        ident: Identity = Depends(operator),
+    ):
+        media_type = request.headers.get("content-type", "").split(";", 1)[0].strip()
+        if media_type not in {
+            "application/vnd.tcpdump.pcap", "application/octet-stream",
+        }:
+            raise HTTPException(415, "classic pcap content type required")
+        maximum = c.settings.pcap_max_upload_mb * 1024 * 1024
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > maximum:
+                raise HTTPException(413, "capture exceeds upload policy")
+        if not body:
+            raise HTTPException(400, "capture body is empty")
+        try:
+            return await asyncio.to_thread(
+                c.captures.ingest,
+                match_id, bytes(body), ident.actor, operation_reason,
+                round_id=round_id, service_id=service_id,
+            )
+        except KeyError:
+            raise HTTPException(404, "match not found")
+        except PcapPrivacyError as exc:
+            from .evidence import AuditContext
+            c.evidence.record(AuditContext(
+                actor=ident.actor, event_type="capture_ingest", result="rejected",
+                match_id=match_id, round_id=round_id, service_id=service_id,
+                metadata={
+                    "reason": operation_reason,
+                    "error_class": type(exc).__name__,
+                },
+                event_id=stable_id(
+                    "audit", "capture-rejected", match_id, ident.actor,
+                    time.time_ns(),
+                ),
+            ))
+            raise HTTPException(400, "capture failed privacy validation")
+
+    @app.get("/api/attack-defense/operator/matches/{match_id}/captures")
+    def operator_captures(match_id: str, _: Identity = Depends(operator)):
+        if not c.repo.get_match(match_id):
+            raise HTTPException(404, "match not found")
+        return {"captures": c.captures.list(match_id, operator=True)}
+
     # ---- Participant/public views -----------------------------------------
     @app.get("/api/attack-defense/public/matches/{match_id}/state")
     def public_match_state(match_id: str):
@@ -526,7 +788,7 @@ def create_app(components: Components | None = None) -> FastAPI:
             "round": round_row["sequence"] if round_row else 0,
             "round_status": round_row["status"] if round_row else None,
             "round_ends_at": round_row["ends_at"] if round_row else None,
-            "server_time": time.time(),
+            "server_time": server_now(),
         }
 
     @app.get("/api/attack-defense/matches/{match_id}/state")
@@ -542,7 +804,8 @@ def create_app(components: Components | None = None) -> FastAPI:
             "round": round_row["sequence"] if round_row else 0,
             "round_status": round_row["status"] if round_row else None,
             "round_ends_at": round_row["ends_at"] if round_row else None,
-            "server_time": time.time(), "team": {"id": team["id"], "name": team["name"]},
+            "server_time": server_now(),
+            "team": {"id": team["id"], "name": team["name"]},
         }
 
     @app.get("/api/attack-defense/matches/{match_id}/services/me")
@@ -640,6 +903,48 @@ def create_app(components: Components | None = None) -> FastAPI:
         }
 
     @app.post(
+        "/api/attack-defense/matches/{match_id}/stealth/detections",
+        status_code=202,
+    )
+    def submit_stealth_detection(
+        match_id: str,
+        req: StealthDetectionReportRequest,
+        ident: Identity = Depends(competitor),
+        idempotency_key: str = Header(default="", alias="Idempotency-Key"),
+    ):
+        membership(match_id, ident)
+        if not idempotency_key or len(idempotency_key) > 128:
+            raise HTTPException(400, "valid Idempotency-Key is required")
+        rate_limit(
+            ident.team_id,
+            "stealth_detection_report",
+            60,
+            c.settings.max_stealth_reports_per_minute,
+        )
+        try:
+            return c.stealth.report_detection(
+                match_id,
+                ident.team_id,
+                req.service_id,
+                req.indicator_hash,
+                req.evidence_summary,
+                idempotency_key,
+                ident.actor,
+            )
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
+
+    @app.get("/api/attack-defense/matches/{match_id}/stealth")
+    def own_stealth_state(
+        match_id: str, ident: Identity = Depends(competitor)
+    ):
+        membership(match_id, ident)
+        try:
+            return c.stealth.state(match_id, team_id=ident.team_id)
+        except KeyError:
+            raise HTTPException(404, "match not found")
+
+    @app.post(
         "/api/attack-defense/matches/{match_id}/services/{service_id}/patches",
         status_code=202,
     )
@@ -705,6 +1010,61 @@ def create_app(components: Components | None = None) -> FastAPI:
         conn.close()
         return {"round": current["sequence"] if current else 0, "services": rows}
 
+    @app.get("/api/attack-defense/matches/{match_id}/captures")
+    def available_captures(match_id: str, ident: Identity = Depends(competitor)):
+        membership(match_id, ident)
+        return {
+            "captures": c.captures.list(match_id, operator=False),
+            "disclosure": "sanitized-delayed-team-watermarked",
+        }
+
+    @app.get(
+        "/api/attack-defense/matches/{match_id}/captures/{capture_id}/download"
+    )
+    def download_capture(
+        match_id: str, capture_id: str,
+        ident: Identity = Depends(competitor),
+    ):
+        membership(match_id, ident)
+        rate_limit(
+            ident.team_id, "capture_download", 60,
+            c.settings.pcap_max_downloads_per_minute,
+        )
+        try:
+            artifact = c.captures.download(
+                match_id, capture_id, ident.team_id, ident.actor
+            )
+        except KeyError:
+            raise HTTPException(404, "capture not found")
+        except CaptureNotReleased as exc:
+            raise HTTPException(
+                425, "capture is not available yet",
+                headers={"Retry-After": str(exc.retry_after)},
+            )
+        except CaptureIntegrityError:
+            from .evidence import AuditContext
+            c.evidence.record(AuditContext(
+                actor=ident.actor, event_type="capture_download", result="failed",
+                team_id=ident.team_id, match_id=match_id,
+                metadata={"capture_id": capture_id, "error": "integrity_failure"},
+                event_id=stable_id(
+                    "audit", "capture-integrity", capture_id,
+                    ident.team_id, time.time_ns(),
+                ),
+            ))
+            raise HTTPException(503, "capture is temporarily unavailable")
+        return Response(
+            content=artifact.data,
+            media_type="application/vnd.tcpdump.pcap",
+            headers={
+                "Content-Disposition": f'attachment; filename="{artifact.filename}"',
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
+                "X-Capture-Watermark": artifact.watermark,
+                "X-Capture-SHA256": artifact.sha256,
+            },
+        )
+
     @app.get("/api/attack-defense/matches/{match_id}/scoreboard")
     def public_scoreboard(match_id: str):
         try:
@@ -717,6 +1077,9 @@ def create_app(components: Components | None = None) -> FastAPI:
         delay = int(match_config.get(
             "scoreboard_delay_rounds", c.settings.scoreboard_delay_rounds
         ))
+        stealth = c.stealth.normalized_config(match_config.get("stealth", {}))
+        if stealth["enabled"]:
+            delay = max(delay, int(stealth["alert_delay_rounds"]))
         return {
             "view": "public", "delay_rounds": delay,
             "last_public_round": max(
@@ -726,6 +1089,20 @@ def create_app(components: Components | None = None) -> FastAPI:
             "provisional": bool(current and current["status"] != "finalized"),
             "scoreboard": rows,
         }
+
+    @app.get("/api/attack-defense/matches/{match_id}/koth")
+    def public_koth_state(match_id: str):
+        try:
+            return c.koth.state(match_id, operator=False)
+        except KeyError:
+            raise HTTPException(404, "match not found")
+
+    @app.get("/api/attack-defense/public/matches/{match_id}/stealth/summary")
+    def public_stealth_summary(match_id: str):
+        try:
+            return c.stealth.state(match_id, observer=True)
+        except KeyError:
+            raise HTTPException(404, "match not found")
 
     @app.get("/api/attack-defense/operator/matches/{match_id}/scoreboard")
     def realtime_scoreboard(match_id: str, _: Identity = Depends(operator)):
@@ -757,9 +1134,76 @@ def create_app(components: Components | None = None) -> FastAPI:
         job_id: str, req: RuntimeCompleteRequest, ident: Identity = Depends(operator)
     ):
         try:
-            return c.patches.complete_job(job_id, req.success, req.result, ident.actor)
+            return c.patches.complete_job(
+                job_id, req.success, req.result, ident.actor, req.claim_token
+            )
         except ValueError as exc:
             raise HTTPException(409, str(exc))
+
+    @app.post(
+        "/api/attack-defense/operator/matches/{match_id}/instances/{instance_id}"
+        "/runtime-result"
+    )
+    def record_runtime_result(
+        match_id: str, instance_id: str, req: RuntimeInstanceResultRequest,
+        ident: Identity = Depends(operator),
+    ):
+        instance = next(
+            (
+                row for row in c.repo.list_instances(match_id)
+                if row["id"] == instance_id
+            ),
+            None,
+        )
+        if not instance:
+            raise HTTPException(404, "service instance not found")
+        if c.settings.game_runtime == "kubernetes":
+            endpoints = [value for value in (
+                req.endpoint, req.management_endpoint
+            ) if value]
+            if req.success and len(endpoints) != 2:
+                raise HTTPException(
+                    400, "successful Kubernetes result requires both endpoints"
+                )
+            if any(not urlsplit(value).hostname.endswith(".svc") for value in endpoints):
+                raise HTTPException(400, "Kubernetes endpoints must use cluster DNS")
+        with c.db.transaction(immediate=True) as conn:
+            now = c.db.server_time(conn)
+            conn.execute(
+                """UPDATE team_service_instances
+                   SET runtime_id=?,status=?,
+                       endpoint=CASE WHEN ? THEN COALESCE(?,endpoint) ELSE endpoint END,
+                       management_endpoint=CASE WHEN ? THEN COALESCE(?,management_endpoint)
+                         ELSE management_endpoint END,
+                       image_digest=CASE WHEN ? THEN COALESCE(?,image_digest)
+                         ELSE image_digest END,
+                       deployed_at=CASE WHEN ? THEN COALESCE(deployed_at,?) ELSE deployed_at END,
+                       updated_at=? WHERE id=? AND match_id=?""",
+                (
+                    req.runtime_id, "healthy" if req.success else "degraded",
+                    req.success, req.endpoint, req.success,
+                    req.management_endpoint, req.success, req.image_digest,
+                    req.success, now, now, instance_id, match_id,
+                ),
+            )
+            c.evidence.record(AuditContext(
+                actor=ident.actor, event_type="runtime_reconcile",
+                result="success" if req.success else "failed",
+                team_id=instance["team_id"], match_id=match_id,
+                service_id=instance["service_id"],
+                metadata={
+                    "instance_id": instance_id, "reason": req.reason,
+                    "error_code": req.error_code,
+                },
+                event_id=stable_id(
+                    "audit", "runtime-reconcile", instance_id,
+                    time.time_ns(), req.success,
+                ),
+            ), conn)
+        return {
+            "recorded": True, "instance_id": instance_id,
+            "status": "healthy" if req.success else "degraded",
+        }
 
     # ---- Sanitized real-time feed -----------------------------------------
     @app.get("/api/attack-defense/matches/{match_id}/events/stream")
@@ -785,8 +1229,13 @@ def create_app(components: Components | None = None) -> FastAPI:
             while not await request.is_disconnected():
                 conn = c.db.connect()
                 rows = conn.execute(
-                    """SELECT rowid,* FROM audit_events WHERE match_id=? AND rowid>?
-                       ORDER BY rowid LIMIT 100""", (match_id, cursor)
+                    """SELECT s.sequence AS stream_sequence,a.*,
+                              m.config AS match_config
+                       FROM audit_event_stream s
+                       JOIN audit_events a ON a.event_id=s.event_id
+                       JOIN matches m ON m.id=a.match_id
+                       WHERE a.match_id=? AND s.sequence>?
+                       ORDER BY s.sequence LIMIT 100""", (match_id, cursor)
                 ).fetchall()
                 conn.close()
                 if not rows:
@@ -794,7 +1243,7 @@ def create_app(components: Components | None = None) -> FastAPI:
                     await asyncio.sleep(2)
                     continue
                 for row in rows:
-                    cursor = int(row["rowid"])
+                    cursor = int(row["stream_sequence"])
                     event = _public_event(dict(row), ident)
                     if event is None:
                         continue
@@ -842,16 +1291,28 @@ PUBLIC_EVENT_TYPES = {
     "round_transition", "patch_submission", "patch_validation",
     "patch_deploy", "patch_rollback", "operator_adjustment",
     "operator_announcement", "round_extended",
+    "koth_ownership", "koth_configuration", "stealth_configuration",
 }
 
 
 def _public_event(row: dict, ident: Identity | None) -> dict | None:
     operator_view = bool(ident and ident.role in {"instructor", "operator"})
     own_team = bool(ident and ident.team_id and ident.team_id == row.get("team_id"))
+    match_config = json_load(row.get("match_config"))
+    stealth = match_config.get("stealth", {})
+    stealth_enabled = isinstance(stealth, dict) and stealth.get("enabled") is True
+    if not operator_view and row["event_type"] == "stealth_incident":
+        return None
+    if not operator_view and stealth_enabled and row["event_type"] == "koth_ownership":
+        # The delayed KOTH state endpoint is the authoritative release path.
+        # Suppressing this immediate event avoids creating a victim/service
+        # timing oracle and does not alter flag acceptance semantics.
+        return None
     if not operator_view and row["event_type"] not in PUBLIC_EVENT_TYPES and not own_team:
         return None
     category = (
         "patch" if "patch" in row["event_type"] else
+        "attack" if row["event_type"] == "koth_ownership" else
         "score" if "score" in row["event_type"] or "adjustment" in row["event_type"] else
         "service" if row["event_type"] in {"service_check", "flag_injection"} else
         "system"
@@ -865,6 +1326,18 @@ def _public_event(row: dict, ident: Identity | None) -> dict | None:
         event.update({
             "team_id": row.get("team_id"), "round_id": row.get("round_id"),
             "service_id": row.get("service_id"), "metadata": json_load(row.get("metadata")),
+        })
+    elif row["event_type"] == "koth_ownership":
+        metadata = json_load(row.get("metadata"))
+        event.update({
+            "team_id": row.get("team_id"),
+            "service_id": row.get("service_id"),
+            "metadata": {
+                key: metadata.get(key) for key in (
+                    "hill_id", "victim_team_id", "previous_owner_team_id",
+                    "expires_after_round",
+                )
+            },
         })
     elif own_team:
         event["scope"] = "own_team"

@@ -1,6 +1,11 @@
 import type { ConnectionState, PatchRecord, ScoreboardResponse } from "./types";
 
 export const FLAG_FORMAT = /^FLAG\{[A-Za-z0-9_-]{32}\}$/;
+export const INDICATOR_HASH_FORMAT = /^[0-9a-f]{64}$/;
+
+export function isIndicatorHash(value: string) {
+  return INDICATOR_HASH_FORMAT.test(value);
+}
 
 export function parseFlagBatch(value: string, maximum = 20) {
   return value.split(/\s+/).map((item) => item.trim()).filter(Boolean).slice(0, maximum)

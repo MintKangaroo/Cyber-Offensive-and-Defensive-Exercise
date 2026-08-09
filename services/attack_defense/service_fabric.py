@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-
 SAFE_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
 
 
@@ -18,6 +17,7 @@ class RuntimeResult:
     endpoint: str | None = None
     image_digest: str | None = None
     error_code: str | None = None
+    management_endpoint: str | None = None
 
 
 class ServiceRuntime(Protocol):

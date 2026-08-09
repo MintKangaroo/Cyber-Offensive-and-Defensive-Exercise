@@ -4,9 +4,9 @@ import base64
 import hashlib
 import hmac
 import re
-import sqlite3
 import uuid
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from .config import AttackDefenseSettings
 from .db import Database
@@ -15,6 +15,9 @@ from .models import FlagStatus
 from .repositories import AttackDefenseRepository
 from .utils import json_load, stable_id
 
+if TYPE_CHECKING:
+    from .koth import KothService
+    from .stealth import StealthService
 
 FLAG_RE = re.compile(r"^FLAG\{[A-Za-z0-9_-]{32}\}$")
 
@@ -46,11 +49,15 @@ class FlagService:
         repo: AttackDefenseRepository,
         settings: AttackDefenseSettings,
         evidence: EvidenceRecorder,
+        koth: "KothService | None" = None,
+        stealth: "StealthService | None" = None,
     ):
         self.db = db
         self.repo = repo
         self.settings = settings
         self.evidence = evidence
+        self.koth = koth
+        self.stealth = stealth
 
     def _token(self, match_id: str, round_id: str, team_id: str, service_id: str) -> str:
         msg = f"v1:{match_id}:{round_id}:{team_id}:{service_id}".encode()
@@ -205,20 +212,20 @@ class FlagService:
 
             submission_id = str(uuid.uuid4())
             round_id = current["id"] if current else None
-            try:
-                conn.execute(
-                    """INSERT INTO flag_submissions(
-                       id,match_id,round_id,attacker_team_id,victim_team_id,service_id,
-                       flag_id,submitted_token_hash,result,reject_reason,submitted_at)
-                       VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
-                    (
-                        submission_id, match_id, round_id, attacker_team_id,
-                        row["team_id"] if row else None, row["service_id"] if row else None,
-                        row["id"] if row else None, submitted_hash,
-                        "accepted" if accepted else "rejected", None if accepted else reason, now,
-                    ),
-                )
-            except sqlite3.IntegrityError:
+            inserted = conn.execute(
+                """INSERT INTO flag_submissions(
+                   id,match_id,round_id,attacker_team_id,victim_team_id,service_id,
+                   flag_id,submitted_token_hash,result,reject_reason,submitted_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(attacker_team_id,flag_id) DO NOTHING""",
+                (
+                    submission_id, match_id, round_id, attacker_team_id,
+                    row["team_id"] if row else None, row["service_id"] if row else None,
+                    row["id"] if row else None, submitted_hash,
+                    "accepted" if accepted else "rejected", None if accepted else reason, now,
+                ),
+            )
+            if inserted.rowcount != 1:
                 accepted = False
                 reason = "duplicate"
 
@@ -246,6 +253,31 @@ class FlagService:
                     metadata={"victim_redacted": True},
                 ):
                     score_delta = self.settings.attack_score_per_flag
+                if self.koth is not None:
+                    self.koth.acquire_for_flag(
+                        conn,
+                        match=dict(match),
+                        current_round=dict(current),
+                        attacker_team_id=attacker_team_id,
+                        victim_team_id=row["team_id"],
+                        service_id=row["service_id"],
+                        flag_id=row["id"],
+                        submission_id=submission_id,
+                        actor=actor,
+                        acquired_at=now,
+                    )
+                if self.stealth is not None:
+                    self.stealth.create_incident(
+                        conn,
+                        match=dict(match),
+                        current_round=dict(current),
+                        attacker_team_id=attacker_team_id,
+                        victim_team_id=row["team_id"],
+                        service_id=row["service_id"],
+                        submission_id=submission_id,
+                        occurred_at=now,
+                        actor=actor,
+                    )
             self.evidence.record(
                 AuditContext(
                     actor=actor, event_type="flag_submission",

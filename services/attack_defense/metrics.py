@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections import Counter
 
 from .db import Database
@@ -14,7 +15,23 @@ def _line(name: str, value: int | float, labels: dict[str, str] | None = None) -
 
 def render_metrics(db: Database) -> str:
     conn = db.connect()
+    database_time = db.server_time(conn)
     lines = [
+        "# TYPE attack_defense_database_backend_info gauge",
+        _line(
+            "attack_defense_database_backend_info", 1,
+            {"backend": db.backend_name},
+        ),
+        "# TYPE attack_defense_database_clock_skew_seconds gauge",
+        _line(
+            "attack_defense_database_clock_skew_seconds",
+            abs(time.time() - database_time),
+        ),
+        "# TYPE attack_defense_ha_mode gauge",
+        _line(
+            "attack_defense_ha_mode",
+            1 if db.backend_name == "postgresql" else 0,
+        ),
         "# TYPE attack_defense_round_current gauge",
     ]
     for row in conn.execute(
@@ -32,11 +49,32 @@ def render_metrics(db: Database) -> str:
         ("attack_defense_patch_submission_total", "SELECT COUNT(*) FROM patch_submissions"),
         ("attack_defense_score_events_total", "SELECT COUNT(*) FROM score_ledger"),
         ("attack_defense_runtime_operation_total", "SELECT COUNT(*) FROM runtime_jobs"),
+        ("attack_defense_koth_ownership_total", "SELECT COUNT(*) FROM koth_leases"),
+        ("attack_defense_stealth_incident_total",
+         "SELECT COUNT(*) FROM stealth_incidents"),
+        ("attack_defense_stealth_detection_report_total",
+         "SELECT COUNT(*) FROM stealth_detection_reports"),
+        ("attack_defense_stealth_detected_total",
+         "SELECT COUNT(*) FROM stealth_incidents WHERE detected_at IS NOT NULL"),
+        ("attack_defense_capture_ingest_total", "SELECT COUNT(*) FROM capture_artifacts"),
+        ("attack_defense_capture_download_total",
+         "SELECT COALESCE(SUM(download_count),0) FROM capture_releases"),
+        ("attack_defense_capture_sanitizer_rejected_total",
+         "SELECT COUNT(*) FROM audit_events WHERE event_type='capture_ingest' AND result='rejected'"),
         ("attack_defense_game_engine_errors_total",
          "SELECT COUNT(*) FROM audit_events WHERE event_type='game_engine_error'"),
     ]
     for name, query in definitions:
         lines.extend((f"# TYPE {name} counter", _line(name, conn.execute(query).fetchone()[0])))
+    lines.extend((
+        "# TYPE attack_defense_koth_hills_enabled gauge",
+        _line(
+            "attack_defense_koth_hills_enabled",
+            conn.execute(
+                "SELECT COUNT(*) FROM koth_hills WHERE enabled=1"
+            ).fetchone()[0],
+        ),
+    ))
     lines.append("# TYPE attack_defense_flag_injection_total counter")
     for status, count in conn.execute(
         """SELECT result,COUNT(*) FROM audit_events

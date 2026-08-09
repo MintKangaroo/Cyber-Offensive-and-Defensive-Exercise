@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import re
+import secrets
 import sqlite3
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Protocol
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -18,9 +21,31 @@ from .models import PATCH_TRANSITIONS, PatchStatus, assert_transition
 from .repositories import AttackDefenseRepository
 from .utils import canonical_json, stable_id
 
-
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 PATH_RE = re.compile(r"^[a-z0-9][a-z0-9._/-]{1,180}$")
+
+
+def _runtime_endpoint(value: object, *, kubernetes: bool) -> str | None:
+    """Accept only non-credentialed HTTP endpoints returned by a trusted runner."""
+    if not value:
+        return None
+    endpoint = str(value)
+    parsed = urlsplit(endpoint)
+    if (
+        parsed.scheme != "http" or not parsed.hostname or parsed.username
+        or parsed.password or parsed.path not in {"", "/"}
+        or parsed.query or parsed.fragment
+    ):
+        raise ValueError("invalid runtime endpoint")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("invalid runtime endpoint") from exc
+    if port is None or not 1 <= port <= 65535:
+        raise ValueError("runtime endpoint must include a valid port")
+    if kubernetes and not parsed.hostname.endswith(".svc"):
+        raise ValueError("Kubernetes runtime endpoint must use cluster DNS")
+    return endpoint.rstrip("/")
 
 
 @dataclass(frozen=True)
@@ -308,38 +333,56 @@ class PatchPipeline:
                 self.settings.patch_validation_timeout_seconds,
                 self.settings.patch_deploy_timeout_seconds,
             )
+            claim_sql = """SELECT * FROM runtime_jobs
+                WHERE status='pending' OR (status='running' AND started_at<?)
+                ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END,created_at
+                LIMIT 1"""
+            if self.db.backend_name == "postgresql":
+                claim_sql += " FOR UPDATE SKIP LOCKED"
             row = conn.execute(
-                """SELECT * FROM runtime_jobs
-                   WHERE status='pending' OR (status='running' AND started_at<?)
-                   ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END,created_at
-                   LIMIT 1""",
+                claim_sql,
                 (stale_before,),
             ).fetchone()
             if not row:
                 return None
             previous_result = json.loads(row["result"] or "{}")
             attempt = int(previous_result.get("attempt", 0)) + 1
-            conn.execute(
+            claim_token = secrets.token_urlsafe(24)
+            claimed_update = conn.execute(
                 """UPDATE runtime_jobs SET status='running',started_at=?,result=?
                    WHERE id=? AND (
                      status='pending' OR (status='running' AND started_at<?)
                    )""",
                 (
-                    now, canonical_json({"owner": owner, "attempt": attempt}),
+                    now, canonical_json({
+                        "owner": owner, "attempt": attempt,
+                        "claim_token": claim_token,
+                    }),
                     row["id"], stale_before,
                 ),
             )
+            if claimed_update.rowcount != 1:
+                return None
             claimed = conn.execute("SELECT * FROM runtime_jobs WHERE id=?", (row["id"],)).fetchone()
             return dict(claimed)
 
     def complete_job(
-        self, job_id: str, success: bool, result: dict, actor: str = "runtime_runner"
+        self, job_id: str, success: bool, result: dict,
+        actor: str = "runtime_runner", claim_token: str | None = None,
     ) -> dict:
         with self.db.transaction(immediate=True) as conn:
             job_row = conn.execute("SELECT * FROM runtime_jobs WHERE id=?", (job_id,)).fetchone()
             if not job_row or job_row["status"] != "running":
                 raise ValueError("runtime job is not claimable")
             job = dict(job_row)
+            if claim_token is not None:
+                active_claim = str(json.loads(job["result"] or "{}").get(
+                    "claim_token", ""
+                ))
+                if not active_claim or not hmac.compare_digest(
+                    active_claim, claim_token
+                ):
+                    raise ValueError("runtime job claim is stale")
             payload = json.loads(job["payload"])
             now = self.db.server_time(conn)
             conn.execute(
@@ -383,11 +426,30 @@ class PatchPipeline:
                     pass
             elif job["operation"] == "deploy":
                 if success:
+                    endpoint = _runtime_endpoint(
+                        result.get("endpoint"),
+                        kubernetes=self.settings.game_runtime == "kubernetes",
+                    )
+                    management_endpoint = _runtime_endpoint(
+                        result.get("management_endpoint"),
+                        kubernetes=self.settings.game_runtime == "kubernetes",
+                    )
+                    if self.settings.game_runtime == "kubernetes" and (
+                        not endpoint or not management_endpoint
+                    ):
+                        raise ValueError(
+                            "successful Kubernetes deployment requires endpoints"
+                        )
                     conn.execute(
                         """UPDATE team_service_instances SET previous_image_digest=image_digest,
-                           image_digest=?,status='verifying',deployed_at=?,updated_at=?
+                           image_digest=?,status='verifying',deployed_at=?,updated_at=?,
+                           endpoint=COALESCE(?,endpoint),
+                           management_endpoint=COALESCE(?,management_endpoint)
                            WHERE id=?""",
-                        (patch["image_digest"], now, now, job["instance_id"]),
+                        (
+                            patch["image_digest"], now, now, endpoint,
+                            management_endpoint, job["instance_id"],
+                        ),
                     )
                 else:
                     patch = self._transition(
@@ -434,18 +496,32 @@ class PatchPipeline:
                 conn,
             )
         if job["operation"] == "sandbox_validate" and success:
-            return self.verify_sandbox(payload["patch_id"])
+            return self.verify_sandbox(
+                payload["patch_id"], result.get("endpoint"),
+                result.get("management_endpoint"),
+            )
         if job["operation"] == "deploy" and success:
             return self.verify_live(payload["patch_id"])
         return self.get(payload["patch_id"])
 
-    def verify_sandbox(self, patch_id: str) -> dict:
+    def verify_sandbox(
+        self, patch_id: str, endpoint: str | None = None,
+        management_endpoint: str | None = None,
+    ) -> dict:
         patch = self.get(patch_id)
         service = self.repo.get_service(patch["service_id"])
+        kubernetes = self.settings.game_runtime == "kubernetes"
         sandbox = {
-            "id": "sandbox", "endpoint": "http://ad_patch_sandbox:9000",
-            "management_endpoint": "http://ad_patch_sandbox:9001",
+            "id": "sandbox", "match_id": patch["match_id"],
+            "team_id": patch["team_id"], "service_id": patch["service_id"],
+            "endpoint": _runtime_endpoint(endpoint, kubernetes=kubernetes)
+            or "http://ad_patch_sandbox:9000",
+            "management_endpoint": _runtime_endpoint(
+                management_endpoint, kubernetes=kubernetes
+            ) or "http://ad_patch_sandbox:9001",
             "checker_type": service["checker_type"],
+            "runtime_kind": "kubernetes" if kubernetes else "docker_compose",
+            "management_secret_scope": f"sandbox-{patch_id}",
         }
         flag = SecretFlag(stable_id("sandbox-flag", patch_id), "FLAG{sandboxvalidationtoken000000000}")
         put = self.checker.injector.put_flag(sandbox, flag)
@@ -473,6 +549,8 @@ class PatchPipeline:
         instance = self.repo.get_instance(
             patch["match_id"], patch["team_id"], patch["service_id"]
         )
+        instance["runtime_kind"] = self.settings.game_runtime
+        instance["management_secret_scope"] = "live"
         flag = SecretFlag(
             stable_id("post-deploy-flag", patch_id),
             "FLAG{postdeployvalidationtoken0000000}",

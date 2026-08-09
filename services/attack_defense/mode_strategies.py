@@ -131,5 +131,12 @@ def strategy_for(mode: str) -> MatchModeStrategy:
         raise ValueError(f"unsupported match mode: {mode}")
 
 
+def supported_score_categories(mode: str) -> set[str]:
+    categories = set(strategy_for(mode).score_categories)
+    if mode in {"attack_defense", "hybrid_live_fire"}:
+        categories.update({"koth", "stealth_attack", "stealth_detection"})
+    return categories
+
+
 def default_score_weights(mode: str) -> dict[str, float]:
     return {category: 1.0 for category in strategy_for(mode).score_categories}

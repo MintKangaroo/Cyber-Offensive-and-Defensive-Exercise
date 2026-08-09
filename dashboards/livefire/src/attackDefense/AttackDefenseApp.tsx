@@ -2,15 +2,15 @@ import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from 
 import {
   Command, CommandPalette, EmptyState, ErrorState,
   FlagSubmissionPanel, IncidentQueue, InfrastructureStatusPanel, LatencySparkline,
-  LiveEventFeed, LiveMatchHeader, LoadingState, MetricTile, OperatorActionDialog,
+  KothControlBoard, LiveEventFeed, LiveMatchHeader, LoadingState, MetricTile, OperatorActionDialog,
   PatchPipeline, ScoreStrip, ServiceMatrix, ServiceStatusBadge,
-  TacticalNetworkView, TeamRankBadge,
+  StealthOperationsBoard, TacticalNetworkView, TeamRankBadge,
 } from "./components";
 import { decodeRole, httpAttackDefenseApi, login } from "./api";
 import { useLiveEvents } from "./useLiveEvents";
 import type {
-  AttackSurface, LiveRole, MatchState, PatchRecord, RuntimeSnapshot,
-  ScoreRow, ScoreboardResponse, ServiceInstance,
+  AttackSurface, CaptureRecord, KothState, LiveRole, MatchState, PatchRecord, RuntimeSnapshot,
+  ScoreRow, ScoreboardResponse, ServiceInstance, StealthState,
 } from "./types";
 import { NAVIGATION } from "./types";
 
@@ -33,7 +33,8 @@ export function AttackDefenseApp({ modeControl }: { modeControl: ReactNode }) {
   );
   const [active, setActive] = useState(visibleNavigation(identity.role)[0]);
   const [snapshot, setSnapshot] = useState<RuntimeSnapshot>({
-    state: null, services: [], scoreboard: null, attackSurface: null, patches: [],
+    state: null, services: [], scoreboard: null, attackSurface: null,
+    patches: [], captures: [], koth: null, stealth: null,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -46,17 +47,20 @@ export function AttackDefenseApp({ modeControl }: { modeControl: ReactNode }) {
         httpAttackDefenseApi.getState(matchId, identity.role, identity.token),
         httpAttackDefenseApi.getScoreboard(matchId, identity.role, identity.token),
       ]);
-      const [services, attackSurface, patches] = await Promise.all([
+      const [services, attackSurface, patches, captures, koth, stealth] = await Promise.all([
         httpAttackDefenseApi.getServices(matchId, identity.role, identity.token).catch(() => []),
         identity.role === "competitor"
           ? httpAttackDefenseApi.getAttackSurface(matchId, identity.token).catch(() => null)
           : Promise.resolve(null),
         identity.role === "observer"
           ? Promise.resolve([]) : httpAttackDefenseApi.getPatches(matchId, identity.role, identity.token).catch(() => []),
+        httpAttackDefenseApi.getCaptures(matchId, identity.role, identity.token).catch(() => []),
+        httpAttackDefenseApi.getKoth(matchId, identity.role, identity.token).catch(() => null),
+        httpAttackDefenseApi.getStealth(matchId, identity.role, identity.token).catch(() => null),
       ]);
       // The API is authoritative for Match mode and state. The shell selector
       // chooses a client experience; it must never rewrite server-confirmed mode.
-      setSnapshot({ state, scoreboard, services, attackSurface, patches });
+      setSnapshot({ state, scoreboard, services, attackSurface, patches, captures, koth, stealth });
       setError("");
     } catch (reason) {
       setError(String(reason));
@@ -143,6 +147,9 @@ export function AttackDefenseApp({ modeControl }: { modeControl: ReactNode }) {
             state={snapshot.state} services={snapshot.services}
             scoreboard={snapshot.scoreboard} ownScore={ownScore}
             attackSurface={snapshot.attackSurface} patches={snapshot.patches}
+            captures={snapshot.captures}
+            koth={snapshot.koth}
+            stealth={snapshot.stealth}
             events={events} refresh={refresh} setAction={setAction}
           />
         </main>
@@ -168,7 +175,9 @@ function Page(props: {
   active: string; role: LiveRole; matchId: string; token: string;
   state: MatchState | null; services: ServiceInstance[];
   scoreboard: ScoreboardResponse | null; ownScore?: ScoreRow;
-  attackSurface: AttackSurface | null; patches: PatchRecord[];
+  attackSurface: AttackSurface | null; patches: PatchRecord[]; captures: CaptureRecord[];
+  koth: KothState | null;
+  stealth: StealthState | null;
   events: ReturnType<typeof useLiveEvents>["events"]; refresh: () => Promise<void>;
   setAction: (action: "pause" | "resume" | "finalize" | "end") => void;
 }) {
@@ -189,23 +198,29 @@ function Page(props: {
       return <DefenseConsole services={props.services} patches={props.patches} />;
     case "Patches":
       return <PatchOperations {...props} />;
+    case "Captures":
+      return <CaptureEvidence {...props} />;
     case "Scoreboard":
     case "Scoring":
       return <ScoreboardView scoreboard={props.scoreboard} />;
     case "Event Feed":
-    case "Evidence":
     case "Patch Review":
       return props.active === "Patch Review"
         ? <PatchList patches={props.patches} />
         : <LiveEventFeed events={props.events} />;
+    case "Evidence":
+      return <div className="page-grid"><CaptureEvidence {...props} /><LiveEventFeed events={props.events} /></div>;
     default:
       return <BattleOverview {...props} />;
   }
 }
 
 function BattleOverview(props: {
+  matchId: string; token: string; refresh: () => Promise<void>;
   state: MatchState | null; services: ServiceInstance[]; ownScore?: ScoreRow;
-  attackSurface: AttackSurface | null; events: ReturnType<typeof useLiveEvents>["events"];
+  attackSurface: AttackSurface | null; koth: KothState | null;
+  stealth: StealthState | null;
+  events: ReturnType<typeof useLiveEvents>["events"];
 }) {
   return (
     <div className="page-grid battle-overview">
@@ -237,6 +252,17 @@ function BattleOverview(props: {
           </table></div>
         )}
       </section>
+      {props.koth?.enabled && <KothControlBoard state={props.koth} />}
+      {props.stealth?.enabled && <StealthOperationsBoard
+        state={props.stealth}
+        services={props.services}
+        onReport={async (serviceId, indicatorHash, summary) => {
+          await httpAttackDefenseApi.submitStealthDetection(
+            props.matchId, props.token, serviceId, indicatorHash, summary,
+          );
+          await props.refresh();
+        }}
+      />}
       <LiveEventFeed events={props.events} />
     </div>
   );
@@ -318,10 +344,81 @@ function PatchList({ patches }: { patches: PatchRecord[] }) {
   );
 }
 
+function CaptureEvidence(props: {
+  role: LiveRole; matchId: string; token: string; captures: CaptureRecord[];
+  refresh: () => Promise<void>;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [reason, setReason] = useState("");
+  const [message, setMessage] = useState("");
+
+  async function upload(event: FormEvent) {
+    event.preventDefault();
+    if (!file || reason.trim().length < 3) return;
+    try {
+      await httpAttackDefenseApi.uploadCapture(props.matchId, props.token, file, reason);
+      setMessage("Capture sanitized. Release remains server-gated until its configured time.");
+      setFile(null); setReason(""); await props.refresh();
+    } catch {
+      setMessage("Capture rejected. Verify classic PCAP format, size, timestamp, and policy.");
+    }
+  }
+
+  async function download(capture: CaptureRecord) {
+    try {
+      const result = await httpAttackDefenseApi.downloadCapture(
+        props.matchId, capture.id, props.token,
+      );
+      const url = URL.createObjectURL(result.blob);
+      const anchor = document.createElement("a");
+      anchor.href = url; anchor.download = result.filename; anchor.click();
+      URL.revokeObjectURL(url);
+      setMessage("Sanitized team-watermarked capture downloaded.");
+    } catch {
+      setMessage("Capture is still withheld or temporarily unavailable.");
+    }
+  }
+
+  return (
+    <section className="panel capture-evidence span-all">
+      <div className="panel-heading">
+        <div><span>PRIVACY-GATED EVIDENCE</span><h1>Sanitized packet captures</h1></div>
+        <b>{props.captures.filter((item) => item.available).length} available</b>
+      </div>
+      {props.role === "operator" && (
+        <form className="capture-upload" onSubmit={upload}>
+          <label>Classic PCAP file<input type="file" accept=".pcap,application/vnd.tcpdump.pcap" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
+          <label>Audit reason<input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="post-round evidence release" /></label>
+          <button className="primary-action" disabled={!file || reason.trim().length < 3}>SANITIZE CAPTURE</button>
+        </form>
+      )}
+      <p className="sanitized-note">RAW CAPTURE IS NOT STORED · IP/MAC PSEUDONYMIZED · FLAGS AND CREDENTIALS REDACTED · DOWNLOADS WATERMARKED</p>
+      {props.captures.length === 0 ? <EmptyState label="No sanitized captures registered" /> : (
+        <div className="matrix-scroll"><table>
+          <thead><tr><th>Captured</th><th>Round</th><th>Service</th><th>Packets</th><th>Size</th><th>Release</th><th>Action</th></tr></thead>
+          <tbody>{props.captures.map((capture) => <tr key={capture.id}>
+            <td><time>{new Date(capture.captured_until * 1000).toLocaleString()}</time></td>
+            <td>{capture.round ?? "—"}</td><td>{capture.service ?? "match-wide"}</td>
+            <td>{capture.packet_count.toLocaleString()}</td>
+            <td>{Math.ceil(capture.size_bytes / 1024).toLocaleString()} KiB</td>
+            <td><ServiceStatusBadge status={capture.available ? "healthy" : "withheld"} /> <time>{new Date(capture.release_at * 1000).toLocaleString()}</time></td>
+            <td>{props.role === "competitor"
+              ? <button disabled={!capture.available} onClick={() => void download(capture)}>{capture.available ? "Download" : "Withheld"}</button>
+              : <code>{capture.sanitizer_version ?? "pcap-v1"}</code>}</td>
+          </tr>)}</tbody>
+        </table></div>
+      )}
+      {message && <p className="capture-message" role="status">{message}</p>}
+    </section>
+  );
+}
+
 function OperatorCommandCenter(props: {
   matchId: string; token: string; refresh: () => Promise<void>;
   state: MatchState | null; services: ServiceInstance[]; scoreboard: ScoreboardResponse | null;
   patches: PatchRecord[]; events: ReturnType<typeof useLiveEvents>["events"];
+  koth: KothState | null;
+  stealth: StealthState | null;
   setAction: (action: "pause" | "resume" | "finalize" | "end") => void;
 }) {
   const [selected, setSelected] = useState<ServiceInstance | null>(null);
@@ -358,6 +455,8 @@ function OperatorCommandCenter(props: {
           </aside>
         )}
       </section>
+      {props.koth?.enabled && <KothControlBoard state={props.koth} />}
+      {props.stealth?.enabled && <StealthOperationsBoard state={props.stealth} />}
       <TacticalNetworkView instances={props.services} />
       <section className="panel round-control">
         <div className="panel-heading"><div><span>AUTHORITY REQUIRED</span><h2>Round control</h2></div></div>
@@ -399,6 +498,8 @@ function OperatorCommandCenter(props: {
 
 function ObserverView(props: {
   active: string; scoreboard: ScoreboardResponse | null; services: ServiceInstance[];
+  koth: KothState | null;
+  stealth: StealthState | null;
   events: ReturnType<typeof useLiveEvents>["events"];
 }) {
   if (props.active === "Scoreboard") return <ScoreboardView scoreboard={props.scoreboard} />;
@@ -406,6 +507,8 @@ function ObserverView(props: {
   return (
     <div className="page-grid observer-view">
       <ScoreboardView scoreboard={props.scoreboard} />
+      {props.koth?.enabled && <KothControlBoard state={props.koth} />}
+      {props.stealth?.enabled && <StealthOperationsBoard state={props.stealth} />}
       <section className="panel">
         <div className="panel-heading"><div><span>BROADCAST SAFE</span><h2>Service availability</h2></div></div>
         <div className="service-card-grid">
@@ -441,7 +544,7 @@ function ScoreboardView({ scoreboard }: { scoreboard: ScoreboardResponse | null 
         <div>{(scoreboard.delay_rounds ?? 0) > 0 && <strong>DELAYED BY {scoreboard.delay_rounds} ROUNDS</strong>} {scoreboard.provisional && <span className="provisional">PROVISIONAL</span>}</div>
       </div>
       <div className="matrix-scroll"><table>
-        <thead><tr><th>Rank</th><th>Team</th><th>Attack</th><th>Defense</th><th>Flag Defense</th><th>Availability</th><th>Detection</th><th>Containment</th><th>Recovery</th><th>Incident Response</th><th>Mission Inject</th><th>Penalty</th><th>Adjustment</th><th>Total</th><th>Round</th></tr></thead>
+        <thead><tr><th>Rank</th><th>Team</th><th>Attack</th><th>Defense</th><th>Flag Defense</th><th>Availability</th><th>Detection</th><th>Containment</th><th>Recovery</th><th>Incident Response</th><th>Mission Inject</th><th>KOTH</th><th>Stealth Attack</th><th>Stealth Detection</th><th>Penalty</th><th>Adjustment</th><th>Total</th><th>Round</th></tr></thead>
         <tbody>{scoreboard.scoreboard.map((row) => <tr key={row.team_id}>
           <td><TeamRankBadge rank={row.rank} /></td><th>{row.team}</th>
           <td className="score-attack">{row.attack}</td>
@@ -450,6 +553,9 @@ function ScoreboardView({ scoreboard }: { scoreboard: ScoreboardResponse | null 
           <td className="score-availability">{row.availability}</td>
           <td>{row.detection}</td><td>{row.containment}</td><td>{row.recovery}</td>
           <td>{row.incident_response}</td><td>{row.mission_inject}</td>
+          <td className="score-koth">{row.koth}</td>
+          <td className="score-stealth-attack">{row.stealth_attack}</td>
+          <td className="score-stealth-detection">{row.stealth_detection}</td>
           <td>{row.penalty}</td><td>{row.adjustment}</td>
           <td className="score-total">{row.total}</td>
           <td>{row.last_updated_round}</td>
@@ -481,6 +587,7 @@ function navIcon(label: string) {
   if (label.includes("Attack")) return "↗";
   if (label.includes("Defense") || label.includes("Service")) return "⬡";
   if (label.includes("Patch")) return "⇪";
+  if (label.includes("Capture") || label.includes("Evidence")) return "◫";
   if (label.includes("Score")) return "▥";
   if (label.includes("Event") || label.includes("Timeline")) return "≋";
   if (label.includes("Control") || label.includes("Command")) return "⌘";

@@ -7,8 +7,10 @@ from typing import Protocol
 from .config import AttackDefenseSettings
 from .db import Database
 from .evidence import AuditContext, EvidenceRecorder
+from .koth import KothService
 from .repositories import AttackDefenseRepository
 from .mode_strategies import strategy_for
+from .stealth import STEALTH_SCORE_TYPES, StealthService
 from .utils import evidence_hash, json_load, stable_id
 
 
@@ -45,11 +47,15 @@ class ScoringService:
         repo: AttackDefenseRepository,
         settings: AttackDefenseSettings,
         evidence: EvidenceRecorder,
+        koth: KothService | None = None,
+        stealth: StealthService | None = None,
     ):
         self.db = db
         self.repo = repo
         self.settings = settings
         self.evidence = evidence
+        self.koth = koth
+        self.stealth = stealth
         self.policy: ScoringPolicy = ConfigurableScoringPolicy(
             settings.attack_score_per_flag,
             settings.defense_score_per_flag,
@@ -167,6 +173,58 @@ class ScoringService:
                         score_type="availability", target=availability,
                         evidence=base_evidence,
                     ))
+            if "koth" in configured_categories and self.koth is not None:
+                targets = self.koth.scoring_targets(conn, match_id, dict(round_row))
+                teams = self.repo.list_teams(match_id, conn)
+                services = self.repo.list_services(match_id, conn)
+                for team in teams:
+                    for service in services:
+                        target = targets.get((team["id"], service["id"]), {
+                            "target": 0, "hills": [],
+                        })
+                        changed += abs(self._apply_target(
+                            conn,
+                            match_id=match_id,
+                            round_id=round_id,
+                            team_id=team["id"],
+                            service_id=service["id"],
+                            score_type="koth",
+                            target=int(target["target"]),
+                            evidence={
+                                "round_sequence": int(round_row["sequence"]),
+                                "controlled_functional_hills": target["hills"],
+                            },
+                        ))
+            if (
+                STEALTH_SCORE_TYPES.issubset(configured_categories)
+                and self.stealth is not None
+            ):
+                targets = self.stealth.scoring_targets(
+                    conn, match_id, dict(round_row)
+                )
+                for team in self.repo.list_teams(match_id, conn):
+                    for service in self.repo.list_services(match_id, conn):
+                        for score_type in sorted(STEALTH_SCORE_TYPES):
+                            target = targets.get(
+                                (team["id"], service["id"], score_type),
+                                {"target": 0, "incidents": []},
+                            )
+                            changed += abs(self._apply_target(
+                                conn,
+                                match_id=match_id,
+                                round_id=round_id,
+                                team_id=team["id"],
+                                service_id=service["id"],
+                                score_type=score_type,
+                                target=int(target["target"]),
+                                evidence={
+                                    "decision_round": int(round_row["sequence"]),
+                                    "incidents": target["incidents"],
+                                },
+                            ))
+                self.stealth.mark_scored(
+                    conn, match_id, int(round_row["sequence"])
+                )
             self.evidence.record(
                 AuditContext(
                     actor=actor, event_type="score_recalculation", result="success",
@@ -227,6 +285,15 @@ class ScoringService:
         configured_delay = int(config.get(
             "scoreboard_delay_rounds", self.settings.scoreboard_delay_rounds
         ))
+        stealth_config = (
+            self.stealth.normalized_config(config.get("stealth", {}))
+            if self.stealth is not None else {"enabled": False}
+        )
+        if stealth_config["enabled"]:
+            configured_delay = max(
+                configured_delay,
+                int(stealth_config["alert_delay_rounds"]),
+            )
         delay = int(
             strategy_for(match["mode"]).visibility_policy.public_delay_rounds(configured_delay)
             if public else 0
@@ -248,7 +315,8 @@ class ScoringService:
         categories = [
             "attack", "defense", "flag_defense", "availability", "detection",
             "containment", "recovery", "incident_response", "mission_inject",
-            "penalty", "adjustment",
+            "koth", "stealth_attack", "stealth_detection", "penalty",
+            "adjustment",
         ]
         weights = {
             str(k): float(v) for k, v in (config.get("score_weights") or {}).items()

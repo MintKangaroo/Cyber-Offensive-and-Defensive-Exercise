@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
@@ -12,6 +13,23 @@ from typing import Callable, Protocol
 import httpx
 
 from .config import AttackDefenseSettings
+
+
+def derive_management_token(master: str, instance: dict) -> str:
+    """Derive a Kubernetes team/service secret without persisting plaintext.
+
+    Compose keeps its existing shared development token. Kubernetes sets
+    ``management_secret_scope`` so checker and trusted runtime independently
+    derive the same namespace-local value from the configured master.
+    """
+    scope = str(instance.get("management_secret_scope") or "live")
+    message = ":".join((
+        "ad-management-v1", str(instance.get("match_id") or ""),
+        str(instance.get("team_id") or ""),
+        str(instance.get("service_id") or ""), scope,
+    )).encode()
+    value = hmac.new(master.encode(), message, hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(value).decode().rstrip("=")
 
 
 @dataclass(frozen=True)
@@ -79,6 +97,16 @@ class HttpFlagInjector:
         self.settings = settings
         self.signer = ManagementSigner(settings.management_token)
 
+    def _signer(self, instance: dict) -> ManagementSigner:
+        if (
+            self.settings.game_runtime == "kubernetes"
+            or instance.get("runtime_kind") == "kubernetes"
+        ):
+            return ManagementSigner(
+                derive_management_token(self.settings.management_token, instance)
+            )
+        return self.signer
+
     def put_flag(self, instance: dict, flag: SecretFlag) -> InjectionResult:
         path = "/management/flags"
         body = {"slot": flag.id, "value": flag.token}
@@ -87,7 +115,7 @@ class HttpFlagInjector:
             with httpx.Client(timeout=self.settings.check_timeout_seconds) as client:
                 response = client.post(
                     f"{instance['management_endpoint']}{path}",
-                    json=body, headers=self.signer.headers("POST", path, body),
+                    json=body, headers=self._signer(instance).headers("POST", path, body),
                 )
             return InjectionResult(
                 response.status_code in (200, 201),
@@ -107,7 +135,7 @@ class HttpFlagInjector:
             with httpx.Client(timeout=self.settings.check_timeout_seconds) as client:
                 response = client.post(
                     f"{instance['management_endpoint']}{path}",
-                    json=body, headers=self.signer.headers("POST", path, body),
+                    json=body, headers=self._signer(instance).headers("POST", path, body),
                 )
             payload = response.json() if response.status_code == 200 else {}
             return VerificationResult(

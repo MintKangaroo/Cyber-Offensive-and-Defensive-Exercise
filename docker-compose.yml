@@ -251,6 +251,13 @@ services:
       - ATTACK_SCORE_PER_FLAG=${ATTACK_SCORE_PER_FLAG:-10}
       - DEFENSE_SCORE_PER_FLAG=${DEFENSE_SCORE_PER_FLAG:-5}
       - AVAILABILITY_SCORE_PER_ROUND=${AVAILABILITY_SCORE_PER_ROUND:-5}
+      - KOTH_DEFAULT_LEASE_ROUNDS=${KOTH_DEFAULT_LEASE_ROUNDS:-2}
+      - KOTH_DEFAULT_POINTS_PER_ROUND=${KOTH_DEFAULT_POINTS_PER_ROUND:-3}
+      - STEALTH_ALERT_DELAY_ROUNDS=${STEALTH_ALERT_DELAY_ROUNDS:-2}
+      - STEALTH_DETECTION_WINDOW_ROUNDS=${STEALTH_DETECTION_WINDOW_ROUNDS:-2}
+      - STEALTH_ATTACKER_UNDETECTED_POINTS=${STEALTH_ATTACKER_UNDETECTED_POINTS:-2}
+      - STEALTH_DEFENDER_DETECTION_POINTS=${STEALTH_DEFENDER_DETECTION_POINTS:-2}
+      - MAX_STEALTH_REPORTS_PER_MINUTE=${MAX_STEALTH_REPORTS_PER_MINUTE:-30}
       - MAX_FLAG_SUBMISSIONS_PER_MINUTE=${MAX_FLAG_SUBMISSIONS_PER_MINUTE:-120}
       - MAX_PATCH_SUBMISSIONS_PER_HOUR=${MAX_PATCH_SUBMISSIONS_PER_HOUR:-10}
       - PATCH_VALIDATION_TIMEOUT_SECONDS=${PATCH_VALIDATION_TIMEOUT_SECONDS:-180}
@@ -258,6 +265,14 @@ services:
       - PATCH_ALLOWED_REGISTRY=${PATCH_ALLOWED_REGISTRY:-registry.local:5000}
       - PATCH_RUNTIME_REGISTRY=${PATCH_RUNTIME_REGISTRY:-localhost:5000}
       - GAME_RUNTIME=${GAME_RUNTIME:-docker_compose}
+      - PCAP_STORAGE_DIR=/data/captures
+      - PCAP_RELEASE_DELAY_SECONDS=${PCAP_RELEASE_DELAY_SECONDS:-900}
+      - PCAP_MAX_UPLOAD_MB=${PCAP_MAX_UPLOAD_MB:-32}
+      - PCAP_MAX_PACKETS=${PCAP_MAX_PACKETS:-250000}
+      - PCAP_MAX_DOWNLOADS_PER_MINUTE=${PCAP_MAX_DOWNLOADS_PER_MINUTE:-10}
+      - PCAP_MAX_FUTURE_SKEW_SECONDS=${PCAP_MAX_FUTURE_SKEW_SECONDS:-300}
+      - PCAP_ANONYMIZATION_SECRET=${PCAP_ANONYMIZATION_SECRET:-attack-defense-dev-pcap-anonymize-change-me}
+      - PCAP_WATERMARK_SECRET=${PCAP_WATERMARK_SECRET:-attack-defense-dev-pcap-watermark-change-me}
     depends_on:
       - ad_team_01_notes
       - ad_team_01_vault
@@ -267,6 +282,123 @@ services:
       - ad_team_03_vault
       - ad_registry
     networks: [range_control, ad_management, ad_scoreboard_api]
+
+  # Optional PostgreSQL-backed replicated API/game-engine profile. The bundled
+  # loopback HAProxy is for local verification only; production must supply
+  # authenticated TLS ingress. Do not run it beside the default SQLite
+  # `attack_defense` service for the same Match.
+  ad_postgres:
+    profiles: ["ad-ha"]
+    image: postgres:17-alpine
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /var/run/postgresql:rw,noexec,nosuid,size=16m
+    security_opt: ["no-new-privileges:true"]
+    shm_size: 128m
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 1.0
+    environment:
+      POSTGRES_USER: attack_defense
+      POSTGRES_PASSWORD: ${AD_POSTGRES_PASSWORD:-ad-ha-dev-password-change-me}
+      POSTGRES_DB: attack_defense
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    volumes:
+      - ad_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U attack_defense -d attack_defense"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+    networks: [ad_management]
+
+  attack_defense_ha:
+    profiles: ["ad-ha"]
+    build: { context: ., dockerfile: services/attack_defense/Dockerfile }
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 512m
+    cpus: 1.0
+    expose: ["8100"]
+    volumes:
+      - ad_ha_data:/data
+    environment:
+      ATTACK_DEFENSE_ENABLED: "true"
+      ATTACK_DEFENSE_DATA_DIR: /data
+      ATTACK_DEFENSE_DATABASE_URL: postgresql://attack_defense:${AD_POSTGRES_PASSWORD:-ad-ha-dev-password-change-me}@ad_postgres:5432/attack_defense
+      ATTACK_DEFENSE_DB_CONNECT_TIMEOUT_SECONDS: ${ATTACK_DEFENSE_DB_CONNECT_TIMEOUT_SECONDS:-5}
+      ATTACK_DEFENSE_DB_STATEMENT_TIMEOUT_MS: ${ATTACK_DEFENSE_DB_STATEMENT_TIMEOUT_MS:-10000}
+      ATTACK_DEFENSE_MAX_DB_CLOCK_SKEW_SECONDS: ${ATTACK_DEFENSE_MAX_DB_CLOCK_SKEW_SECONDS:-5}
+      ATTACK_DEFENSE_FLAG_SECRET: ${ATTACK_DEFENSE_FLAG_SECRET:-attack-defense-dev-flag-secret-change-me}
+      ATTACK_DEFENSE_FLAG_HASH_SECRET: ${ATTACK_DEFENSE_FLAG_HASH_SECRET:-attack-defense-dev-hash-secret-change-me}
+      ATTACK_DEFENSE_MANAGEMENT_TOKEN: ${ATTACK_DEFENSE_MANAGEMENT_TOKEN:-attack-defense-dev-management-token}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-demo-jwt-secret-change-before-production-32bytes}
+      INSTRUCTOR_TOKEN: ${INSTRUCTOR_TOKEN:-dev-instructor-token}
+      OPERATOR_TOKEN: ${OPERATOR_TOKEN:-}
+      ROUND_DURATION_SECONDS: ${ROUND_DURATION_SECONDS:-120}
+      ACTIVE_FLAG_WINDOW_ROUNDS: ${ACTIVE_FLAG_WINDOW_ROUNDS:-3}
+      CHECK_INTERVAL_SECONDS: ${CHECK_INTERVAL_SECONDS:-30}
+      CHECK_TIMEOUT_SECONDS: ${CHECK_TIMEOUT_SECONDS:-10}
+      CHECK_RETRY_COUNT: ${CHECK_RETRY_COUNT:-2}
+      SCOREBOARD_DELAY_ROUNDS: ${SCOREBOARD_DELAY_ROUNDS:-0}
+      ATTACK_SCORE_PER_FLAG: ${ATTACK_SCORE_PER_FLAG:-10}
+      DEFENSE_SCORE_PER_FLAG: ${DEFENSE_SCORE_PER_FLAG:-5}
+      AVAILABILITY_SCORE_PER_ROUND: ${AVAILABILITY_SCORE_PER_ROUND:-5}
+      KOTH_DEFAULT_LEASE_ROUNDS: ${KOTH_DEFAULT_LEASE_ROUNDS:-2}
+      KOTH_DEFAULT_POINTS_PER_ROUND: ${KOTH_DEFAULT_POINTS_PER_ROUND:-3}
+      STEALTH_ALERT_DELAY_ROUNDS: ${STEALTH_ALERT_DELAY_ROUNDS:-2}
+      STEALTH_DETECTION_WINDOW_ROUNDS: ${STEALTH_DETECTION_WINDOW_ROUNDS:-2}
+      STEALTH_ATTACKER_UNDETECTED_POINTS: ${STEALTH_ATTACKER_UNDETECTED_POINTS:-2}
+      STEALTH_DEFENDER_DETECTION_POINTS: ${STEALTH_DEFENDER_DETECTION_POINTS:-2}
+      MAX_STEALTH_REPORTS_PER_MINUTE: ${MAX_STEALTH_REPORTS_PER_MINUTE:-30}
+      MAX_FLAG_SUBMISSIONS_PER_MINUTE: ${MAX_FLAG_SUBMISSIONS_PER_MINUTE:-120}
+      MAX_PATCH_SUBMISSIONS_PER_HOUR: ${MAX_PATCH_SUBMISSIONS_PER_HOUR:-10}
+      PATCH_VALIDATION_TIMEOUT_SECONDS: ${PATCH_VALIDATION_TIMEOUT_SECONDS:-180}
+      PATCH_ALLOWED_REGISTRY: ${PATCH_ALLOWED_REGISTRY:-registry.local:5000}
+      PATCH_RUNTIME_REGISTRY: ${PATCH_RUNTIME_REGISTRY:-localhost:5000}
+      GAME_RUNTIME: ${GAME_RUNTIME:-docker_compose}
+      PCAP_STORAGE_DIR: /data/captures
+      PCAP_RELEASE_DELAY_SECONDS: ${PCAP_RELEASE_DELAY_SECONDS:-900}
+      PCAP_ANONYMIZATION_SECRET: ${PCAP_ANONYMIZATION_SECRET:-attack-defense-dev-pcap-anonymize-change-me}
+      PCAP_WATERMARK_SECRET: ${PCAP_WATERMARK_SECRET:-attack-defense-dev-pcap-watermark-change-me}
+    depends_on:
+      ad_postgres: {condition: service_healthy}
+      ad_registry: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/ready', timeout=3).read()"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+      start_period: 15s
+    deploy:
+      replicas: 2
+    restart: unless-stopped
+    networks: [range_control, ad_management, ad_scoreboard_api]
+
+  ad_ha_gateway:
+    profiles: ["ad-ha"]
+    image: haproxy:3.1-alpine
+    user: "99:99"
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.25
+    ports: ["127.0.0.1:8110:8110"]
+    volumes:
+      - ./infra/attack_defense/haproxy-ha.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    depends_on:
+      attack_defense_ha: {condition: service_healthy}
+    restart: unless-stopped
+    networks: [range_control, ad_scoreboard_api]
 
   ad_registry:
     image: registry:2
@@ -943,6 +1075,8 @@ volumes:
   rc_data: {}
   ad_data: {}
   ad_registry_data: {}
+  ad_postgres_data: {}
+  ad_ha_data: {}
   ad_team_01_notes_data: {}
   ad_team_01_vault_data: {}
   ad_team_02_notes_data: {}

@@ -1,6 +1,11 @@
 # Attack/Defense API
 
-Base URL: `http://localhost:8100`.
+Default base URL: `http://localhost:8100`. The local HA profile uses
+`http://localhost:8110` through HAProxy.
+
+`GET /health` is liveness. `GET /ready` checks database access and
+application/database clock skew; the HA load balancer sends traffic only to
+ready replicas.
 
 Authentication uses existing HS256 access JWTs. Competitor identity is taken
 only from signed `team_id` and `match_id` claims, never from request bodies.
@@ -23,9 +28,42 @@ only from signed `team_id` and `match_id` claims, never from request bodies.
 | POST | `/api/attack-defense/internal/matches/{id}/score-events` | operator/service integration |
 | POST | `/api/attack-defense/operator/runtime/jobs/claim` | trusted operator runner |
 | POST | `/api/attack-defense/operator/runtime/jobs/{job}/complete` | trusted operator runner |
+| GET | `/api/attack-defense/operator/ha/status` | operator |
+| POST | `/api/attack-defense/operator/matches/{id}/instances/{instance}/runtime-result` | trusted operator reconciler |
+| POST | `/api/attack-defense/operator/matches/{id}/captures` | operator, binary classic PCAP + reason |
+| GET | `/api/attack-defense/operator/matches/{id}/captures` | operator privacy metadata |
+| POST | `/api/attack-defense/operator/matches/{id}/koth/configure` | operator, draft/paused only, reason required |
+| GET | `/api/attack-defense/operator/matches/{id}/koth` | operator real-time ownership and policy |
+| POST | `/api/attack-defense/operator/matches/{id}/stealth/configure` | operator, draft/paused only, reason required |
+| GET | `/api/attack-defense/operator/matches/{id}/stealth` | operator real-time incidents and internal report results |
 
 The hybrid score event endpoint requires a caller-supplied unique `event_id` and
 rejects categories disabled in Match configuration.
+
+`ha/status` exposes only backend type, HA capability, database time, bounded
+clock skew, migration versions, running Match count and the current engine
+owner ID. It never exposes the DSN or database credentials.
+
+Runtime job completion requires the opaque `claim_token` returned inside the
+claimed job's result. Reclaiming a stale job rotates the token, so an older
+worker receives `409` if it attempts completion.
+
+The runtime-result endpoint records a Compose/Kubernetes reconciliation result
+and writes audit evidence. It accepts only bounded HTTP endpoints with explicit
+ports; Kubernetes mode additionally requires cluster `.svc` DNS. A reason is
+mandatory. Example:
+
+```json
+{
+  "success": true,
+  "runtime_id": "vulnerable-notes-47d91b20",
+  "endpoint": "http://vulnerable-notes-47d91b20.ad-match-team.svc:9000",
+  "management_endpoint": "http://vulnerable-notes-47d91b20.ad-match-team.svc:9001",
+  "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "error_code": null,
+  "reason": "initial tournament service deployment"
+}
+```
 
 ## Participant and public routes
 
@@ -42,6 +80,12 @@ rejects categories disabled in Match configuration.
 | GET | `/api/attack-defense/public/matches/{id}/state` | public |
 | GET | `/api/attack-defense/public/matches/{id}/service-summary` | aggregate healthy/total only |
 | GET | `/api/attack-defense/matches/{id}/events/stream` | role-filtered SSE |
+| GET | `/api/attack-defense/matches/{id}/captures` | Match competitors, delayed metadata |
+| GET | `/api/attack-defense/matches/{id}/captures/{capture}/download` | Match competitors, delayed/watermarked PCAP |
+| GET | `/api/attack-defense/matches/{id}/koth` | Match competitors, sanitized current ownership |
+| POST | `/api/attack-defense/matches/{id}/stealth/detections` | competitor, own membership, idempotency key and rate limit |
+| GET | `/api/attack-defense/matches/{id}/stealth` | competitor, own delayed attacker-redacted alerts |
+| GET | `/api/attack-defense/public/matches/{id}/stealth/summary` | delayed service aggregate, no team attribution |
 
 Flag submission:
 
@@ -68,8 +112,65 @@ Every rejection exposed to a competitor is generalized:
 Victim, service, exact expiry, duplicate state, and internal reason remain in
 operator-only audit evidence.
 
+An accepted submission can also acquire, capture or renew an enabled KOTH hill.
+The flag response deliberately remains unchanged, so it cannot reveal whether a
+specific token affected KOTH ownership.
+
+## Sanitized captures
+
+Operator ingest uses `application/vnd.tcpdump.pcap` or
+`application/octet-stream`. The binary body is bounded by `PCAP_MAX_UPLOAD_MB`;
+an `X-Operation-Reason` header is mandatory. Optional `X-Round-Id` and
+`X-Service-Id` values are ownership-checked against the Match.
+
+```http
+POST /api/attack-defense/operator/matches/ad-demo/captures
+Authorization: Bearer <operator token>
+Content-Type: application/vnd.tcpdump.pcap
+X-Operation-Reason: round 42 post-round evidence
+
+<classic PCAP bytes>
+```
+
+Raw capture bytes are discarded after in-memory sanitization. Competitor
+downloads return HTTP `425` with `Retry-After` before release. Successful
+downloads include `X-Capture-SHA256`, `X-Capture-Watermark`, `Cache-Control:
+private, no-store`, and a safe attachment filename. See
+[PCAP Privacy and Delayed Delivery](attack-defense-pcap.md).
+
 ## Scoreboard
 
 Public output includes delay, last public round, provisional state and raw score
 categories. Operator output has no configured delay. Hybrid categories are
 separate columns; weighted `total` is calculated from Match configuration.
+When enabled, `koth` remains its own ledger and scoreboard category and uses its
+independent configured weight.
+
+Stealth adds independent `stealth_attack` and `stealth_detection` categories.
+Its alert delay becomes the minimum public scoreboard delay and the public KOTH
+as-of delay. Operator score remains real-time.
+
+## Stealth detection report
+
+```http
+POST /api/attack-defense/matches/ad-demo/stealth/detections
+Authorization: Bearer <competitor access token>
+Idempotency-Key: team01-round42-notes-01
+Content-Type: application/json
+
+{
+  "service_id": "service-vulnerable-notes",
+  "indicator_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "evidence_summary": "SIEM and EDR correlation for anomalous note access"
+}
+```
+
+Every successfully recorded report returns the same generalized state:
+
+```json
+{"recorded":true,"status":"pending_verification","report_id":"opaque-id"}
+```
+
+The response does not reveal whether a matching incident exists. Raw evidence
+must not be sent to this endpoint. See
+[Stealth Mode Policy](attack-defense-stealth.md).

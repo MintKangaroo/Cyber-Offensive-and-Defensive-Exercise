@@ -2,10 +2,10 @@ import {
   FormEvent, ReactNode, useEffect, useRef, useState,
 } from "react";
 import type {
-  AsyncState, ConnectionState, LiveEvent, MatchState, PatchRecord,
-  ScoreRow, ServiceInstance, SubmissionResult,
+  AsyncState, ConnectionState, KothState, LiveEvent, MatchState, PatchRecord,
+  ScoreRow, ServiceInstance, StealthState, SubmissionResult,
 } from "./types";
-import { parseFlagBatch, patchStageIndex } from "./uiLogic";
+import { isIndicatorHash, parseFlagBatch, patchStageIndex } from "./uiLogic";
 
 function time(value?: number | null) {
   if (!value) return "—";
@@ -128,6 +128,9 @@ export function ScoreStrip({ row }: { row?: ScoreRow }) {
     ["Recovery", row?.recovery ?? 0, "operator"],
     ["Incident Response", row?.incident_response ?? 0, "operator"],
     ["Mission Inject", row?.mission_inject ?? 0, "operator"],
+    ["KOTH", row?.koth ?? 0, "operator"],
+    ["Stealth Attack", row?.stealth_attack ?? 0, "attack"],
+    ["Stealth Detection", row?.stealth_detection ?? 0, "defense"],
     ["Penalty", row?.penalty ?? 0, "critical"],
     ["Total", row?.total ?? 0, "primary"],
   ];
@@ -148,6 +151,105 @@ export function TeamRankBadge({ rank, movement = 0 }: { rank: number; movement?:
   );
 }
 
+export function KothControlBoard({ state }: { state: KothState }) {
+  const owned = state.hills.filter((hill) => hill.status === "owned").length;
+  return (
+    <section className="panel koth-board span-all">
+      <div className="panel-heading">
+        <div><span>OWNERSHIP LEASES</span><h2>King of the Hill control</h2></div>
+        <b>{owned}/{state.hills.length} controlled · {state.lease_rounds} round lease</b>
+      </div>
+      {state.hills.length === 0 ? <EmptyState label="No KOTH hills configured" /> : (
+        <div className="matrix-scroll"><table>
+          <caption className="sr-only">Current KOTH ownership by target team and service</caption>
+          <thead><tr><th>Target</th><th>Service</th><th>Control</th><th>Lease</th><th>Value</th></tr></thead>
+          <tbody>{state.hills.map((hill) => <tr key={hill.id}>
+            <th>{hill.victim_team}</th>
+            <td>{hill.service}</td>
+            <td>{hill.status === "owned" ? (
+              <span className="koth-owner"><span aria-hidden="true">◆</span>{hill.owner_team}</span>
+            ) : <span className="koth-unclaimed"><span aria-hidden="true">◇</span>UNCLAIMED</span>}</td>
+            <td>{hill.status === "owned"
+              ? `${hill.remaining_rounds} round${hill.remaining_rounds === 1 ? "" : "s"} remaining`
+              : "capture required"}</td>
+            <td>+{hill.points_per_round}/round</td>
+          </tr>)}</tbody>
+        </table></div>
+      )}
+      <p className="sanitized-note">OWNERSHIP ONLY · Flags, endpoints, checker details, and exploit method are never disclosed</p>
+    </section>
+  );
+}
+
+export function StealthOperationsBoard({
+  state, services = [], onReport,
+}: {
+  state: StealthState;
+  services?: ServiceInstance[];
+  onReport?: (
+    serviceId: string, indicatorHash: string, evidenceSummary: string,
+  ) => Promise<unknown>;
+}) {
+  const [serviceId, setServiceId] = useState(services[0]?.service_id ?? "");
+  const [indicatorHash, setIndicatorHash] = useState("");
+  const [summary, setSummary] = useState("");
+  const [message, setMessage] = useState("");
+  const delayed = state.disclosure.includes("delayed");
+  return (
+    <section className="panel stealth-board span-all">
+      <div className="panel-heading">
+        <div><span>DETECTION-AWARE DISCLOSURE</span><h2>Stealth operations</h2></div>
+        <b>{state.alert_delay_rounds} round alert delay · {state.detection_window_rounds} round detection window</b>
+      </div>
+      <div className="stealth-summary" role="status">
+        <span><strong>{state.incidents.length}</strong> {delayed ? "released alerts" : "tracked incidents"}</span>
+        <span><strong>+{state.attacker_undetected_points}</strong> undetected attack</span>
+        <span><strong>+{state.defender_detection_points}</strong> verified detection</span>
+      </div>
+      {state.incidents.length === 0 ? (
+        <EmptyState label={delayed ? "No alerts have reached the disclosure window" : "No Stealth incidents recorded"} />
+      ) : (
+        <div className="matrix-scroll"><table>
+          <caption className="sr-only">Delayed Stealth incidents and aggregate outcomes</caption>
+          <thead><tr><th>Round</th><th>Service</th><th>Outcome</th><th>Disclosure</th></tr></thead>
+          <tbody>{state.incidents.map((incident, index) => <tr key={incident.id ?? `${incident.service_id}-${index}`}>
+            <td>{incident.occurred_round ?? incident.occurred_sequence ?? "released"}</td>
+            <th>{incident.service ?? incident.service_slug ?? incident.service_id}</th>
+            <td><ServiceStatusBadge status={
+              incident.status === "detected" || (incident.detected ?? 0) > 0
+                ? "healthy" : "degraded"
+            } /> {incident.status ?? `${incident.detected ?? 0} detected / ${incident.undetected ?? 0} undetected`}</td>
+            <td>{delayed ? "DELAYED · ATTACKER REDACTED" : "OPERATOR REAL-TIME"}</td>
+          </tr>)}</tbody>
+        </table></div>
+      )}
+      {onReport && (
+        <form className="stealth-report-form" onSubmit={async (event) => {
+          event.preventDefault();
+          setMessage("");
+          try {
+            await onReport(serviceId, indicatorHash, summary);
+            setIndicatorHash(""); setSummary("");
+            setMessage("Evidence recorded. Verification remains hidden until disclosure.");
+          } catch {
+            setMessage("Evidence could not be recorded. Check policy, hash format, and rate limit.");
+          }
+        }}>
+          <label>Service<select required value={serviceId} onChange={(event) => setServiceId(event.target.value)}>
+            <option value="" disabled>Select defended service</option>
+            {services.map((service) => <option key={service.id} value={service.service_id}>{service.service_slug ?? service.service}</option>)}
+          </select></label>
+          <label>Indicator SHA-256<input required pattern="[0-9a-f]{64}" maxLength={64} className="mono-input" value={indicatorHash} onChange={(event) => setIndicatorHash(event.target.value.toLowerCase())} placeholder="64 lowercase hex characters" /></label>
+          <label>Evidence summary<input required minLength={3} maxLength={280} value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="Safe SIEM/EDR correlation summary" /></label>
+          <button disabled={!serviceId || !isIndicatorHash(indicatorHash)}>Record detection evidence</button>
+        </form>
+      )}
+      {message && <p role="status" className="stealth-message">{message}</p>}
+      <p className="sanitized-note">NO ORACLE · Report matching, attacker identity, submission ID, flags, and raw evidence remain hidden</p>
+    </section>
+  );
+}
+
 const STATUS: Record<string, { label: string; icon: string; tone: string }> = {
   healthy: { label: "HEALTHY", icon: "✓", tone: "healthy" },
   declared: { label: "INITIALIZING", icon: "◌", tone: "info" },
@@ -157,6 +259,7 @@ const STATUS: Record<string, { label: string; icon: string; tone: string }> = {
   deploying: { label: "PATCH DEPLOYING", icon: "↻", tone: "info" },
   verifying: { label: "VERIFYING", icon: "…", tone: "info" },
   rollback: { label: "ROLLBACK", icon: "↶", tone: "warning" },
+  withheld: { label: "WITHHELD", icon: "◷", tone: "info" },
   offline: { label: "OFFLINE", icon: "○", tone: "offline" },
 };
 

@@ -1,6 +1,8 @@
-# Production-oriented example. Labels and namespaces must be applied by the
-# Kubernetes runtime adapter; this file is not claimed to make Docker Compose
-# tournament-grade.
+# Legacy single-namespace policy sketch retained for Compose documentation.
+# Do not apply this file to a tournament cluster: the runtime now creates one
+# namespace per team and one namespace per patch sandbox. Use
+# `kubernetes/control-planes.yaml`; per-team policies are generated and
+# validated by `services.attack_defense.kubernetes_runtime`.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

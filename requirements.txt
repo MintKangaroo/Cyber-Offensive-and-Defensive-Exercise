@@ -8,5 +8,6 @@ requests==2.32.3
 websockets==13.1
 psutil==6.0.0
 pyyaml==6.0.2
+psycopg[binary]==3.3.4
 python-ulid==2.7.0
 reportlab==4.2.5

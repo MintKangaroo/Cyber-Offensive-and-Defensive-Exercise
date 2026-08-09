@@ -145,8 +145,9 @@ rollback합니다.
 
 검증된 상태:
 
-- 기존 exercise/ICS를 포함한 Python 전체 회귀: **296 passed**
-- React/Vitest 컴포넌트 테스트: **16 passed**
+- 기존 exercise/ICS를 포함한 Python 전체 회귀: **341 passed, 6 skipped**
+  (PostgreSQL 전용 6개는 별도 PostgreSQL 17 실행에서 모두 통과)
+- React/Vitest 컴포넌트 테스트: **17 passed**
 - Playwright 역할·권한·키보드·시각 회귀: **3 passed**
 - 3팀 × 2서비스 실제 Compose health, round 재시작 복구, flag 제출·중복 차단,
   digest-pinned patch 배포·rollback 경로 검증
@@ -284,6 +285,111 @@ make attack-defense-runtime-work
 않거나 이전 digest로 rollback합니다. API 컨테이너에 Docker socket을 연결하지
 마십시오.
 
+### 선택 사항: Kubernetes에 팀 서비스 배포
+
+기본 데모는 Docker Compose이므로 Kubernetes가 없어도 됩니다. 실제 CNI 기반 격리가
+필요한 운영자는 팀 서비스와 patch sandbox만 Kubernetes runtime으로 전환할 수
+있습니다. API에 kubeconfig를 넣지 않고 신뢰된 운영 호스트에서만 실행합니다.
+
+```bash
+# .env에서 GAME_RUNTIME=kubernetes, KUBERNETES_IMAGE_REGISTRY,
+# ATTACK_DEFENSE_MANAGEMENT_TOKEN을 먼저 설정합니다.
+
+# 1) 리소스 생성 없이 manifest·보안 정책 검사
+python3 -m services.attack_defense.cli ad runtime-reconcile ad-demo \
+  --runtime kubernetes --kube-context range-production
+
+# 2) 출력과 context를 확인한 뒤 실제 배포
+python3 -m services.attack_defense.cli ad runtime-reconcile ad-demo \
+  --runtime kubernetes --kube-context range-production --apply-kubernetes \
+  --reason "initial tournament deployment"
+
+# 3) 대기 중인 patch/restart/rollback 작업 한 건 처리
+python3 -m services.attack_defense.cli ad runtime-work \
+  --runtime kubernetes --kube-context range-production \
+  --apply-kubernetes --runner-id k8s-runner-01
+```
+
+Kubernetes runtime은 팀·sandbox별 namespace, restricted Pod Security,
+deny-by-default NetworkPolicy, quota, digest 고정 image, readiness 기반 rolling
+배포를 생성합니다. 단, CNI·registry·RWX storage·API control-plane 배포·image
+signature 검증은 자동 설치하지 않습니다. 기본 `ad-demo` 이미지를 사용하려면
+먼저 운영 registry로 mirror하고 서비스 정의의 digest가 registry manifest digest와
+일치해야 합니다. 사전 조건과 정확한 운영 절차는
+[Kubernetes Runtime](docs/attack-defense-kubernetes.md)을 먼저 확인하십시오.
+
+### 선택 사항: PostgreSQL 기반 다중 Game Engine 실행
+
+기본 `make attack-defense-demo`는 단일 API와 SQLite를 사용합니다. API 또는 game
+engine 인스턴스 장애 시 다른 인스턴스가 경기를 이어받아야 하는 운영 리허설에는
+PostgreSQL 공유 상태와 HAProxy를 사용하는 HA 프로필을 실행합니다.
+
+```bash
+cp .env.example .env
+./scripts/gen_secrets.sh
+make attack-defense-ha-demo
+
+# 두 API가 같은 DB·round lock·rate limit을 공유하는지 확인
+make attack-defense-ha-status
+curl -fsS http://localhost:8110/ready
+```
+
+HA API 주소는 `http://localhost:8110`입니다. 이 프로필은 새 PostgreSQL DB를
+사용하므로 기존 SQLite 경기를 자동 이전하지 않습니다. 로컬 HAProxy에는 TLS가
+없고 PostgreSQL도 단일 컨테이너이므로 대회 운영용 database HA 구성이 아닙니다.
+운영 요구사항과 장애 복구 절차는
+[High-Availability Mode](docs/attack-defense-high-availability.md)를 참고하십시오.
+
+### 선택 사항: KOTH 소유권 경기 켜기
+
+KOTH는 네 번째 경기 모드가 아닙니다. `attack_defense` 또는
+`hybrid_live_fire` 경기에서만 선택적으로 켜는 소유권·채점 규칙입니다. 상대
+서비스의 정상적인 새 라운드 플래그를 제출하면 해당 팀×서비스 hill의 제한된
+round lease를 획득하며, 서비스 정상 기능이 유지될 때만 별도 KOTH 점수를 받습니다.
+
+이미 실행 중인 데모에서는 먼저 경기를 pause합니다.
+
+```bash
+python3 -m services.attack_defense.cli ad match-pause ad-demo \
+  --reason "enable KOTH scoring"
+python3 -m services.attack_defense.cli ad koth-configure ad-demo \
+  --service-id service-vulnerable-notes \
+  --lease-rounds 2 --points-per-round 3 --score-weight 1 \
+  --reason "approved KOTH rules"
+python3 -m services.attack_defense.cli ad match-resume ad-demo \
+  --reason "KOTH policy applied"
+python3 -m services.attack_defense.cli ad koth-status ad-demo
+```
+
+Live Fire 화면에는 실제 API에서 받은 현재 소유 팀과 남은 lease round가 표시됩니다.
+플래그·내부 endpoint·checker 상세·공격 기법은 공개하지 않습니다. 전체 규칙과
+비활성화 절차는 [KOTH Policy](docs/attack-defense-koth.md)를 참고하십시오.
+
+### 선택 사항: Stealth Mode 켜기
+
+Stealth Mode도 네 번째 경기 모드가 아닙니다. `attack_defense`와
+`hybrid_live_fire`에서만 선택적으로 켜며, 기존 flag 제출 형식과 Attack 점수는
+바꾸지 않습니다. 공격 성공 정보는 운영자에게만 즉시 보이고 참가자·관전자에게는
+설정한 round만큼 지연됩니다. 방어팀은 공개 알림을 보기 전에 자체 SIEM/EDR 증거의
+SHA-256을 제출할 수 있습니다.
+
+```bash
+python3 -m services.attack_defense.cli ad match-pause ad-demo \
+  --reason "enable delayed disclosure"
+python3 -m services.attack_defense.cli ad stealth-configure ad-demo \
+  --alert-delay-rounds 2 --detection-window-rounds 2 \
+  --attacker-points 2 --defender-points 2 \
+  --reason "approved Stealth rules"
+python3 -m services.attack_defense.cli ad match-resume ad-demo \
+  --reason "Stealth policy applied"
+python3 -m services.attack_defense.cli ad stealth-status ad-demo
+```
+
+증거 제출 결과는 실제 incident 일치 여부와 관계없이 항상
+`pending_verification`으로 응답하므로 탐지 oracle로 사용할 수 없습니다. 공개
+scoreboard와 KOTH 상태에도 동일한 공개 지연 하한이 적용됩니다. 자세한 사용법과
+한계는 [Stealth Mode Policy](docs/attack-defense-stealth.md)를 참고하십시오.
+
 ### 관전과 운영 모니터링
 
 - Observer 화면: `http://localhost:5178/observer/live?mode=attack_defense`
@@ -294,6 +400,30 @@ make attack-defense-runtime-work
 
 Observer는 공개 scoreboard, round 시간과 서비스 aggregate만 봅니다. 실제 flag,
 팀별 내부 상태, endpoint, checker 상세 증거와 patch image 정보는 공개하지 않습니다.
+
+### PCAP 증거를 안전하게 제공하기
+
+운영자는 승인된 classic PCAP 파일을 업로드할 수 있습니다. 서버는 원본을 저장하지
+않고 IP·MAC을 가명화하고 flag·비밀번호·token을 지운 정제본만 보관합니다.
+정해진 지연 시간이 지나면 참가자의 **Captures** 화면에 다운로드 버튼이 열리며,
+팀마다 주소가 다시 가명화되고 서로 다른 watermark가 적용됩니다.
+
+```bash
+# 운영자: PCAP 정제·등록 및 상태 확인
+python3 -m services.attack_defense.cli ad capture-upload \
+  ad-demo ./round-042.pcap --reason "round 42 post-round evidence"
+python3 -m services.attack_defense.cli ad capture-list ad-demo
+
+# 참가자: 공개 시간이 지난 정제본 다운로드
+export ATTACK_DEFENSE_COMPETITOR_TOKEN='<access_token>'
+python3 -m services.attack_defense.cli ad capture-download \
+  ad-demo '<capture-id>' ./evidence/round-042.pcap
+```
+
+현재는 Ethernet/raw-IP/Linux cooked-v1 형식의 classic PCAP만 지원합니다.
+PCAPNG와 자동 TAP/CNI 캡처는 아직 지원하지 않으며, 지원하지 않는 입력은 원본을
+그대로 통과시키지 않고 거절합니다. 상세 정책은
+[PCAP Privacy and Delayed Delivery](docs/attack-defense-pcap.md)를 참고하십시오.
 
 ### 기존 Exercise 모드 사용
 
@@ -328,13 +458,20 @@ docker compose down
 - Compose bridge는 방향성 egress, 대회급 bandwidth/connection quota를 완전히
   강제하지 못합니다. 운영 환경에서는 CNI 기반 deny-by-default NetworkPolicy가
   필요합니다.
-- SQLite lease는 단일 호스트 개발·데모용입니다. 다중 game-engine HA는
-  PostgreSQL advisory lock과 분산 rate limit으로 교체해야 합니다.
+- SQLite lease는 단일 프로세스 개발·데모용입니다. 다중 game-engine은 구현된
+  PostgreSQL advisory lock, DB 기준 시각, 분산 rate limit 프로필을 사용해야 합니다.
+  Compose의 단일 PostgreSQL은 coordination 데모이며 database HA는 별도입니다.
 - 로컬 registry는 운영용 trust boundary가 아닙니다. 운영 전 image signature,
   provenance/SBOM, 인증 registry와 microVM/gVisor 계열 sandbox가 필요합니다.
 - API 컨테이너에 Docker socket, privileged, host network/PID/IPC 또는 host mount를
   제공하지 않습니다. 배포 명령은 별도의 trusted host runner가 durable job으로
   처리합니다.
+- PCAP 원본은 저장하지 않으며 정제본만 `ad_data`에 보관합니다. 실제 경기에서는
+  PCAP 익명화·watermark secret을 경기마다 교체하고, 캡처 센서 서명·암호화 object
+  storage·보존 정책을 추가해야 합니다.
+- Kubernetes runtime은 팀 서비스 배치만 담당합니다. API/control-plane chart,
+  CNI, ingress, RWX storage, Secret encryption/RBAC, image signature admission은
+  운영 환경에서 별도로 준비해야 합니다.
 
 <p align="center">
   <img src="docs/images/livefire-overview.png" alt="Live Fire Range 대시보드" width="900"/>

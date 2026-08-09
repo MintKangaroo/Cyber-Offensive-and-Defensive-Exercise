@@ -2,19 +2,21 @@ import { describe, expect, it } from "vitest";
 import { visibleNavigation } from "./AttackDefenseApp";
 import { orderAndDedupe } from "./useLiveEvents";
 import {
-  isConnectionDegraded, nextBackoff, parseFlagBatch, patchStageIndex,
+  isConnectionDegraded, isIndicatorHash, nextBackoff, parseFlagBatch, patchStageIndex,
   scoreboardDisclosure,
 } from "./uiLogic";
 
 describe("role-aware live fire UI", () => {
   it("hides unauthorized navigation instead of disabling it", () => {
     expect(visibleNavigation("competitor")).toContain("Attack Console");
+    expect(visibleNavigation("competitor")).toContain("Captures");
     expect(visibleNavigation("competitor")).not.toContain("Round Control");
     expect(visibleNavigation("operator")).toContain("Evidence");
     expect(visibleNavigation("operator")).not.toContain("Attack Console");
     expect(visibleNavigation("observer")).toEqual([
       "Live Overview", "Scoreboard", "Match Timeline", "Service Status", "Major Events",
     ]);
+    expect(visibleNavigation("observer")).not.toContain("Captures");
   });
 
   it("validates and bounds local flag batches", () => {
@@ -47,5 +49,11 @@ describe("role-aware live fire UI", () => {
     expect(scoreboardDisclosure({
       view: "public", delay_rounds: 3, scoreboard: [],
     })).toBe("PUBLIC SCORE — DELAYED BY 3 ROUNDS");
+  });
+
+  it("accepts only a lowercase SHA-256 detection indicator", () => {
+    expect(isIndicatorHash("a".repeat(64))).toBe(true);
+    expect(isIndicatorHash("A".repeat(64))).toBe(false);
+    expect(isIndicatorHash("a".repeat(63))).toBe(false);
   });
 });

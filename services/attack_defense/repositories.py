@@ -5,8 +5,10 @@ import uuid
 from typing import Any, Iterable
 
 from .db import Database
+from .koth import KothService
+from .mode_strategies import strategy_for, supported_score_categories
+from .stealth import STEALTH_SCORE_TYPES, StealthService
 from .models import ROUND_TRANSITIONS, assert_transition
-from .mode_strategies import strategy_for
 from .utils import canonical_json, evidence_hash, json_load, stable_id
 
 
@@ -25,10 +27,25 @@ class AttackDefenseRepository:
     ) -> dict:
         mid = match_id or str(uuid.uuid4())
         strategy = strategy_for(mode)
+        koth_config = KothService.normalized_config(config.get("koth", {}))
+        stealth_config = StealthService.normalized_config(config.get("stealth", {}))
+        # Match creation is the initial policy epoch. Operator reconfiguration
+        # replaces this with authoritative database time.
+        stealth_config["activated_at"] = 0.0
         requested_categories = config.get("score_categories", list(strategy.score_categories))
+        if koth_config["enabled"] and "koth" not in requested_categories:
+            requested_categories = [*requested_categories, "koth"]
+        if stealth_config["enabled"]:
+            requested_categories = [
+                *requested_categories,
+                *(
+                    category for category in sorted(STEALTH_SCORE_TYPES)
+                    if category not in requested_categories
+                ),
+            ]
         if (
             not isinstance(requested_categories, list)
-            or not set(requested_categories).issubset(set(strategy.score_categories))
+            or not set(requested_categories).issubset(supported_score_categories(mode))
         ):
             raise ValueError("score_categories must be supported by the selected match mode")
         selected = set(requested_categories)
@@ -46,11 +63,26 @@ class AttackDefenseRepository:
         ):
             raise ValueError("score_weights must be non-negative and mode-supported")
         merged_config = {
-            "score_categories": requested_categories,
             **config,
+            "score_categories": requested_categories,
+            "koth": koth_config,
+            "stealth": stealth_config,
             "score_weights": {
                 **{category: 1.0 for category in requested_categories},
                 **requested_weights,
+                **(
+                    {"koth": koth_config["score_weight"]}
+                    if koth_config["enabled"] else {}
+                ),
+                **(
+                    {
+                        "stealth_attack": stealth_config["attack_score_weight"],
+                        "stealth_detection": stealth_config[
+                            "detection_score_weight"
+                        ],
+                    }
+                    if stealth_config["enabled"] else {}
+                ),
             },
         }
         with self.db.transaction(immediate=True) as conn:
@@ -201,7 +233,8 @@ class AttackDefenseRepository:
         conn = conn or self.db.connect()
         query = (
             "SELECT i.*,t.slug AS team_slug,s.slug AS service_slug,s.checker_type,"
-            "s.config AS service_config FROM team_service_instances i "
+            "s.config AS service_config,s.base_image,s.base_image_digest,"
+            "s.internal_port FROM team_service_instances i "
             "JOIN teams t ON t.id=i.team_id JOIN game_services s ON s.id=i.service_id "
             "WHERE i.match_id=?"
         )
@@ -223,7 +256,8 @@ class AttackDefenseRepository:
         conn = conn or self.db.connect()
         row = conn.execute(
             """SELECT i.*,t.slug AS team_slug,s.slug AS service_slug,s.checker_type,
-                      s.config AS service_config
+                      s.config AS service_config,s.base_image,s.base_image_digest,
+                      s.internal_port
                FROM team_service_instances i
                JOIN teams t ON t.id=i.team_id JOIN game_services s ON s.id=i.service_id
                WHERE i.match_id=? AND i.team_id=? AND i.service_id=?""",

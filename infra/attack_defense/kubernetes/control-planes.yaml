@@ -1,0 +1,270 @@
+# Prerequisites for the trusted control, attack-client and scoreboard planes.
+# Team service and patch sandbox namespaces are created by `runtime-reconcile`.
+# A CNI that enforces networking.k8s.io/v1 NetworkPolicy is required.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ad-management
+  labels:
+    ad.cyber-range/plane: management
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ad-team-access
+  labels:
+    ad.cyber-range/plane: team-access
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ad-game-attack
+  labels:
+    ad.cyber-range/plane: game-attack
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ad-scoreboard-api
+  labels:
+    ad.cyber-range/plane: scoreboard-api
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny-all, namespace: ad-management}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny-all, namespace: ad-game-attack}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny-all, namespace: ad-team-access}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny-all, namespace: ad-scoreboard-api}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# API/checker/injector may reach only service game/management ports in
+# runtime-managed team and sandbox namespaces.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: management-to-team-services, namespace: ad-management}
+spec:
+  podSelector:
+    matchExpressions:
+      - key: ad.cyber-range/component
+        operator: In
+        values: [api, checker, flag-injector]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchExpressions:
+              - key: ad.cyber-range/plane
+                operator: In
+                values: [game-team, patch-sandbox]
+          podSelector:
+            matchExpressions:
+              - key: ad.cyber-range/plane
+                operator: In
+                values: [game-service, patch-sandbox]
+      ports:
+        - {protocol: TCP, port: 9000}
+        - {protocol: TCP, port: 9001}
+---
+# Management components may reach only explicitly labelled infrastructure in
+# their own namespace. Keep registry/database/cache/broker labels off every
+# participant-controlled workload.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: management-to-infrastructure, namespace: ad-management}
+spec:
+  podSelector:
+    matchExpressions:
+      - key: ad.cyber-range/component
+        operator: In
+        values: [api, checker, flag-injector]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchExpressions:
+              - key: ad.cyber-range/component
+                operator: In
+                values: [database, cache, event-broker, registry]
+---
+# Participant, attack-client and scoreboard planes may call only the API. RBAC
+# remains the authorization boundary inside that port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: api-client-ingress, namespace: ad-management}
+spec:
+  podSelector:
+    matchLabels: {ad.cyber-range/component: api}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - key: ad.cyber-range/plane
+                operator: In
+                values: [team-access, game-attack, scoreboard-api, management]
+      ports:
+        - {protocol: TCP, port: 8100}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: clients-to-api, namespace: ad-team-access}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {ad.cyber-range/plane: management}
+          podSelector:
+            matchLabels: {ad.cyber-range/component: api}
+      ports:
+        - {protocol: TCP, port: 8100}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: clients-to-api, namespace: ad-game-attack}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {ad.cyber-range/plane: management}
+          podSelector:
+            matchLabels: {ad.cyber-range/component: api}
+      ports:
+        - {protocol: TCP, port: 8100}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: clients-to-api, namespace: ad-scoreboard-api}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {ad.cyber-range/plane: management}
+          podSelector:
+            matchLabels: {ad.cyber-range/component: api}
+      ports:
+        - {protocol: TCP, port: 8100}
+---
+# Competitor attack clients may reach only the public game port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: attack-clients-to-game-services, namespace: ad-game-attack}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              ad.cyber-range/plane: game-team
+          podSelector:
+            matchLabels:
+              ad.cyber-range/plane: game-service
+      ports:
+        - {protocol: TCP, port: 9000}
+---
+# DNS is explicit because default-deny egress otherwise blocks service lookup.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-dns, namespace: ad-management}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-dns, namespace: ad-game-attack}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-dns, namespace: ad-team-access}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-dns, namespace: ad-scoreboard-api}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
