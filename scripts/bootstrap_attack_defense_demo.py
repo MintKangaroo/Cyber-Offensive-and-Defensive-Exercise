@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import time
 from typing import Any
 
 import requests
@@ -13,6 +14,33 @@ AD_API = os.environ.get("ATTACK_DEFENSE_API_URL", "http://localhost:8100").rstri
 AUTH_API = os.environ.get("AUTH_API_URL", "http://localhost:8051").rstrip("/")
 OPERATOR_TOKEN = os.environ.get("INSTRUCTOR_TOKEN", "dev-instructor-token")
 MATCH_ID = os.environ.get("ATTACK_DEFENSE_DEMO_MATCH_ID", "ad-demo")
+
+
+def wait_until_ready(timeout_seconds: int = 90) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    pending = {
+        "Attack/Defense API": f"{AD_API}/ready",
+        "Auth API": f"{AUTH_API}/health",
+    }
+    last_errors: dict[str, str] = {}
+    while pending and time.monotonic() < deadline:
+        for name, url in list(pending.items()):
+            try:
+                response = requests.get(url, timeout=2)
+                if response.status_code == 200:
+                    pending.pop(name)
+                    last_errors.pop(name, None)
+                else:
+                    last_errors[name] = f"HTTP {response.status_code}"
+            except requests.RequestException as exc:
+                last_errors[name] = type(exc).__name__
+        if pending:
+            time.sleep(1)
+    if pending:
+        detail = ", ".join(
+            f"{name} ({last_errors.get(name, 'not ready')})" for name in pending
+        )
+        raise RuntimeError(f"demo dependencies did not become ready: {detail}")
 
 
 def call(method: str, path: str, body: dict[str, Any] | None = None) -> dict:
@@ -27,6 +55,7 @@ def call(method: str, path: str, body: dict[str, Any] | None = None) -> dict:
 
 
 def bootstrap(start: bool = True) -> dict:
+    wait_until_ready()
     call("POST", "/api/attack-defense/matches", {
         "id": MATCH_ID, "name": "Operation Blackout",
         "mode": "attack_defense", "round_duration_seconds": 60,
