@@ -15,6 +15,33 @@
 Docker와 Docker Compose v2, Node.js 20+가 설치돼 있다면 아래 순서만 따라 하면
 됩니다. 첫 실행은 image build 때문에 시간이 조금 걸릴 수 있습니다.
 
+### 전체 실전 훈련 환경 한 번에 관리
+
+저장소 루트에서 다음 명령만 사용하면 됩니다.
+
+```bash
+make training-up       # 전체 백엔드·트윈·A/D 경기·대시보드 시작
+make training-status   # 컨테이너와 대시보드 상태 확인
+make training-down     # 전체 프로세스와 컨테이너 한 번에 종료
+```
+
+`training-up`은 세 팀의 실제 게임 서비스와 Red/Blue Portal, EDR, SIEM,
+Live Fire, Control Tower를 함께 띄웁니다. Red Portal은 CTF 문제 카드 대신
+허용된 상대 팀의 실제 Notes/Vault 포트로 HTTP 요청을 보내고 획득한 라운드
+플래그를 게임 엔진에 제출하는 공격 워크벤치입니다.
+
+| 화면 | URL |
+|---|---|
+| Red 실제 서비스 공격 | `http://localhost:5176` |
+| Blue 방어 운영 | `http://localhost:5177` |
+| EDR / SIEM | `http://localhost:5173` / `http://localhost:5175` |
+| Live Fire | `http://localhost:5178/?mode=attack_defense` |
+| Control Tower | `http://localhost:5180` |
+
+`training-down`은 훈련 진행 데이터가 든 Docker volume은 보존합니다. 완전한
+새 경기로 초기화해야 할 때만 종료 후 해당 데이터 volume을 명시적으로
+삭제하십시오.
+
 ### 1. 경기 서버 시작
 
 ```bash

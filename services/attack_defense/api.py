@@ -1176,11 +1176,33 @@ def create_app(components: Components | None = None) -> FastAPI:
             {"id": t["id"], "name": t["name"], "slug": t["slug"]}
             for t in c.repo.list_teams(match_id) if t["id"] != ident.team_id
         ]
+        service_rows = c.repo.list_services(match_id)
         services = [
             {"id": s["id"], "name": s["name"], "slug": s["slug"]}
-            for s in c.repo.list_services(match_id)
+            for s in service_rows
         ]
-        return {"teams": teams, "services": services, "disclosure": "public-connectivity-only"}
+        targets = []
+        for team in teams:
+            for service in service_rows:
+                config = json_load(service.get("config"))
+                ports = config.get("public_port_by_team", {})
+                raw_port = ports.get(team["slug"]) if isinstance(ports, dict) else None
+                try:
+                    public_port = int(raw_port)
+                except (TypeError, ValueError):
+                    continue
+                if not 1 <= public_port <= 65535:
+                    continue
+                targets.append({
+                    "team_id": team["id"], "team": team["name"],
+                    "team_slug": team["slug"], "service_id": service["id"],
+                    "service": service["name"], "service_slug": service["slug"],
+                    "scheme": "http", "public_port": public_port,
+                })
+        return {
+            "teams": teams, "services": services, "targets": targets,
+            "disclosure": "public-game-ports-only-no-runtime-or-management-address",
+        }
 
     @app.get("/api/attack-defense/public/matches/{match_id}/service-summary")
     def public_service_summary(match_id: str):

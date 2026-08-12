@@ -54,3 +54,16 @@ def test_expected_patch_blocks_idor_and_management_flag_survives(tmp_path, monke
         headers=signer.headers("POST", "/management/flags/verify", body),
     )
     assert verify.json() == {"verified": True}
+
+
+def test_browser_workbench_origin_is_allowed(tmp_path, monkeypatch):
+    monkeypatch.setattr(common, "DATA_DIR", tmp_path)
+    response = TestClient(main.game_app).options(
+        "/api/version",
+        headers={
+            "Origin": "http://localhost:5176",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5176"

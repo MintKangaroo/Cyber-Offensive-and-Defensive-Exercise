@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRangeStore } from "./store/rangeStore";
 import { useEventStream, fetchRecentEvents, fetchDelayedEvents } from "./api/client";
 
@@ -42,7 +42,7 @@ function RoleSwitcher() {
   );
 }
 
-export default function LegacyExerciseApp() {
+export default function LegacyExerciseApp({ modeControl }: { modeControl?: ReactNode }) {
   const role = useRangeStore((s) => s.role);
   const pushEvent = useRangeStore((s) => s.pushEvent);
   const setInitialEvents = useRangeStore((s) => s.setInitialEvents);
@@ -85,28 +85,33 @@ export default function LegacyExerciseApp() {
 
   return (
     <div className="h-screen w-screen bg-[#0A0E1A] text-[#E8EDF5] flex flex-col font-sans">
-      <header className="h-12 border-b border-[#1E2A3F] flex items-center px-4 gap-3 shrink-0">
-        <span className="font-mono text-sm tracking-[0.2em] text-[#E8EDF5]">LIVE FIRE RANGE</span>
-        <span className="text-[10px] uppercase tracking-widest text-[#6B7A99] px-2 py-0.5 rounded border border-[#1E2A3F]">
-          training environment
-        </span>
+      <header className="min-h-12 border-b border-[#1E2A3F] flex flex-wrap items-center px-4 py-2 gap-3 shrink-0">
+        <div className="flex min-w-0 shrink-0 items-center gap-2">
+          <span className="whitespace-nowrap font-mono text-sm tracking-[0.2em] text-[#E8EDF5]">LIVE FIRE RANGE</span>
+          <span className="hidden xl:inline-flex whitespace-nowrap text-[10px] uppercase tracking-widest text-[#6B7A99] px-2 py-0.5 rounded border border-[#1E2A3F]">
+            training environment
+          </span>
+        </div>
         {/* 팀별 전용 포털 진입(포털은 별도 dev 서버: Red 5176 / Blue 5177) */}
-        <a
-          href={`http://${typeof window !== "undefined" ? window.location.hostname : "localhost"}:5176/`}
-          target="_blank" rel="noreferrer"
-          className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded border border-[#FB7185]/50 text-[#FB7185] hover:bg-[#FB7185]/10"
-          title="레드팀 챌린지 포털 열기"
-        >
-          🚩 RED PORTAL
-        </a>
-        <a
-          href={`http://${typeof window !== "undefined" ? window.location.hostname : "localhost"}:5177/`}
-          target="_blank" rel="noreferrer"
-          className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded border border-[#22D3EE]/50 text-[#22D3EE] hover:bg-[#22D3EE]/10"
-          title="블루팀 방어 포털 열기"
-        >
-          🛡️ BLUE PORTAL
-        </a>
+        <nav aria-label="Team portals" className="flex shrink-0 items-center gap-2">
+          <a
+            href={`http://${typeof window !== "undefined" ? window.location.hostname : "localhost"}:5176/`}
+            target="_blank" rel="noreferrer"
+            className="whitespace-nowrap text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded border border-[#FB7185]/50 text-[#FB7185] hover:bg-[#FB7185]/10"
+            title="레드팀 실제 서비스 공격 포털 열기"
+          >
+            🚩 RED PORTAL
+          </a>
+          <a
+            href={`http://${typeof window !== "undefined" ? window.location.hostname : "localhost"}:5177/`}
+            target="_blank" rel="noreferrer"
+            className="whitespace-nowrap text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded border border-[#22D3EE]/50 text-[#22D3EE] hover:bg-[#22D3EE]/10"
+            title="블루팀 방어 포털 열기"
+          >
+            🛡️ BLUE PORTAL
+          </a>
+        </nav>
+        {modeControl && <div className="shrink-0">{modeControl}</div>}
         <div className="flex-1" />
         <button
           onClick={() => {

@@ -93,6 +93,9 @@ def bootstrap(start: bool = True) -> dict:
         "config": {
             "endpoint_by_team": endpoint_notes,
             "management_endpoint_by_team": management_notes,
+            "public_port_by_team": {
+                "team-01": 9101, "team-02": 9102, "team-03": 9103,
+            },
             "runtime_id_by_team": {
                 "team-01": "ad_team_01_notes", "team-02": "ad_team_02_notes",
                 "team-03": "ad_team_03_notes",
@@ -109,6 +112,9 @@ def bootstrap(start: bool = True) -> dict:
         "config": {
             "endpoint_by_team": endpoint_vault,
             "management_endpoint_by_team": management_vault,
+            "public_port_by_team": {
+                "team-01": 9201, "team-02": 9202, "team-03": 9203,
+            },
             "runtime_id_by_team": {
                 "team-01": "ad_team_01_vault", "team-02": "ad_team_02_vault",
                 "team-03": "ad_team_03_vault",

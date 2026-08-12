@@ -216,6 +216,16 @@ export interface ScoreboardResponse {
 export interface AttackSurface {
   teams: Array<{ id: string; name: string; slug: string }>;
   services: Array<{ id: string; name: string; slug: string }>;
+  targets?: Array<{
+    team_id: string;
+    team: string;
+    team_slug: string;
+    service_id: string;
+    service: string;
+    service_slug: string;
+    scheme: "http" | "https";
+    public_port: number;
+  }>;
   disclosure: string;
 }
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+import json
 
 import jwt
 from fastapi.testclient import TestClient
@@ -77,6 +78,48 @@ def test_public_service_summary_is_aggregate_only(ad):
     assert "team_id" not in serialized
     assert "endpoint" not in serialized
     assert "image_digest" not in serialized
+
+
+def test_competitor_attack_surface_exposes_only_opponent_game_ports(ad, monkeypatch):
+    bootstrap(ad, teams=2, services=1)
+    with ad.db.transaction(immediate=True) as conn:
+        conn.execute(
+            "UPDATE game_services SET config=? WHERE id='service-vulnerable-notes'",
+            (json.dumps({
+                "endpoint_by_team": {
+                    "team-01": "http://private-team-one:9000",
+                    "team-02": "http://private-team-two:9000",
+                },
+                "management_endpoint_by_team": {
+                    "team-01": "http://private-team-one:9001",
+                    "team-02": "http://private-team-two:9001",
+                },
+                "public_port_by_team": {"team-01": 9101, "team-02": 9102},
+            }),),
+        )
+    monkeypatch.setenv("AUTH_JWT_SECRET", SECRET)
+    client = TestClient(create_app(ad))
+    response = client.get(
+        "/api/attack-defense/matches/match-1/attack-surface",
+        headers={
+            "Authorization": f"Bearer {token('competitor', 'team-1', 'match-1')}"
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["targets"] == [{
+        "team_id": "team-2", "team": "Team 2", "team_slug": "team-02",
+        "service_id": "service-vulnerable-notes",
+        "service": "Vulnerable Notes", "service_slug": "vulnerable-notes",
+        "scheme": "http", "public_port": 9102,
+    }]
+    assert body["disclosure"] == (
+        "public-game-ports-only-no-runtime-or-management-address"
+    )
+    serialized = response.text
+    assert "private-team" not in serialized
+    assert "management_endpoint" not in serialized
+    assert "9101" not in serialized
 
 
 def test_broadcast_snapshot_uses_only_public_delayed_projections(ad):

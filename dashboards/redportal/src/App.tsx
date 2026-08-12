@@ -1,347 +1,248 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  fetchChallenges, submitFlag, fetchScoreboard, artifactUrl, fetchTeams,
-  type Challenge, type SubmitResult, type ScoreRow, type Team,
+  getAttackSurface, getScoreboard, getState, login, sendTargetRequest,
+  submitCapturedFlag, targetBaseUrl,
+  type AttackSurface, type AttackTarget, type MatchState, type ScoreRow, type Session,
 } from "./api";
 
-const DIFF_STYLE: Record<string, string> = {
-  easy: "border-[#34D399]/40 text-[#34D399]",
-  medium: "border-[#F5A623]/40 text-[#F5A623]",
-  hard: "border-[#FB7185]/50 text-[#FB7185]",
-  insane: "border-[#C084FC]/50 text-[#C084FC]",
-};
-const CAT_LABEL: Record<string, string> = {
-  web: "Web", ics: "ICS/OT", network: "Network", forensics: "Forensics",
-  reversing: "Reversing", ai: "AI Security",
-};
+const SESSION_KEY = "redportal_ad_session";
 
-function useLocalState(key: string, initial: string): [string, (v: string) => void] {
-  const [v, setV] = useState(() => localStorage.getItem(key) ?? initial);
-  const set = useCallback((nv: string) => { setV(nv); localStorage.setItem(key, nv); }, [key]);
-  return [v, set];
-}
-
-function DifficultyBadge({ d }: { d: string }) {
-  return (
-    <span className={`font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border ${DIFF_STYLE[d] ?? "border-[#6B7A99]/40 text-[#6B7A99]"}`}>
-      {d}
-    </span>
-  );
-}
-
-// ── CTF 시각화 ────────────────────────────────────────────────
-function Donut({ frac, big, sub, color }: { frac: number; big: string; sub: string; color: string }) {
-  const R = 30, C = 2 * Math.PI * R;
-  return (
-    <svg viewBox="0 0 80 80" className="w-[76px] h-[76px] shrink-0">
-      <circle cx="40" cy="40" r={R} fill="none" stroke="#2a1a1c" strokeWidth="7" />
-      <circle cx="40" cy="40" r={R} fill="none" stroke={color} strokeWidth="7" strokeLinecap="round"
-        strokeDasharray={C} strokeDashoffset={C * (1 - frac)} transform="rotate(-90 40 40)"
-        style={{ transition: "stroke-dashoffset 0.8s ease" }} />
-      <text x="40" y="38" textAnchor="middle" fontSize="16" fontWeight="700" fill={color}>{big}</text>
-      <text x="40" y="52" textAnchor="middle" fontSize="8" fill="#8a6a6e">{sub}</text>
-    </svg>
-  );
-}
-
-const DIFF_COLOR: Record<string, string> = { easy: "#34D399", medium: "#F5A623", hard: "#FB7185", insane: "#C084FC" };
-
-function StatsPanel({ challenges, points, rank }: { challenges: Challenge[]; points: number; rank: number | null }) {
-  const total = challenges.length || 1;
-  const solved = challenges.filter((c) => c.solved).length;
-  const frac = solved / total;
-
-  const byCat = useMemo(() => {
-    const m: Record<string, { total: number; solved: number }> = {};
-    for (const c of challenges) {
-      const b = (m[c.category] ??= { total: 0, solved: 0 });
-      b.total++; if (c.solved) b.solved++;
-    }
-    return Object.entries(m).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [challenges]);
-
-  const byDiff = useMemo(() => {
-    const m: Record<string, { total: number; solved: number }> = {};
-    for (const c of challenges) {
-      const b = (m[c.difficulty] ??= { total: 0, solved: 0 });
-      b.total++; if (c.solved) b.solved++;
-    }
-    return (["easy", "medium", "hard", "insane"] as const).map((d) => [d, m[d] ?? { total: 0, solved: 0 }] as const);
-  }, [challenges]);
-
-  return (
-    <div className="border border-[#2a1a1c] rounded-xl bg-gradient-to-br from-[#150d0f] to-[#0f0809] p-4 mb-4">
-      <div className="flex flex-wrap items-center gap-6">
-        {/* 완료율 도넛 */}
-        <div className="flex items-center gap-3">
-          <Donut frac={frac} big={`${Math.round(frac * 100)}%`} sub={`${solved}/${total}`} color="#FB7185" />
-          <div>
-            <div className="font-mono text-3xl font-bold text-[#FB7185] tabular-nums leading-none">{points}<span className="text-sm text-[#8a6a6e] ml-1">pt</span></div>
-            <div className="font-mono text-[11px] text-[#8a6a6e] mt-1">{rank ? `🏆 순위 ${rank}위` : "미제출"} · {solved} solved</div>
-          </div>
-        </div>
-
-        {/* 난이도 분포 */}
-        <div className="flex items-center gap-3">
-          {byDiff.map(([d, b]) => (
-            <div key={d} className="text-center">
-              <div className="font-mono text-lg font-bold tabular-nums" style={{ color: DIFF_COLOR[d] }}>{b.solved}<span className="text-[10px] text-[#5a4548]">/{b.total}</span></div>
-              <div className="font-mono text-[9px] uppercase" style={{ color: DIFF_COLOR[d] }}>{d}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* 카테고리 진행 바 */}
-        <div className="flex-1 min-w-[260px] grid grid-cols-2 gap-x-5 gap-y-1.5">
-          {byCat.map(([cat, b]) => (
-            <div key={cat} className="flex items-center gap-2">
-              <span className="font-mono text-[10px] text-[#8a6a6e] w-16 shrink-0">{CAT_LABEL[cat] ?? cat}</span>
-              <div className="flex-1 h-1.5 rounded-full bg-[#2a1a1c] overflow-hidden">
-                <div className="h-full rounded-full bg-[#FB7185] transition-all duration-700" style={{ width: `${(b.solved / b.total) * 100}%` }} />
-              </div>
-              <span className="font-mono text-[10px] text-[#8a6a6e] w-8 text-right tabular-nums">{b.solved}/{b.total}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ScoreboardBars({ rows, me }: { rows: ScoreRow[]; me: string }) {
-  const max = Math.max(1, ...rows.map((r) => r.points));
-  return (
-    <div className="flex flex-col gap-1.5">
-      {rows.slice(0, 6).map((r, i) => (
-        <div key={r.team_id} className="flex items-center gap-2">
-          <span className={`font-mono text-[10px] w-24 shrink-0 truncate ${r.team_id === me ? "text-[#FB7185]" : "text-[#c9b8ba]"}`}>{i + 1}. {r.team_id}</span>
-          <div className="flex-1 h-3 rounded bg-[#2a1a1c] overflow-hidden min-w-[60px]">
-            <div className={`h-full rounded transition-all duration-700 ${r.team_id === me ? "bg-[#FB7185]" : "bg-[#8a5a60]"}`} style={{ width: `${(r.points / max) * 100}%` }} />
-          </div>
-          <span className="font-mono text-[10px] text-[#8a6a6e] w-14 text-right tabular-nums">{r.points}pt·{r.solved}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ChallengeCard({ c, onClick }: { c: Challenge; onClick: () => void }) {
-  return (
-    <button onClick={onClick}
-      className={`text-left border rounded-lg px-3 py-2.5 bg-[#151011] hover:bg-[#1c1315] transition-colors ${
-        c.solved ? "border-[#34D399]/50" : "border-[#2a1a1c]"}`}>
-      <div className="flex items-center justify-between mb-1">
-        <span className="font-mono text-[10px] text-[#8a6a6e]">{c.id}</span>
-        <div className="flex items-center gap-1.5">
-          {c.solved && <span className="text-[#34D399] text-[11px]">✓ solved</span>}
-          <DifficultyBadge d={c.difficulty} />
-        </div>
-      </div>
-      <div className="text-[13px] text-[#F0E6E6] leading-snug mb-1.5">{c.title}</div>
-      <div className="flex items-center justify-between">
-        <span className="font-mono text-[10px] text-[#8a6a6e]">{c.gate === "artifact" ? "📦 분석형" : "🎯 서비스형"}</span>
-        <span className="font-mono text-[12px] font-bold text-[#FB7185]">{c.points_red}pt</span>
-      </div>
-    </button>
-  );
-}
-
-function SubmitPanel({ c, teamId, onSolved }: { c: Challenge; teamId: string; onSolved: () => void }) {
-  const [fields, setFields] = useState<Record<string, string>>({});
-  const [result, setResult] = useState<SubmitResult | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => { setFields({}); setResult(null); setErr(null); }, [c.id]);
-
-  const submit = async () => {
-    setBusy(true); setErr(null); setResult(null);
-    try {
-      const r = await submitFlag(c.id, teamId, fields);
-      setResult(r);
-      if (r.passed && !r.already_solved) onSolved();
-    } catch (e) { setErr(String(e)); }
-    finally { setBusy(false); }
-  };
-
-  return (
-    <div className="flex flex-col gap-3">
-      {/* 무엇을 해야 하는가 */}
-      <div>
-        <div className="text-[10px] uppercase tracking-widest text-[#8a6a6e] mb-1">목표 (Goal)</div>
-        <div className="text-[13px] text-[#F0E6E6] leading-relaxed">{c.goal || "플래그를 획득하라."}</div>
-      </div>
-      {c.description && (
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-[#8a6a6e] mb-1">설명</div>
-          <div className="text-[12px] text-[#c9b8ba] leading-relaxed whitespace-pre-wrap">{c.description}</div>
-        </div>
-      )}
-      {c.mitre?.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {c.mitre.map((m) => (
-            <span key={m} className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-[#2a1a1c] text-[#c98a8f]">{m}</span>
-          ))}
-        </div>
-      )}
-
-      {/* 공격 방법 안내 */}
-      <div className="border border-[#2a1a1c] rounded-md px-3 py-2 bg-[#120c0d]">
-        <div className="text-[10px] uppercase tracking-widest text-[#8a6a6e] mb-1">공격 방법</div>
-        {c.gate === "artifact" ? (
-          <div className="text-[12px] text-[#c9b8ba] leading-relaxed">
-            아래 <b className="text-[#FB7185]">아티팩트</b>를 내려받아 분석 → 정답 필드를 도출해 제출하세요. (팀별 고유 데이터)
-            <a href={artifactUrl(c.id, teamId)} download
-               className="mt-2 inline-block font-mono text-[12px] px-3 py-1.5 rounded border border-[#FB7185]/50 text-[#FB7185] hover:bg-[#FB7185]/10">
-              ⬇ 아티팩트 다운로드
-            </a>
-          </div>
-        ) : (
-          <div className="text-[12px] text-[#c9b8ba] leading-relaxed">
-            <b className="text-[#FB7185]">서비스형</b> — 실제 취약 서비스를 직접 익스플로잇해 플래그를 획득하세요.
-            트윈 포트(위성 8001 · 발전소 8002 · 사내망 8003 · 섹터 8201~8208) 또는 챌린지 배포 서비스가 대상입니다.
-            <div className="mt-1 font-mono text-[11px] text-[#8a6a6e]">예: curl 로 취약 엔드포인트에 페이로드 전송 → 응답에서 flag 추출</div>
-          </div>
-        )}
-      </div>
-
-      {/* 제출 폼(필드는 챌린지별 submit_fields) */}
-      <div>
-        <div className="text-[10px] uppercase tracking-widest text-[#8a6a6e] mb-1.5">제출 (Submit)</div>
-        <div className="flex flex-col gap-2">
-          {c.submit_fields.map((f) => (
-            <input key={f} value={fields[f] ?? ""} placeholder={f}
-              onChange={(e) => setFields((s) => ({ ...s, [f]: e.target.value }))}
-              className="bg-[#0c0809] border border-[#2a1a1c] rounded px-2.5 py-1.5 font-mono text-[12px] text-[#F0E6E6] placeholder:text-[#5a4548] focus:border-[#FB7185]/60 outline-none" />
-          ))}
-          <button onClick={submit} disabled={busy || !teamId}
-            className="font-mono text-[12px] uppercase tracking-wider px-3 py-2 rounded bg-[#FB7185]/15 border border-[#FB7185]/50 text-[#FB7185] hover:bg-[#FB7185]/25 disabled:opacity-40">
-            {busy ? "채점 중…" : "제출"}
-          </button>
-        </div>
-      </div>
-
-      {err && <div className="text-[12px] text-[#FB7185] font-mono">⚠ {err}</div>}
-      {result && (
-        <div className={`rounded-md px-3 py-2 text-[13px] font-mono border ${
-          result.passed ? "border-[#34D399]/50 bg-[#34D399]/10 text-[#34D399]" : "border-[#FB7185]/50 bg-[#FB7185]/10 text-[#FB7185]"}`}>
-          {result.passed
-            ? (result.already_solved ? "✓ 이미 해결한 챌린지입니다." : `✓ 정답! +${result.points_awarded}pt 획득 🎉`)
-            : "✗ 오답입니다. 다시 시도하세요."}
-          <div className="text-[10px] text-[#8a6a6e] mt-1">{result.detail}</div>
-        </div>
-      )}
-    </div>
-  );
+function storedSession(): Session | null {
+  try {
+    const value = localStorage.getItem(SESSION_KEY);
+    return value ? JSON.parse(value) as Session : null;
+  } catch {
+    return null;
+  }
 }
 
 export default function App() {
-  const [teamId, setTeamId] = useLocalState("redportal_team", "red_alpha");
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [challenges, setChallenges] = useState<Challenge[]>([]);
-  const [cat, setCat] = useState<string>("all");
-  const [selected, setSelected] = useState<Challenge | null>(null);
+  const [session, setSession] = useState<Session | null>(storedSession);
+  const [state, setState] = useState<MatchState | null>(null);
+  const [surface, setSurface] = useState<AttackSurface | null>(null);
   const [scoreboard, setScoreboard] = useState<ScoreRow[]>([]);
-  const [err, setErr] = useState<string | null>(null);
+  const [selected, setSelected] = useState<AttackTarget | null>(null);
+  const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
+  const refresh = useCallback(async () => {
+    if (!session) return;
     try {
-      const [d, s] = await Promise.all([fetchChallenges(teamId), fetchScoreboard()]);
-      setChallenges(d.challenges); setScoreboard(s.scoreboard); setErr(null);
-    } catch (e) { setErr(String(e)); }
-  }, [teamId]);
+      const [nextState, nextSurface, scores] = await Promise.all([
+        getState(session.match_id, session.access_token),
+        getAttackSurface(session.match_id, session.access_token),
+        getScoreboard(session.match_id),
+      ]);
+      setState(nextState);
+      setSurface(nextSurface);
+      setScoreboard(scores.scoreboard);
+      setSelected((current) => current
+        ? nextSurface.targets.find(
+          (target) => target.team_id === current.team_id
+            && target.service_id === current.service_id,
+        ) ?? nextSurface.targets[0] ?? null
+        : nextSurface.targets[0] ?? null);
+      setError("");
+    } catch (reason) {
+      setError(String(reason));
+    }
+  }, [session]);
 
-  useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, [load]);
   useEffect(() => {
-    fetchTeams("red").then((r) => {
-      setTeams(r.teams);
-      // 저장된 팀이 목록에 없으면 첫 팀으로.
-      if (r.teams.length && !r.teams.some((t) => t.team_id === teamId)) setTeamId(r.teams[0].team_id);
-    }).catch(() => { /* 백엔드 미기동 시 자유입력 유지 */ });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 5_000);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
 
-  const cats = useMemo(() => ["all", ...Array.from(new Set(challenges.map((c) => c.category)))], [challenges]);
-  const shown = useMemo(() => challenges.filter((c) => cat === "all" || c.category === cat), [challenges, cat]);
-  const myScore = scoreboard.find((r) => r.team_id === teamId);
-  const solvedCount = challenges.filter((c) => c.solved).length;
-  const rankIdx = scoreboard.findIndex((r) => r.team_id === teamId);
-  const rank = rankIdx >= 0 ? rankIdx + 1 : null;
+  if (!session) {
+    return <LoginScreen onLogin={(next) => {
+      localStorage.setItem(SESSION_KEY, JSON.stringify(next));
+      setSession(next);
+    }} />;
+  }
 
+  const ownScore = scoreboard.find((row) => row.team_id === session.team_id);
   return (
-    <div className="min-h-screen bg-[#0c0809] text-[#F0E6E6] font-sans">
-      <header className="h-14 border-b border-[#2a1a1c] flex items-center px-4 gap-3 sticky top-0 bg-[#0c0809] z-10">
-        <span className="font-mono text-sm tracking-[0.25em] text-[#FB7185]">🚩 RED PORTAL</span>
-        <span className="text-[10px] uppercase tracking-widest text-[#8a6a6e] px-2 py-0.5 rounded border border-[#2a1a1c]">
-          공격팀 전용
+    <div className="min-h-screen bg-[#08090d] text-[#f3e9eb]">
+      <header className="min-h-16 border-b border-[#382127] bg-[#0d090b]/95 px-4 py-3 flex flex-wrap items-center gap-3 sticky top-0 z-20">
+        <div className="min-w-0">
+          <div className="font-mono text-sm tracking-[0.22em] text-[#FB7185]">RED OPERATIONS</div>
+          <div className="text-[10px] uppercase tracking-[0.16em] text-[#9b737b] mt-1">live service intrusion · no challenge cards</div>
+        </div>
+        <span className={`font-mono text-[10px] px-2 py-1 rounded border ${state?.status === "running" ? "text-[#34D399] border-[#34D399]/50" : "text-[#F5A623] border-[#F5A623]/50"}`}>
+          {state?.status?.toUpperCase() ?? "CONNECTING"}
         </span>
         <div className="flex-1" />
-        <label className="text-[10px] uppercase tracking-widest text-[#8a6a6e]">TEAM</label>
-        {teams.length > 0 ? (
-          <select value={teamId} onChange={(e) => setTeamId(e.target.value)}
-            className="bg-[#151011] border border-[#2a1a1c] rounded px-2 py-1 font-mono text-[12px] text-[#F0E6E6] focus:border-[#FB7185]/60 outline-none">
-            {teams.map((t) => <option key={t.team_id} value={t.team_id}>{t.name}</option>)}
-          </select>
-        ) : (
-          <input value={teamId} onChange={(e) => setTeamId(e.target.value.trim())}
-            className="bg-[#151011] border border-[#2a1a1c] rounded px-2 py-1 font-mono text-[12px] text-[#F0E6E6] w-32 focus:border-[#FB7185]/60 outline-none" />
-        )}
-        <div className="font-mono text-[13px] text-[#FB7185] font-bold">
-          {myScore?.points ?? 0}<span className="text-[10px] text-[#8a6a6e] ml-1">pt</span>
-        </div>
-        <div className="font-mono text-[11px] text-[#8a6a6e]">{solvedCount}/{challenges.length} solved</div>
+        <div className="font-mono text-[10px] text-[#9b737b]">{state?.name ?? session.match_id} · R{state?.round ?? "—"}</div>
+        <div className="font-mono text-xs text-[#FB7185]">ATK {ownScore?.attack ?? 0} · TOTAL {ownScore?.total ?? 0}</div>
+        <button className="border border-[#382127] rounded px-2 py-1 text-[10px] text-[#9b737b]" onClick={() => {
+          localStorage.removeItem(SESSION_KEY);
+          setSession(null);
+        }}>LOGOUT</button>
       </header>
 
-      {err && <div className="px-4 py-2 text-[12px] text-[#FB7185] font-mono bg-[#FB7185]/10">⚠ 포털 백엔드(8060) 연결 실패: {err}</div>}
+      {error && <div role="alert" className="px-4 py-2 bg-[#FB7185]/10 text-[#FB7185] font-mono text-xs">PUBLIC GAME PLANE DEGRADED · {error}</div>}
 
-      <div className="flex">
-        {/* 챌린지 목록 */}
-        <main className="flex-1 p-4 min-w-0">
-          <StatsPanel challenges={challenges} points={myScore?.points ?? 0} rank={rank} />
-          <div className="flex flex-wrap gap-1.5 mb-4">
-            {cats.map((c) => (
-              <button key={c} onClick={() => setCat(c)}
-                className={`font-mono text-[11px] px-2.5 py-1 rounded border ${
-                  cat === c ? "border-[#FB7185] text-[#FB7185] bg-[#FB7185]/10" : "border-[#2a1a1c] text-[#8a6a6e]"}`}>
-                {c === "all" ? "전체" : CAT_LABEL[c] ?? c}
-              </button>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
-            {shown.map((c) => (
-              <ChallengeCard key={c.id} c={c} onClick={() => setSelected(c)} />
-            ))}
-          </div>
-          {shown.length === 0 && !err && <div className="text-[#8a6a6e] font-mono text-sm">불러오는 중…</div>}
-        </main>
-
-        {/* 상세/제출 사이드 */}
-        {selected && (
-          <aside className="w-96 border-l border-[#2a1a1c] p-4 shrink-0 h-[calc(100vh-3.5rem)] overflow-y-auto sticky top-14">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <div className="font-mono text-[11px] text-[#8a6a6e]">{selected.id} · {CAT_LABEL[selected.category] ?? selected.category}</div>
-                <div className="text-[15px] text-[#F0E6E6] font-semibold leading-snug mt-0.5">{selected.title}</div>
-              </div>
-              <button onClick={() => setSelected(null)} className="text-[#8a6a6e] hover:text-[#F0E6E6] text-sm">✕</button>
-            </div>
-            <div className="flex items-center gap-2 mb-3">
-              <DifficultyBadge d={selected.difficulty} />
-              <span className="font-mono text-[12px] font-bold text-[#FB7185]">{selected.points_red}pt</span>
-              {selected.solved && <span className="text-[#34D399] text-[11px]">✓ solved</span>}
-            </div>
-            <SubmitPanel c={selected} teamId={teamId} onSolved={load} />
-          </aside>
-        )}
-      </div>
-
-      {/* 스코어보드(막대) */}
-      {scoreboard.length > 0 && (
-        <div className="fixed bottom-3 left-3 bg-[#151011] border border-[#2a1a1c] rounded-lg px-3 py-2.5 w-72 shadow-lg">
-          <div className="text-[10px] uppercase tracking-widest text-[#8a6a6e] mb-2">🏆 Scoreboard</div>
-          <ScoreboardBars rows={scoreboard} me={teamId} />
-        </div>
-      )}
+      <main className="grid grid-cols-1 xl:grid-cols-[310px_minmax(0,1fr)_350px] min-h-[calc(100vh-4rem)]">
+        <TargetList targets={surface?.targets ?? []} selected={selected} onSelect={setSelected} />
+        <RequestWorkbench target={selected} />
+        <aside className="border-l border-[#2a1a1c] bg-[#0c090a] p-4 flex flex-col gap-4">
+          <FlagSubmission session={session} onAccepted={refresh} />
+          <Scoreboard rows={scoreboard} ownTeamId={session.team_id} />
+          <section className="border border-[#2a1a1c] rounded-lg p-3 bg-[#120c0e]">
+            <div className="text-[10px] text-[#9b737b] tracking-widest uppercase">Rules of engagement</div>
+            <ul className="mt-2 pl-4 list-disc text-xs leading-6 text-[#bea7ac]">
+              <li>화면에 표시된 상대 팀 게임 포트만 공격합니다.</li>
+              <li>관리 포트, Docker API와 호스트 OS는 공격 범위가 아닙니다.</li>
+              <li>서비스를 파괴하지 말고 취약점으로 라운드 플래그를 획득합니다.</li>
+              <li>자동 exploit은 실행되지 않습니다. 요청과 판단은 공격팀이 수행합니다.</li>
+            </ul>
+          </section>
+        </aside>
+      </main>
     </div>
   );
+}
+
+function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }) {
+  const [username, setUsername] = useState("team01");
+  const [password, setPassword] = useState("demo-team-01-change-me");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function submit(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError("");
+    try { onLogin(await login(username, password)); }
+    catch (reason) { setError(String(reason)); }
+    finally { setBusy(false); }
+  }
+  return (
+    <main className="min-h-screen bg-[#08090d] text-[#f3e9eb] grid place-items-center p-4">
+      <form onSubmit={submit} className="w-full max-w-md border border-[#4a252d] bg-[#100a0c] rounded-xl p-6 shadow-2xl">
+        <span className="font-mono text-[10px] tracking-[0.2em] text-[#FB7185]">LIVE FIRE · ATTACK PLANE</span>
+        <h1 className="text-2xl mt-2 mb-1">Red Operations Login</h1>
+        <p className="text-sm text-[#9b737b] mb-5">문제 목록이 아니라 실제 상대 서비스에 접속하는 공격 워크벤치입니다.</p>
+        <label className="grid gap-1 text-xs text-[#bea7ac] mb-3">Username<input aria-label="Username" value={username} onChange={(event) => setUsername(event.target.value)} className="bg-[#08090d] border border-[#4a252d] rounded px-3 py-2 text-[#f3e9eb]" /></label>
+        <label className="grid gap-1 text-xs text-[#bea7ac] mb-4">Password<input aria-label="Password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="bg-[#08090d] border border-[#4a252d] rounded px-3 py-2 text-[#f3e9eb]" /></label>
+        <button disabled={busy} className="w-full py-2 rounded border border-[#FB7185] bg-[#FB7185]/15 text-[#FB7185] font-mono text-xs tracking-wider">{busy ? "CONNECTING…" : "ENTER ATTACK PLANE"}</button>
+        {error && <p role="alert" className="text-xs text-[#FB7185] mt-3">{error}</p>}
+      </form>
+    </main>
+  );
+}
+
+function TargetList({ targets, selected, onSelect }: {
+  targets: AttackTarget[]; selected: AttackTarget | null;
+  onSelect: (target: AttackTarget) => void;
+}) {
+  return (
+    <aside className="border-r border-[#2a1a1c] bg-[#0c090a] p-3">
+      <div className="px-2 py-2 mb-2"><span className="font-mono text-[10px] tracking-widest text-[#9b737b]">AUTHORIZED TARGETS</span><h2 className="text-lg mt-1">Opponent attack surface</h2></div>
+      <div className="grid gap-2">
+        {targets.map((target) => {
+          const active = selected?.team_id === target.team_id && selected.service_id === target.service_id;
+          return (
+            <button key={`${target.team_id}:${target.service_id}`} onClick={() => onSelect(target)} className={`text-left rounded-lg border p-3 ${active ? "border-[#FB7185] bg-[#FB7185]/10" : "border-[#2a1a1c] bg-[#120c0e] hover:border-[#6d3944]"}`}>
+              <div className="flex justify-between gap-2"><strong>{target.team}</strong><span className="font-mono text-[10px] text-[#FB7185]">:{target.public_port}</span></div>
+              <div className="text-xs text-[#9b737b] mt-1">{target.service}</div>
+              <div className="font-mono text-[10px] text-[#6f555a] mt-2 truncate">{targetBaseUrl(target)}</div>
+            </button>
+          );
+        })}
+        {targets.length === 0 && <div className="text-xs text-[#9b737b] p-3">공개 공격 표면을 기다리는 중입니다.</div>}
+      </div>
+    </aside>
+  );
+}
+
+function RequestWorkbench({ target }: { target: AttackTarget | null }) {
+  const [method, setMethod] = useState("GET");
+  const [path, setPath] = useState("/api/version");
+  const [bearer, setBearer] = useState("");
+  const [body, setBody] = useState("");
+  const [result, setResult] = useState<{ status: number; elapsed_ms: number; headers: string; body: string } | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const recipes = useMemo(() => target?.service_slug === "file-vault" ? [
+    ["RECON", "GET", "/api/version", ""],
+    ["REGISTER", "POST", "/api/register", '{"username":"redops","password":"redops-pass-2026"}'],
+    ["LOGIN", "POST", "/api/login", '{"username":"redops","password":"redops-pass-2026"}'],
+    ["DISCOVER", "GET", "/api/files?path=../../system", ""],
+    ["EXFIL", "GET", "/api/files?path=../../system/<discovered-file>.txt", ""],
+  ] : [
+    ["RECON", "GET", "/api/version", ""],
+    ["REGISTER", "POST", "/api/register", '{"username":"redops","password":"redops-pass-2026"}'],
+    ["LOGIN", "POST", "/api/login", '{"username":"redops","password":"redops-pass-2026"}'],
+    ["ENUMERATE", "GET", "/api/notes/1", ""],
+  ], [target?.service_slug]);
+
+  if (!target) return <section className="p-6 text-[#9b737b]">상대 서비스 인스턴스를 선택하세요.</section>;
+  async function execute(event: FormEvent) {
+    event.preventDefault(); if (!target) return;
+    setBusy(true); setError(""); setResult(null);
+    try { setResult(await sendTargetRequest(target, method, path, bearer, body)); }
+    catch (reason) { setError(String(reason)); }
+    finally { setBusy(false); }
+  }
+  return (
+    <section className="p-4 md:p-6 min-w-0">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+        <div><span className="font-mono text-[10px] tracking-widest text-[#FB7185]">SELECTED LIVE TARGET</span><h1 className="text-2xl mt-1">{target.team} · {target.service}</h1><code className="text-xs text-[#9b737b]">{targetBaseUrl(target)}</code></div>
+        <a href={`${targetBaseUrl(target)}/docs`} target="_blank" rel="noreferrer" className="px-3 py-2 border border-[#FB7185]/50 rounded text-xs text-[#FB7185]">OPEN API SURFACE ↗</a>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+        {recipes.map(([label, recipeMethod, recipePath, recipeBody]) => (
+          <button key={label} onClick={() => { setMethod(recipeMethod); setPath(recipePath); setBody(recipeBody); setResult(null); }} className="text-left border border-[#2a1a1c] bg-[#120c0e] rounded p-3 hover:border-[#FB7185]/60">
+            <span className="font-mono text-[9px] text-[#FB7185]">{label}</span><strong className="block text-xs mt-1">{recipeMethod} {recipePath}</strong>
+          </button>
+        ))}
+      </div>
+
+      <form onSubmit={execute} className="border border-[#382127] rounded-lg bg-[#100b0d] overflow-hidden">
+        <div className="grid grid-cols-[110px_minmax(0,1fr)] border-b border-[#382127]">
+          <select aria-label="HTTP method" value={method} onChange={(event) => setMethod(event.target.value)} className="bg-[#180e11] px-3 py-3 border-r border-[#382127] text-[#FB7185] font-mono text-xs"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option></select>
+          <input aria-label="Request path" value={path} onChange={(event) => setPath(event.target.value)} className="bg-[#090709] px-3 py-3 font-mono text-xs text-[#f3e9eb]" />
+        </div>
+        <div className="grid md:grid-cols-2">
+          <label className="grid gap-1 p-3 text-[10px] text-[#9b737b] border-b md:border-b-0 md:border-r border-[#382127]">BEARER TOKEN<input aria-label="Target bearer token" value={bearer} onChange={(event) => setBearer(event.target.value)} placeholder="login 응답의 access_token" className="bg-[#090709] border border-[#382127] rounded px-2 py-2 font-mono text-xs text-[#f3e9eb]" /></label>
+          <label className="grid gap-1 p-3 text-[10px] text-[#9b737b]">JSON BODY<textarea aria-label="JSON request body" value={body} onChange={(event) => setBody(event.target.value)} rows={4} className="bg-[#090709] border border-[#382127] rounded px-2 py-2 font-mono text-xs text-[#f3e9eb] resize-y" /></label>
+        </div>
+        <button disabled={busy} className="w-full border-t border-[#FB7185]/40 bg-[#FB7185]/15 py-3 text-[#FB7185] font-mono text-xs tracking-wider">{busy ? "REQUEST IN FLIGHT…" : "SEND TO LIVE SERVICE"}</button>
+      </form>
+
+      <section className="mt-4 border border-[#2a1a1c] rounded-lg bg-[#070608] min-h-64 overflow-hidden">
+        <div className="flex justify-between px-3 py-2 border-b border-[#2a1a1c] font-mono text-[10px] text-[#9b737b]"><span>RAW RESPONSE</span>{result && <span className={result.status < 400 ? "text-[#34D399]" : "text-[#FB7185]"}>HTTP {result.status} · {result.elapsed_ms}ms</span>}</div>
+        {error ? <pre className="p-3 text-xs text-[#FB7185] whitespace-pre-wrap">{error}</pre> : result ? <pre className="p-3 text-xs text-[#cdbcc0] whitespace-pre-wrap break-all">{result.headers}{"\n\n"}{prettyBody(result.body)}</pre> : <div className="p-5 text-xs text-[#6f555a]">실제 대상에 요청을 보내면 서버 응답이 여기에 표시됩니다. 로그인 응답 토큰은 위 Bearer Token 필드에 복사하세요.</div>}
+      </section>
+    </section>
+  );
+}
+
+function FlagSubmission({ session, onAccepted }: { session: Session; onAccepted: () => Promise<void> }) {
+  const [flag, setFlag] = useState("");
+  const [message, setMessage] = useState("");
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    try {
+      const result = await submitCapturedFlag(session.match_id, session.access_token, flag);
+      setMessage(result.accepted ? `FLAG ACCEPTED · +${result.score_delta ?? 0} ATTACK` : "FLAG REJECTED · inactive, duplicate, self, or invalid");
+      if (result.accepted) { setFlag(""); await onAccepted(); }
+    } catch (reason) { setMessage(String(reason)); }
+  }
+  return (
+    <section className="border border-[#5a2933] rounded-lg bg-[#140c0f] p-3">
+      <span className="font-mono text-[10px] tracking-widest text-[#FB7185]">EXFILTRATED FLAG</span>
+      <h2 className="text-lg mt-1">Submit captured token</h2>
+      <form onSubmit={submit} className="grid gap-2 mt-3"><textarea aria-label="Captured flag" value={flag} onChange={(event) => setFlag(event.target.value.trim())} placeholder="FLAG{...}" rows={3} className="bg-[#080608] border border-[#5a2933] rounded p-2 font-mono text-xs resize-none" /><button disabled={!flag} className="border border-[#FB7185] bg-[#FB7185]/15 rounded py-2 text-[#FB7185] font-mono text-xs">SUBMIT TO GAME ENGINE</button></form>
+      {message && <p role="status" className="text-[10px] text-[#bea7ac] mt-2">{message}</p>}
+    </section>
+  );
+}
+
+function Scoreboard({ rows, ownTeamId }: { rows: ScoreRow[]; ownTeamId: string }) {
+  return <section className="border border-[#2a1a1c] rounded-lg bg-[#120c0e] overflow-hidden"><div className="px-3 py-2 border-b border-[#2a1a1c] text-[10px] text-[#9b737b] tracking-widest">LIVE SCOREBOARD</div><ol className="m-0 p-0 list-none">{rows.map((row) => <li key={row.team_id} className={`grid grid-cols-[28px_1fr_auto] gap-2 px-3 py-2 border-b border-[#21171a] text-xs ${row.team_id === ownTeamId ? "bg-[#FB7185]/10" : ""}`}><span className="font-mono text-[#9b737b]">{row.rank}</span><strong>{row.team}</strong><span className="font-mono text-[#FB7185]">{row.total}</span></li>)}</ol></section>;
+}
+
+function prettyBody(body: string): string {
+  try { return JSON.stringify(JSON.parse(body), null, 2); }
+  catch { return body; }
 }

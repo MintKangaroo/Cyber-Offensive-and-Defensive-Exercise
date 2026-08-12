@@ -199,6 +199,35 @@ async function installApi(page: Page, role: "competitor" | "operator" | "observe
   });
 }
 
+function overlaps(a: { x: number; y: number; width: number; height: number }, b: typeof a) {
+  return a.x < b.x + b.width && a.x + a.width > b.x
+    && a.y < b.y + b.height && a.y + a.height > b.y;
+}
+
+test("exercise header keeps range and team portal labels separate", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.addInitScript(() => localStorage.setItem("cr_match_mode", "exercise"));
+  await page.goto("/?mode=exercise");
+  const labels = [
+    page.getByText("LIVE FIRE RANGE", { exact: true }),
+    page.getByText("training environment", { exact: true }),
+    page.getByRole("link", { name: /RED PORTAL/ }),
+    page.getByRole("link", { name: /BLUE PORTAL/ }),
+  ];
+  const boxes = [];
+  for (const label of labels) {
+    await expect(label).toBeVisible();
+    const box = await label.boundingBox();
+    expect(box).not.toBeNull();
+    boxes.push(box!);
+  }
+  for (let left = 0; left < boxes.length; left += 1) {
+    for (let right = left + 1; right < boxes.length; right += 1) {
+      expect(overlaps(boxes[left], boxes[right])).toBe(false);
+    }
+  }
+});
+
 test("competitor navigation, keyboard submission, and visual baseline", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await installApi(page, "competitor");

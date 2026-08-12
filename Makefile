@@ -1,4 +1,13 @@
-.PHONY: attack-defense-demo attack-defense-test attack-defense-runtime-work attack-defense-ha-demo attack-defense-ha-status
+.PHONY: training-up training-down training-status attack-defense-demo attack-defense-test attack-defense-runtime-work attack-defense-ha-demo attack-defense-ha-status
+
+training-up:
+	python3 -m scripts.training_environment up
+
+training-down:
+	python3 -m scripts.training_environment down
+
+training-status:
+	python3 -m scripts.training_environment status
 
 attack-defense-demo:
 	docker compose up -d --build auth attack_defense ad_registry ad_team_01_notes ad_team_01_vault ad_team_02_notes ad_team_02_vault ad_team_03_notes ad_team_03_vault

@@ -6,6 +6,7 @@ import sqlite3
 import time
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from ..common import (
@@ -37,6 +38,16 @@ def db() -> sqlite3.Connection:
 
 game_app = FastAPI(title="Vulnerable Notes")
 management_app = FastAPI(title="Vulnerable Notes Management", docs_url=None, redoc_url=None)
+game_app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=(
+        r"https?://(localhost|127\.0\.0\.1|(\d{1,3}\.){3}\d{1,3}|"
+        r"[\w-]+\.ts\.net)(:\d+)?"
+    ),
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+)
 
 
 class Credentials(BaseModel):

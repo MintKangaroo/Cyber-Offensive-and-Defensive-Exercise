@@ -40,12 +40,7 @@ export default function App() {
   }
 
   if (mode === "exercise") {
-    return (
-      <div className="mode-frame">
-        <div className="mode-frame__control">{modeControl}</div>
-        <LegacyExerciseApp />
-      </div>
-    );
+    return <LegacyExerciseApp modeControl={modeControl} />;
   }
   return <AttackDefenseApp modeControl={modeControl} />;
 }

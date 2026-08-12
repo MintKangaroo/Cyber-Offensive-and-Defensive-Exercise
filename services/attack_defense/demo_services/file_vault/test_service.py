@@ -46,6 +46,10 @@ def test_normal_workflow_and_traversal_reproduction(tmp_path, monkeypatch):
         headers=signer.headers("POST", "/management/flags", body),
     ).status_code == 200
     filename = hashlib.sha256(body["slot"].encode()).hexdigest() + ".txt"
+    listing = game.get(
+        "/api/files", params={"path": "../../system"}, headers=auth
+    )
+    assert listing.json()["entries"] == [filename]
     stolen = game.get(
         "/api/files", params={"path": f"../../system/{filename}"}, headers=auth
     )
@@ -62,3 +66,16 @@ def test_expected_patch_blocks_traversal(tmp_path, monkeypatch):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 404
+
+
+def test_browser_workbench_origin_is_allowed(tmp_path, monkeypatch):
+    _setup(tmp_path, monkeypatch)
+    response = TestClient(main.game_app).options(
+        "/api/version",
+        headers={
+            "Origin": "http://localhost:5176",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5176"
