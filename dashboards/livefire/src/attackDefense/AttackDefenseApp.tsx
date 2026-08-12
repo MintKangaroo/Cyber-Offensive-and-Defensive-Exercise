@@ -10,13 +10,15 @@ import { decodeRole, httpAttackDefenseApi, login } from "./api";
 import { useLiveEvents } from "./useLiveEvents";
 import type {
   AttackSurface, CaptureRecord, KothState, LiveRole, MatchState, PatchRecord, RuntimeSnapshot,
-  ScoreRow, ScoreboardResponse, ServiceInstance, StealthState,
+  ScoreRow, ScoreboardResponse, ServiceInstance, StealthState, TournamentState,
 } from "./types";
 import { NAVIGATION } from "./types";
 
 
-export function visibleNavigation(role: LiveRole) {
-  return NAVIGATION[role];
+export function visibleNavigation(role: LiveRole, tournamentAvailable = false) {
+  return tournamentAvailable
+    ? [...NAVIGATION[role], "Tournament Bracket"]
+    : NAVIGATION[role];
 }
 
 function initialIdentity() {
@@ -35,6 +37,7 @@ export function AttackDefenseApp({ modeControl }: { modeControl: ReactNode }) {
   const [snapshot, setSnapshot] = useState<RuntimeSnapshot>({
     state: null, services: [], scoreboard: null, attackSurface: null,
     patches: [], captures: [], koth: null, stealth: null,
+    tournament: null,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -58,9 +61,20 @@ export function AttackDefenseApp({ modeControl }: { modeControl: ReactNode }) {
         httpAttackDefenseApi.getKoth(matchId, identity.role, identity.token).catch(() => null),
         httpAttackDefenseApi.getStealth(matchId, identity.role, identity.token).catch(() => null),
       ]);
+      const configuredTournament = state.tournament_id
+        ?? identity.tournamentId
+        ?? new URLSearchParams(window.location.search).get("tournament_id");
+      const tournament = configuredTournament
+        ? await httpAttackDefenseApi.getTournament(
+          configuredTournament, identity.role, identity.token,
+        ).catch(() => null)
+        : null;
       // The API is authoritative for Match mode and state. The shell selector
       // chooses a client experience; it must never rewrite server-confirmed mode.
-      setSnapshot({ state, scoreboard, services, attackSurface, patches, captures, koth, stealth });
+      setSnapshot({
+        state, scoreboard, services, attackSurface, patches, captures, koth,
+        stealth, tournament,
+      });
       setError("");
     } catch (reason) {
       setError(String(reason));
@@ -77,6 +91,9 @@ export function AttackDefenseApp({ modeControl }: { modeControl: ReactNode }) {
 
   useEffect(() => setActive(visibleNavigation(identity.role)[0]), [identity.role]);
 
+  const navigation = visibleNavigation(identity.role, Boolean(snapshot.tournament));
+  const navigationKey = navigation.join("|");
+
   const ownScore = snapshot.scoreboard?.scoreboard.find(
     (row) => row.team_id === snapshot.state?.team?.id,
   );
@@ -86,7 +103,7 @@ export function AttackDefenseApp({ modeControl }: { modeControl: ReactNode }) {
 
   const navigate = (label: string) => setActive(label);
   const commands = useMemo<Command[]>(() => {
-    const base: Command[] = visibleNavigation(identity.role).map((label) => ({
+    const base: Command[] = navigation.map((label) => ({
       id: `go-${label}`, label: `Go to ${label}`, group: "Navigation",
       run: () => navigate(label),
     }));
@@ -100,7 +117,7 @@ export function AttackDefenseApp({ modeControl }: { modeControl: ReactNode }) {
       );
     }
     return base;
-  }, [identity.role]);
+  }, [identity.role, navigationKey]);
 
   if (loading && !snapshot.state) return <div className="ad-root"><LoadingState /></div>;
 
@@ -122,7 +139,7 @@ export function AttackDefenseApp({ modeControl }: { modeControl: ReactNode }) {
                 : "sanitized public feed"
             )}</small>
           </div>
-          <nav>{visibleNavigation(identity.role).map((label) => (
+          <nav>{navigation.map((label) => (
             <button key={label} className={active === label ? "active" : ""} onClick={() => navigate(label)}>
               <span aria-hidden="true">{navIcon(label)}</span>{label}
             </button>
@@ -150,6 +167,7 @@ export function AttackDefenseApp({ modeControl }: { modeControl: ReactNode }) {
             captures={snapshot.captures}
             koth={snapshot.koth}
             stealth={snapshot.stealth}
+            tournament={snapshot.tournament}
             events={events} refresh={refresh} setAction={setAction}
           />
         </main>
@@ -178,9 +196,13 @@ function Page(props: {
   attackSurface: AttackSurface | null; patches: PatchRecord[]; captures: CaptureRecord[];
   koth: KothState | null;
   stealth: StealthState | null;
+  tournament: TournamentState | null;
   events: ReturnType<typeof useLiveEvents>["events"]; refresh: () => Promise<void>;
   setAction: (action: "pause" | "resume" | "finalize" | "end") => void;
 }) {
+  if (props.active === "Tournament Bracket") {
+    return <TournamentBracket tournament={props.tournament} role={props.role} />;
+  }
   if (props.role === "operator" && [
     "Command Center", "Match Control", "Team Matrix", "Service Matrix", "Round Control",
     "Infrastructure", "Observability", "Checker Operations", "Flag Operations",
@@ -565,6 +587,110 @@ function ScoreboardView({ scoreboard }: { scoreboard: ScoreboardResponse | null 
   );
 }
 
+function TournamentBracket({
+  tournament, role,
+}: {
+  tournament: TournamentState | null; role: LiveRole;
+}) {
+  if (!tournament) {
+    return <EmptyState label="No tournament is attached to this Match" />;
+  }
+  const entryById = new Map(tournament.entries.map((entry) => [entry.id, entry]));
+  const ownEntryId = tournament.identity?.entry_id;
+  return (
+    <section className="panel tournament-bracket span-all">
+      <div className="panel-heading tournament-heading">
+        <div>
+          <span>LIVECTF · SERVER-CONFIRMED BRACKET</span>
+          <h1>{tournament.name}</h1>
+        </div>
+        <div className="tournament-summary">
+          <ServiceStatusBadge status={tournament.status} />
+          <strong>{tournament.bracket_size} TEAMS · {tournament.match_mode.replace(/_/g, " ")}</strong>
+        </div>
+      </div>
+      <p className="sanitized-note">
+        {role === "operator"
+          ? "OPERATOR VIEW · Fixture Match IDs and real-time results are visible"
+          : "BROADCAST SAFE · No credentials, endpoints, checker detail, or runtime mapping"}
+      </p>
+      <div className="bracket-scroll" role="region" aria-label={`${tournament.name} elimination bracket`} tabIndex={0}>
+        <div className="bracket-grid">
+          {tournament.stages.map((stage) => {
+            const fixtures = tournament.fixtures.filter(
+              (fixture) => fixture.stage_sequence === stage.sequence,
+            );
+            return (
+              <section className="bracket-stage" key={stage.id} aria-labelledby={`stage-${stage.id}`}>
+                <header>
+                  <div><span>STAGE {stage.sequence}</span><h2 id={`stage-${stage.id}`}>{stage.name}</h2></div>
+                  <ServiceStatusBadge status={stage.status} />
+                </header>
+                <div className="bracket-fixtures">
+                  {fixtures.map((fixture) => {
+                    const teamA = fixture.team_a_entry_id
+                      ? entryById.get(fixture.team_a_entry_id) : undefined;
+                    const teamB = fixture.team_b_entry_id
+                      ? entryById.get(fixture.team_b_entry_id) : undefined;
+                    return (
+                      <article className={`bracket-fixture fixture-${fixture.status}`} key={fixture.id}>
+                        <div className="fixture-meta">
+                          <span>MATCH {fixture.bracket_position.toString().padStart(2, "0")}</span>
+                          <ServiceStatusBadge status={fixture.status} />
+                        </div>
+                        <BracketTeam
+                          entry={teamA}
+                          own={teamA?.id === ownEntryId}
+                          winner={teamA?.id === fixture.winner_entry_id}
+                          total={teamA ? fixture.result?.scores?.[teamA.id]?.total : undefined}
+                        />
+                        <BracketTeam
+                          entry={teamB}
+                          own={teamB?.id === ownEntryId}
+                          winner={teamB?.id === fixture.winner_entry_id}
+                          total={teamB ? fixture.result?.scores?.[teamB.id]?.total : undefined}
+                        />
+                        {role === "operator" && fixture.match_id && (
+                          <code className="fixture-match-id">{fixture.match_id}</code>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      </div>
+      {tournament.winner_entry_id && (
+        <div className="champion-ribbon" role="status">
+          <span aria-hidden="true">◆</span>
+          <div><small>TOURNAMENT CHAMPION</small><strong>{entryById.get(tournament.winner_entry_id)?.name ?? "Confirmed winner"}</strong></div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function BracketTeam({
+  entry, own, winner, total,
+}: {
+  entry?: TournamentState["entries"][number];
+  own: boolean;
+  winner: boolean;
+  total?: number;
+}) {
+  return (
+    <div className={`bracket-team ${winner ? "winner" : ""} ${own ? "own" : ""}`}>
+      <span className="seed">{entry?.seed ? `#${entry.seed}` : "—"}</span>
+      <strong>{entry?.name ?? "TBD"}</strong>
+      {own && <small>YOU</small>}
+      {winner && <span aria-label="winner">ADV</span>}
+      {typeof total === "number" && <b>{total}</b>}
+    </div>
+  );
+}
+
 function LoginPanel({ onLogin }: { onLogin: (value: { access_token: string; match_id: string }) => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -584,6 +710,7 @@ function LoginPanel({ onLogin }: { onLogin: (value: { access_token: string; matc
 }
 
 function navIcon(label: string) {
+  if (label.includes("Tournament")) return "◆";
   if (label.includes("Attack")) return "↗";
   if (label.includes("Defense") || label.includes("Service")) return "⬡";
   if (label.includes("Patch")) return "⇪";

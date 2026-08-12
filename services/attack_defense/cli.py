@@ -370,6 +370,63 @@ def parser() -> argparse.ArgumentParser:
     detection.add_argument("evidence_summary")
     detection.add_argument("--idempotency-key", required=True)
 
+    tournament_create = commands.add_parser("tournament-create")
+    tournament_create.add_argument("--id")
+    tournament_create.add_argument("--name", required=True)
+    tournament_create.add_argument("--bracket-size", type=int, required=True)
+    tournament_create.add_argument(
+        "--match-mode",
+        choices=["attack_defense", "hybrid_live_fire"],
+        default="attack_defense",
+    )
+    tournament_create.add_argument("--round-duration-seconds", type=int)
+    tournament_create.add_argument("--active-flag-window", type=int)
+    tournament_create.add_argument("--match-config", default="{}")
+
+    tournament_entry = commands.add_parser("tournament-entry-add")
+    tournament_entry.add_argument("tournament_id")
+    tournament_entry.add_argument("--id")
+    tournament_entry.add_argument("--slug", required=True)
+    tournament_entry.add_argument("--name", required=True)
+    tournament_entry.add_argument("--identity-subject", required=True)
+    tournament_entry.add_argument("--seed", type=int)
+
+    tournament_service = commands.add_parser("tournament-service-add")
+    tournament_service.add_argument("tournament_id")
+    tournament_service.add_argument("--id")
+    tournament_service.add_argument("--slug", required=True)
+    tournament_service.add_argument("--name", required=True)
+    tournament_service.add_argument("--base-image", required=True)
+    tournament_service.add_argument("--base-image-digest")
+    tournament_service.add_argument("--internal-port", type=int, required=True)
+    tournament_service.add_argument(
+        "--checker-type", choices=["vulnerable_notes", "file_vault"],
+        required=True,
+    )
+    tournament_service.add_argument("--config", default="{}")
+
+    for tournament_command in (
+        "tournament-seed", "tournament-start", "tournament-reconcile",
+    ):
+        item = commands.add_parser(tournament_command)
+        item.add_argument("tournament_id")
+        item.add_argument("--reason", required=True)
+
+    tournament_status = commands.add_parser("tournament-status")
+    tournament_status.add_argument("tournament_id")
+    tournament_status.add_argument("--public", action="store_true")
+
+    fixture_start = commands.add_parser("tournament-fixture-start")
+    fixture_start.add_argument("tournament_id")
+    fixture_start.add_argument("fixture_id")
+    fixture_start.add_argument("--reason", required=True)
+
+    fixture_finalize = commands.add_parser("tournament-fixture-finalize")
+    fixture_finalize.add_argument("tournament_id")
+    fixture_finalize.add_argument("fixture_id")
+    fixture_finalize.add_argument("--winner-entry-id")
+    fixture_finalize.add_argument("--reason", required=True)
+
     capture = commands.add_parser("capture-upload")
     capture.add_argument("match_id")
     capture.add_argument("file")
@@ -512,6 +569,84 @@ def main(argv: list[str] | None = None) -> None:
             },
             participant=True,
             headers={"Idempotency-Key": args.idempotency_key},
+        ))
+    elif command == "tournament-create":
+        body = {
+            "name": args.name,
+            "bracket_size": args.bracket_size,
+            "match_mode": args.match_mode,
+            "match_config": json.loads(args.match_config),
+        }
+        if args.id:
+            body["id"] = args.id
+        if args.round_duration_seconds is not None:
+            body["round_duration_seconds"] = args.round_duration_seconds
+        if args.active_flag_window is not None:
+            body["active_flag_window"] = args.active_flag_window
+        _print(_request(
+            "POST", "/api/attack-defense/operator/tournaments", body=body,
+        ))
+    elif command == "tournament-entry-add":
+        body = {
+            "slug": args.slug,
+            "name": args.name,
+            "identity_subject": args.identity_subject,
+            "seed": args.seed,
+        }
+        if args.id:
+            body["id"] = args.id
+        _print(_request(
+            "POST",
+            f"/api/attack-defense/operator/tournaments/{args.tournament_id}/entries",
+            body=body,
+        ))
+    elif command == "tournament-service-add":
+        body = {
+            "slug": args.slug,
+            "name": args.name,
+            "base_image": args.base_image,
+            "base_image_digest": args.base_image_digest,
+            "internal_port": args.internal_port,
+            "checker_type": args.checker_type,
+            "config": json.loads(args.config),
+        }
+        if args.id:
+            body["id"] = args.id
+        _print(_request(
+            "POST",
+            f"/api/attack-defense/operator/tournaments/{args.tournament_id}/services",
+            body=body,
+        ))
+    elif command in {"tournament-seed", "tournament-start", "tournament-reconcile"}:
+        action = command.removeprefix("tournament-")
+        _print(_request(
+            "POST",
+            f"/api/attack-defense/operator/tournaments/{args.tournament_id}/{action}",
+            body={"reason": args.reason},
+        ))
+    elif command == "tournament-status":
+        path = (
+            f"/api/attack-defense/public/tournaments/{args.tournament_id}"
+            if args.public
+            else f"/api/attack-defense/operator/tournaments/{args.tournament_id}"
+        )
+        _print(_request("GET", path))
+    elif command == "tournament-fixture-start":
+        _print(_request(
+            "POST",
+            f"/api/attack-defense/operator/tournaments/{args.tournament_id}"
+            f"/fixtures/{args.fixture_id}/start",
+            body={"reason": args.reason},
+        ))
+    elif command == "tournament-fixture-finalize":
+        _print(_request(
+            "POST",
+            f"/api/attack-defense/operator/tournaments/{args.tournament_id}"
+            f"/fixtures/{args.fixture_id}/finalize",
+            body={
+                "winner_entry_id": args.winner_entry_id,
+                "reason": args.reason,
+            },
         ))
     elif command == "capture-upload":
         capture_upload(args)

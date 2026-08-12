@@ -41,7 +41,13 @@ The SPA supports query-selected modes and observer-safe presentation paths:
 - `/observer/live`
 - `/observer/scoreboard`
 - `/observer/timeline`
+- `/broadcast/overlay?match_id=<id>&layout=scorebar|standings|bracket`
 
 The server must use SPA fallback for these routes. Observer path forces observer
 UX even when a more privileged token exists, preventing accidental broadcast
 of operator panels.
+
+The broadcast path is a separate, navigation-free browser-source surface. It
+does not inspect stored identity and calls only the public broadcast snapshot.
+Transparent, solid and chroma backgrounds are query-selected for downstream
+composition. See [Broadcast Graphics Overlay](../attack-defense-broadcast.md).

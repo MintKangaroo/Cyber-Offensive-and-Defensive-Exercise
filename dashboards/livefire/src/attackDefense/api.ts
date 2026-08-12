@@ -1,6 +1,7 @@
 import type {
-  AttackSurface, CaptureRecord, KothState, LiveRole, MatchState, PatchRecord, ScoreboardResponse,
+  AttackSurface, BroadcastSnapshot, CaptureRecord, KothState, LiveRole, MatchState, PatchRecord, ScoreboardResponse,
   ServiceInstance, StealthState, SubmissionResult,
+  TournamentState,
 } from "./types";
 
 const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
@@ -26,6 +27,7 @@ async function request<T>(path: string, token = "", init?: RequestInit): Promise
 }
 
 export interface AttackDefenseApi {
+  getBroadcastSnapshot(matchId: string): Promise<BroadcastSnapshot>;
   getState(matchId: string, role: LiveRole, token: string): Promise<MatchState>;
   getServices(matchId: string, role: LiveRole, token: string): Promise<ServiceInstance[]>;
   getScoreboard(matchId: string, role: LiveRole, token: string): Promise<ScoreboardResponse>;
@@ -34,6 +36,9 @@ export interface AttackDefenseApi {
   getCaptures(matchId: string, role: LiveRole, token: string): Promise<CaptureRecord[]>;
   getKoth(matchId: string, role: LiveRole, token: string): Promise<KothState>;
   getStealth(matchId: string, role: LiveRole, token: string): Promise<StealthState>;
+  getTournament(
+    tournamentId: string, role: LiveRole, token: string,
+  ): Promise<TournamentState>;
   submitStealthDetection(
     matchId: string, token: string, serviceId: string,
     indicatorHash: string, evidenceSummary: string,
@@ -54,6 +59,11 @@ export interface AttackDefenseApi {
 }
 
 export const httpAttackDefenseApi: AttackDefenseApi = {
+  getBroadcastSnapshot(matchId) {
+    return request(
+      `/api/attack-defense/public/matches/${encodeURIComponent(matchId)}/broadcast`,
+    );
+  },
   getState(matchId, role, token) {
     if (role === "competitor") {
       return request(`/api/attack-defense/matches/${matchId}/state`, token);
@@ -114,6 +124,14 @@ export const httpAttackDefenseApi: AttackDefenseApi = {
       : role === "observer"
         ? `/api/attack-defense/public/matches/${matchId}/stealth/summary`
         : `/api/attack-defense/matches/${matchId}/stealth`;
+    return request(path, token);
+  },
+  getTournament(tournamentId, role, token) {
+    const path = role === "operator"
+      ? `/api/attack-defense/operator/tournaments/${tournamentId}`
+      : role === "competitor"
+        ? `/api/attack-defense/tournaments/${tournamentId}`
+        : `/api/attack-defense/public/tournaments/${tournamentId}`;
     return request(path, token);
   },
   submitStealthDetection(matchId, token, serviceId, indicatorHash, evidenceSummary) {
@@ -193,17 +211,27 @@ export async function login(username: string, password: string) {
   });
   if (!response.ok) throw new Error("Invalid credentials");
   return response.json() as Promise<{
-    role: string; team_id: string; match_id: string; access_token: string;
+    role: string; team_id: string; match_id: string; tournament_id: string;
+    access_token: string;
   }>;
 }
 
-export function decodeRole(token: string): { role: LiveRole; teamId: string; matchId: string } {
+export function decodeRole(token: string): {
+  role: LiveRole; teamId: string; matchId: string; tournamentId: string;
+} {
   try {
     const claims = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
     const role: LiveRole = ["instructor", "operator"].includes(claims.role)
       ? "operator" : claims.role === "observer" ? "observer" : "competitor";
-    return { role, teamId: claims.team_id ?? "", matchId: claims.match_id ?? "" };
+    return {
+      role,
+      teamId: claims.team_id ?? "",
+      matchId: claims.match_id ?? "",
+      tournamentId: claims.tournament_id ?? "",
+    };
   } catch {
-    return { role: "observer", teamId: "", matchId: "" };
+    return {
+      role: "observer", teamId: "", matchId: "", tournamentId: "",
+    };
   }
 }

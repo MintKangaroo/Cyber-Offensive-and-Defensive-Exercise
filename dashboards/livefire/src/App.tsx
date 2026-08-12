@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import LegacyExerciseApp from "./LegacyExerciseApp";
 import { AttackDefenseApp } from "./attackDefense/AttackDefenseApp";
+import { BroadcastOverlay } from "./attackDefense/BroadcastOverlay";
 import type { MatchMode } from "./attackDefense/types";
 
 function initialMode(): MatchMode {
@@ -33,6 +34,10 @@ export default function App() {
       </select>
     </label>
   ), [mode]);
+
+  if (window.location.pathname.startsWith("/broadcast/")) {
+    return <BroadcastOverlay />;
+  }
 
   if (mode === "exercise") {
     return (

@@ -14,7 +14,6 @@ import csv
 import hashlib
 import hmac
 import io
-import json
 import os
 import secrets
 import time
@@ -51,7 +50,10 @@ def _init():
     c = _db()
     c.execute("""CREATE TABLE IF NOT EXISTS users(
         username TEXT PRIMARY KEY, pw_hash TEXT, salt TEXT, role TEXT,
-        team_id TEXT, match_id TEXT, created_at REAL)""")
+        team_id TEXT, match_id TEXT, tournament_id TEXT, created_at REAL)""")
+    columns = {row[1] for row in c.execute("PRAGMA table_info(users)")}
+    if "tournament_id" not in columns:
+        c.execute("ALTER TABLE users ADD COLUMN tournament_id TEXT DEFAULT ''")
     c.execute("""CREATE TABLE IF NOT EXISTS revoked(jti TEXT PRIMARY KEY, at REAL)""")
     c.commit(); c.close()
 
@@ -64,19 +66,33 @@ def _verify_pw(pw: str, salt: str, expect: str) -> bool:
     return hmac.compare_digest(_hash(pw, salt), expect)
 
 
-def _add_user(username: str, password: str, role: str, team_id: str = "", match_id: str = ""):
+def _add_user(
+    username: str, password: str, role: str, team_id: str = "",
+    match_id: str = "", tournament_id: str = "",
+):
     if role not in ROLES:
         raise ValueError(f"invalid role {role}")
     salt = secrets.token_hex(8)
     c = _db()
-    c.execute("INSERT OR REPLACE INTO users VALUES(?,?,?,?,?,?,?)",
-              (username, _hash(password, salt), salt, role, team_id, match_id, time.time()))
+    c.execute(
+        """INSERT OR REPLACE INTO users(
+           username,pw_hash,salt,role,team_id,match_id,tournament_id,created_at)
+           VALUES(?,?,?,?,?,?,?,?)""",
+        (
+            username, _hash(password, salt), salt, role, team_id, match_id,
+            tournament_id, time.time(),
+        ),
+    )
     c.commit(); c.close()
 
 
-def _issue(username: str, role: str, team_id: str, match_id: str, ttl: int, typ: str) -> str:
+def _issue(
+    username: str, role: str, team_id: str, match_id: str,
+    tournament_id: str, ttl: int, typ: str,
+) -> str:
     now = int(time.time())
-    return jwt.encode({"sub": username, "role": role, "team_id": team_id, "match_id": match_id,
+    return jwt.encode({"sub": username, "role": role, "team_id": team_id,
+                       "match_id": match_id, "tournament_id": tournament_id,
                        "type": typ, "jti": uuid.uuid4().hex, "iat": now, "exp": now + ttl},
                       JWT_SECRET, algorithm="HS256")
 
@@ -128,6 +144,7 @@ class RegisterReq(BaseModel):
     role: str
     team_id: str = ""
     match_id: str = ""
+    tournament_id: str = ""
 
 
 @app.get("/health")
@@ -141,12 +158,13 @@ def login(req: LoginReq, response: Response):
     c = _db(); row = c.execute("SELECT * FROM users WHERE username=?", (req.username,)).fetchone(); c.close()
     if not row or not _verify_pw(req.password, row["salt"], row["pw_hash"]):
         raise HTTPException(401, "invalid credentials")
-    access = _issue(row["username"], row["role"], row["team_id"] or "", row["match_id"] or "", ACCESS_TTL, "access")
-    refresh = _issue(row["username"], row["role"], row["team_id"] or "", row["match_id"] or "", REFRESH_TTL, "refresh")
+    access = _issue(row["username"], row["role"], row["team_id"] or "", row["match_id"] or "", row["tournament_id"] or "", ACCESS_TTL, "access")
+    refresh = _issue(row["username"], row["role"], row["team_id"] or "", row["match_id"] or "", row["tournament_id"] or "", REFRESH_TTL, "refresh")
     # httpOnly 쿠키(same-origin gateway). Secure는 https 뒤에서.
     response.set_cookie(COOKIE, access, httponly=True, samesite="lax", max_age=ACCESS_TTL, path="/")
     response.set_cookie("cr_refresh", refresh, httponly=True, samesite="lax", max_age=REFRESH_TTL, path="/")
     return {"role": row["role"], "team_id": row["team_id"], "match_id": row["match_id"],
+            "tournament_id": row["tournament_id"],
             "access_token": access, "expires_in": ACCESS_TTL}
 
 
@@ -155,7 +173,7 @@ def refresh(response: Response, cr_refresh: str | None = Cookie(default=None)):
     if not cr_refresh:
         raise HTTPException(401, "no refresh token")
     claims = _decode(cr_refresh, "refresh")
-    access = _issue(claims["sub"], claims["role"], claims.get("team_id", ""), claims.get("match_id", ""), ACCESS_TTL, "access")
+    access = _issue(claims["sub"], claims["role"], claims.get("team_id", ""), claims.get("match_id", ""), claims.get("tournament_id", ""), ACCESS_TTL, "access")
     response.set_cookie(COOKIE, access, httponly=True, samesite="lax", max_age=ACCESS_TTL, path="/")
     return {"access_token": access, "expires_in": ACCESS_TTL}
 
@@ -171,7 +189,7 @@ def me(authorization: str = Header(default=""), cr_token: str | None = Cookie(de
     tok = (authorization or "").replace("Bearer ", "").strip() or (cr_token or "")
     claims = _decode(tok, "access")
     return {"username": claims["sub"], "role": claims["role"], "team_id": claims.get("team_id"),
-            "match_id": claims.get("match_id")}
+            "match_id": claims.get("match_id"), "tournament_id": claims.get("tournament_id")}
 
 
 @app.get("/auth/verify")
@@ -188,12 +206,15 @@ def verify(response: Response, authorization: str = Header(default=""), cr_token
 @app.post("/auth/register")
 def register(req: RegisterReq, authorization: str = Header(default=""), cr_token: str | None = Cookie(default=None)):
     _require_instructor(authorization, cr_token)
-    _add_user(req.username, req.password, req.role, req.team_id, req.match_id)
+    _add_user(
+        req.username, req.password, req.role, req.team_id, req.match_id,
+        req.tournament_id,
+    )
     return {"registered": req.username, "role": req.role}
 
 
 class BulkReq(BaseModel):
-    csv: str   # "username,password,role,team_id,match_id" per line (헤더 허용)
+    csv: str   # username,password,role,team_id,match_id,tournament_id
 
 
 @app.post("/auth/users/bulk")
@@ -204,8 +225,12 @@ def bulk(req: BulkReq, authorization: str = Header(default=""), cr_token: str | 
         if not r or r[0].strip().lower() in ("username", "#"):
             continue
         try:
-            _add_user(r[0].strip(), r[1].strip(), r[2].strip(),
-                      r[3].strip() if len(r) > 3 else "", r[4].strip() if len(r) > 4 else "")
+            _add_user(
+                r[0].strip(), r[1].strip(), r[2].strip(),
+                r[3].strip() if len(r) > 3 else "",
+                r[4].strip() if len(r) > 4 else "",
+                r[5].strip() if len(r) > 5 else "",
+            )
             added += 1
         except (IndexError, ValueError) as e:
             errors.append(f"line {i+1}: {e}")

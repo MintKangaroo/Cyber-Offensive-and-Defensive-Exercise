@@ -27,3 +27,9 @@ remains available in the preserved exercise interface.
 Malformed single events are isolated rather than terminating the stream. An
 HTTP authentication error remains visibly degraded and does not silently grant
 operator or competitor views.
+
+The standalone broadcast route deliberately does not use this SSE stream. It
+polls the versioned public snapshot at the server-recommended interval (bounded
+to 2–30 seconds), anchors its countdown to returned server time and retains the
+last confirmed snapshot with a visible `FEED STALE` signal on failure. This
+keeps immediate event timing outside the broadcast disclosure boundary.

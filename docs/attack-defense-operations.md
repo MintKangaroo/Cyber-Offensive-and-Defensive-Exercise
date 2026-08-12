@@ -162,3 +162,51 @@ quality from the external SIEM/EDR record referenced by its SHA-256, not from a
 participant screenshot or repeated API submissions. Use an audited score
 adjustment only after documented referee review. See
 [Stealth Mode Policy](attack-defense-stealth.md).
+
+## LiveCTF tournament operations
+
+Treat a tournament as a parent runbook over independent Matches. Register the
+exact entry and service count in draft, review seeds, then run
+`tournament-seed`; this is the point at which the bracket becomes immutable.
+Run `tournament-reconcile` after a process restart or stage advancement. It is
+idempotent and materializes only ready fixtures.
+
+Before starting a scheduled fixture:
+
+1. reconcile its generated Match through the trusted Kubernetes runtime;
+2. verify checker-to-management reachability and deny-by-default policy;
+3. issue fresh fixture `match_id` + Match-local `team_id` access tokens;
+4. confirm both teams and the referee window; and
+5. call `tournament-fixture-start` with a reason.
+
+Finalize only after disputes and infrastructure incidents are closed. The
+service ends the fixture Match, finalizes its active round and selects the
+scoreboard winner. An exact total/Attack/Availability tie returns a conflict;
+record the referee decision with `--winner-entry-id`. Archive the whole
+tournament schema plus every generated Match/ledger/audit set together.
+
+The static local Compose demo cannot create arbitrary isolated bracket
+containers. Use it for bracket/API development only; use the Kubernetes runtime
+or an externally reviewed per-fixture Compose project for live service play.
+Full commands and recovery boundaries are in
+[LiveCTF Tournament Orchestration](attack-defense-tournament.md).
+
+## Broadcast overlay operations
+
+Use the standalone browser-source route, not the operator or observer shell:
+
+```text
+http://localhost:5178/broadcast/overlay?match_id=ad-demo&layout=scorebar&background=transparent
+```
+
+Before air, verify the Match name, round clock, **PUBLIC PROJECTION** delay and
+last released round. The browser source needs access only to the Live Fire
+static app and the public Attack/Defense API. It must not receive an operator
+token or management-network route. A stale refresh retains the last confirmed
+graphic and changes the signal to **FEED STALE**; take the source off air if the
+displayed public round no longer meets the production rundown.
+
+Use a 1920×1080 source. Choose `transparent` for alpha, `solid` for a full-frame
+venue display or `chroma` for legacy keyers. The complete query contract,
+privacy boundary and examples are in
+[Broadcast Graphics Overlay](attack-defense-broadcast.md).

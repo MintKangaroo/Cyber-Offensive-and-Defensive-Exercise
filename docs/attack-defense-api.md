@@ -12,6 +12,10 @@ only from signed `team_id` and `match_id` claims, never from request bodies.
 `red` and `blue` remain accepted as competitor aliases for compatibility.
 `instructor` and `operator` can use operator routes.
 
+Tournament participants may additionally receive a signed `tournament_id`
+claim. It authorizes only their bracket projection. Fixture mutations still
+require fresh Match-local `match_id` and `team_id` claims.
+
 ## Match and operator routes
 
 | Method | Path | Role |
@@ -36,6 +40,11 @@ only from signed `team_id` and `match_id` claims, never from request bodies.
 | GET | `/api/attack-defense/operator/matches/{id}/koth` | operator real-time ownership and policy |
 | POST | `/api/attack-defense/operator/matches/{id}/stealth/configure` | operator, draft/paused only, reason required |
 | GET | `/api/attack-defense/operator/matches/{id}/stealth` | operator real-time incidents and internal report results |
+| POST | `/api/attack-defense/operator/tournaments` | operator creates a 2/4/8/16-entry single-elimination tournament |
+| GET | `/api/attack-defense/operator/tournaments[/{id}]` | operator list/detail including identity and fixture Match mapping |
+| POST | `/api/attack-defense/operator/tournaments/{id}/entries|services` | operator draft registration |
+| POST | `/api/attack-defense/operator/tournaments/{id}/seed|start|reconcile` | operator lifecycle, reason required |
+| POST | `/api/attack-defense/operator/tournaments/{id}/fixtures/{fixture}/start|finalize` | operator fixture lifecycle, reason required |
 
 The hybrid score event endpoint requires a caller-supplied unique `event_id` and
 rejects categories disabled in Match configuration.
@@ -79,6 +88,7 @@ mandatory. Example:
 | GET | `/api/attack-defense/matches/{id}/scoreboard` | sanitized public/delayed |
 | GET | `/api/attack-defense/public/matches/{id}/state` | public |
 | GET | `/api/attack-defense/public/matches/{id}/service-summary` | aggregate healthy/total only |
+| GET | `/api/attack-defense/public/matches/{id}/broadcast` | versioned no-store public graphics snapshot; delayed scores, aggregate services, optional public bracket; no events or sensitive fields |
 | GET | `/api/attack-defense/matches/{id}/events/stream` | role-filtered SSE |
 | GET | `/api/attack-defense/matches/{id}/captures` | Match competitors, delayed metadata |
 | GET | `/api/attack-defense/matches/{id}/captures/{capture}/download` | Match competitors, delayed/watermarked PCAP |
@@ -86,6 +96,33 @@ mandatory. Example:
 | POST | `/api/attack-defense/matches/{id}/stealth/detections` | competitor, own membership, idempotency key and rate limit |
 | GET | `/api/attack-defense/matches/{id}/stealth` | competitor, own delayed attacker-redacted alerts |
 | GET | `/api/attack-defense/public/matches/{id}/stealth/summary` | delayed service aggregate, no team attribution |
+| GET | `/api/attack-defense/tournaments/{id}` | registered tournament participant projection |
+| GET | `/api/attack-defense/public/tournaments/{id}` | public bracket, no credential/runtime/identity mapping |
+
+Tournament creation example:
+
+```json
+{
+  "id": "livectf-2026",
+  "name": "LiveCTF 2026",
+  "bracket_size": 8,
+  "match_mode": "attack_defense",
+  "round_duration_seconds": 120,
+  "active_flag_window": 3,
+  "match_config": {"scoreboard_delay_rounds": 0}
+}
+```
+
+Fixture finalization normally derives the winner from the finalized operator
+scoreboard. `winner_entry_id` is optional and accepted only for one of the two
+fixture participants; use it for a documented tie-break. See
+[LiveCTF Tournament Orchestration](attack-defense-tournament.md).
+
+The broadcast endpoint intentionally accepts no access token. Its
+`broadcast-overlay.v1` response is a whitelist composition of the existing
+public projections and includes a `disclosure` object with score delay, last
+public round, aggregate-only service policy and explicit false values for
+events/sensitive fields. See [Broadcast Graphics Overlay](attack-defense-broadcast.md).
 
 Flag submission:
 

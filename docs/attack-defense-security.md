@@ -147,3 +147,35 @@ rate-limit, audit and network telemetry controls.
 An indicator hash proves only that a caller supplied a digest. Production must
 sign evidence at collection time, bind it to an immutable SIEM/EDR record and
 provide an adjudication process for disputes and false positives.
+
+## Tournament identity boundary
+
+LiveCTF entry identity is stable, but Match credentials are deliberately not.
+A signed `tournament_id` claim permits only the participant bracket projection;
+it is insufficient for flags, patches or service state. Every fixture uses new
+Match-local team/service IDs and must receive new credentials and secrets.
+Public bracket output strips identity subjects, Match IDs, loser mapping,
+operator reasons and runtime configuration. Operators must never reuse a
+fixture volume, management secret or JWT in a later stage.
+
+The static Compose demo cannot guarantee per-fixture tournament isolation.
+Production LiveCTF play requires Kubernetes namespaces/network policy or an
+equivalently isolated reviewed runtime. Automatic credential rotation,
+signed team check-in and no-show controls remain production work.
+
+## Broadcast projection boundary
+
+The production graphics route never uses an operator or competitor token. Its
+versioned public snapshot is assembled server-side from the delayed public
+scoreboard, aggregate-only service status and public tournament bracket. It
+does not include SSE events because even a sanitized event sequence can reveal
+operational timing that is unnecessary for standings graphics. Endpoint,
+runtime, checker, flag, patch, evidence, identity and referee fields are not
+selected.
+
+The endpoint sends `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`
+and `X-Robots-Tag: noindex, nofollow`. These headers do not replace network
+policy: expose the route through the public reverse proxy only, block operator
+routes from broadcast hosts, and never paste an operator token into OBS. The
+visible delay marker is part of the graphic and should not be cropped. See
+[Broadcast Graphics Overlay](attack-defense-broadcast.md).

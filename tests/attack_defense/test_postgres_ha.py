@@ -49,7 +49,9 @@ def pg_ad(tmp_path: Path):
     value = _components(settings)
     conn = value.db.connect()
     conn.execute(
-        """TRUNCATE stealth_detection_reports,stealth_incidents,
+        """TRUNCATE tournament_match_teams,tournament_fixtures,
+           tournament_stages,tournament_services,tournament_entries,tournaments,
+           stealth_detection_reports,stealth_incidents,
            koth_leases,koth_hills,capture_releases,capture_artifacts,
            runtime_jobs,rate_limits,
            engine_locks,audit_event_stream,audit_events,score_snapshots,
@@ -69,7 +71,7 @@ def test_postgres_migrations_clock_readiness_and_audit_sequence(pg_ad):
     )]
     database_time = pg_ad.db.server_time(conn)
     conn.close()
-    assert versions[-1] == "0006_stealth"
+    assert versions[-1] == "0007_tournaments"
     assert abs(time.time() - database_time) < 5
 
     def record(index: int):

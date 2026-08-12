@@ -221,17 +221,22 @@ implemented sources, not design-only placeholders.
 | Post-MVP — HA game engine | SQLite/PostgreSQL compatibility, advisory Match locks, DB clock, shared rate limits, sequenced SSE audit stream and fenced `SKIP LOCKED` runtime jobs | PostgreSQL migration/readiness, two-engine locking, concurrent submission/rate-limit, job claim/fencing tests; local two-replica HAProxy profile |
 | Post-MVP — KOTH | Optional symmetric-mode team/service hills, append-only round leases, atomic capture/transfer, functionality-gated scoring, API/CLI/metrics and Live Fire board | SQLite policy/lifecycle/redaction/recalculation tests plus PostgreSQL per-hill concurrent capture serialization |
 | Post-MVP — Stealth Mode | Optional delayed incident disclosure, hashed pre-disclosure defender reports, independent attack/detection scoring, visibility floor and role-specific Live Fire projection | Policy/mode, oracle resistance, idempotency, release timing, deterministic score and KOTH delay tests plus PostgreSQL concurrent report serialization |
-| UI 1–3 | Role-specific Live Fire shell, battle/attack/defense/patch/operator/observer screens, SSE recovery, topology, command palette, accessibility and responsive tokens | Vitest `17 passed`; TypeScript/Vite production build passed; Playwright `3 passed` at 1920×1080 and laptop viewports; `npm audit` reports 0 vulnerabilities |
+| Post-MVP — LiveCTF tournament | Deterministic bracket, stable entry identity, isolated fixture Match/team/service materialization, recovery reconciliation, advancement, role-safe API/CLI/metrics/UI | Seed/mode validation, full semifinal-to-final lifecycle, Match-local identity isolation, tie-break, idempotency, RBAC and public-redaction tests |
+| Post-MVP — Broadcast overlay | Versioned public-only snapshot plus standalone scorebar, standings and bracket graphics with alpha/solid/chroma output, server clock, disclosure marker and stale state | Public-projection equality/sensitive-field tests; option bounds; 1920×1080 standings/bracket and RGBA alpha scorebar browser baselines with an operator token present |
+| UI 1–3 | Role-specific Live Fire shell, battle/attack/defense/patch/operator/observer/tournament screens, SSE recovery, topology, command palette, accessibility and responsive tokens | Vitest `19 passed`; TypeScript/Vite production build passed; Playwright `5 passed` at 1920×1080 and laptop viewports; `npm audit` reports 0 vulnerabilities |
 
 The browser regression suite uses typed, deterministic route fixtures. The
 screenshots in `docs/ui/screenshots/` were separately captured against the
 running API and six real demo service containers.
 
-Latest full regression after PCAP, Kubernetes, HA, KOTH and Stealth additions:
-`341 passed, 6 skipped` (the skipped cases require
+Latest full regression after PCAP, Kubernetes, HA, KOTH, Stealth, LiveCTF and
+broadcast additions: `349 passed, 6 skipped` (the skipped cases require
 `ATTACK_DEFENSE_TEST_POSTGRES_URL`). The same six PostgreSQL tests passed
-against PostgreSQL 17 in the explicit HA test profile. Live Fire Vitest remains
-`17 passed`; the production build and dependency audit passed with 0 reported
-vulnerabilities. On the retained 955MB demo database, migration
+against PostgreSQL 17 in the explicit HA test profile. Live Fire Vitest passed
+`19` tests; the production build passed, and the Playwright role/visual suite
+passed `5` tests including public tournament and broadcast graphics. PostgreSQL 17
+applied migration `0007_tournaments` and completed a four-team bracket
+materialization lifecycle in an isolated validation database. On the retained
+955MB demo database, migration
 `0005_metrics_indexes` reduced an observed Prometheus scrape from 13.27 seconds
 to 0.14 seconds without rewriting score, audit or checker rows.

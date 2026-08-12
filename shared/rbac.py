@@ -18,6 +18,7 @@
 향후 확장: 정적 토큰 → 역할 클레임을 담은 JWT로 교체 시 이 모듈의 authenticate()만 바꾸면 된다.
 """
 from __future__ import annotations
+
 import os
 from dataclasses import dataclass
 
@@ -31,6 +32,7 @@ class Identity:
     dev_mode: bool = False   # 토큰 미설정 로컬 개발 여부(역할 검사 우회)
     team_id: str = ""        # JWT 멤버십 클레임(정적 토큰에는 없음)
     match_id: str = ""       # JWT 멤버십 클레임(정적 토큰에는 없음)
+    tournament_id: str = ""  # LiveCTF 상위 identity scope(선택)
 
 
 def _token_role_map() -> dict[str, str]:
@@ -58,7 +60,7 @@ def _jwt_secret() -> str:
     return os.environ.get("AUTH_JWT_SECRET", "").strip()
 
 
-def _decode_jwt(token: str) -> "Identity | None":
+def _decode_jwt(token: str) -> Identity | None:
     """AUTH_JWT_SECRET로 서명된 JWT면 Identity로 디코드. 아니면 None(정적 토큰 등)."""
     secret = _jwt_secret()
     if not secret or token.count(".") != 2:
@@ -76,6 +78,7 @@ def _decode_jwt(token: str) -> "Identity | None":
         role=role,
         team_id=str(claims.get("team_id", "") or ""),
         match_id=str(claims.get("match_id", "") or ""),
+        tournament_id=str(claims.get("tournament_id", "") or ""),
     )
 
 
@@ -111,7 +114,7 @@ def read_enforced() -> bool:
     return os.environ.get("OBSERVER_READ_ENFORCE", "").strip().lower() in ("1", "true", "yes", "on")
 
 
-def require_read(authorization: str) -> "Identity | None":
+def require_read(authorization: str) -> Identity | None:
     """읽기 전용 모니터링 엔드포인트 게이트.
 
     - OBSERVER_READ_ENFORCE 미설정: None 반환(게이트 없음 = 기존 공개 동작).

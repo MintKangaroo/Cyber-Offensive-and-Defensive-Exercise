@@ -31,9 +31,21 @@ The MVP deliberately leaves these next tasks in this order:
    visibility floor, operator/participant/observer API, CLI, metrics and Live
    Fire board are implemented. Signed external evidence, semantic SIEM rule
    evaluation and automatic false-positive adjudication remain.
-6. **LiveCTF tournament** — bracket/match scheduler and tournament identities.
-7. **Broadcast overlay** — production graphics output after privacy and delayed
-   disclosure review.
+6. **LiveCTF tournament — MVP complete** — deterministic 2/4/8/16-team
+   single-elimination bracket, stable tournament entries, isolated fixture
+   Match/team/service materialization, restart reconciliation, scoreboard and
+   referee tie-break advancement, operator/participant/public API, CLI,
+   metrics, audit and role-safe Live Fire bracket are implemented. Automatic
+   time slots, byes/pools/double elimination, credential rotation and dynamic
+   Compose projects remain.
+7. **Broadcast overlay — MVP complete** — standalone OBS/browser-source
+   scorebar, standings and LiveCTF bracket layouts, alpha/solid/chroma
+   backgrounds, server-time countdown, bounded refresh, stale state and a
+   versioned public-only snapshot API are implemented. The projection reuses
+   the delayed scoreboard floor and aggregate service/public tournament views,
+   excludes events and sensitive operational fields, and is covered by
+   privacy plus 1920×1080 RGBA visual tests. NDI/SDI fill-and-key, sponsor CMS,
+   animated transitions and a multi-Match director console remain.
 
 Additional production work: microVM patch sandbox, image provenance/SBOM,
 multi-variant hidden checkers, capacity testing above 12 teams, immutable audit

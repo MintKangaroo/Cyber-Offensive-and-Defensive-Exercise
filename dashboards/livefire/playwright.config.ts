@@ -2,6 +2,9 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
+  // The original baseline directory can be mounted read-only by containerized
+  // CI. Keep generated visual baselines in the repository-owned testDir.
+  snapshotPathTemplate: "{testDir}/snapshots/{arg}{ext}",
   timeout: 30_000,
   expect: { timeout: 5_000 },
   use: {

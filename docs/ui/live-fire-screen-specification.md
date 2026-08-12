@@ -39,6 +39,25 @@ and major events. The public service summary has no team mapping. Observer
 views never receive endpoints, flags, checker evidence, patch image references
 or management details.
 
+### LiveCTF tournament bracket
+
+When authoritative Match state contains a `tournament_id`, every role gains a
+Tournament Bracket destination. Horizontally scrollable stage columns show
+server-confirmed seed, fixture state, advancement and result. Competitors see a
+`YOU` marker only on their stable entry. Operators also see generated fixture
+Match IDs; participant and observer responses contain no Match mapping,
+identity subject, credential, endpoint, checker detail or referee reason. No
+placeholder Match or fake score is rendered.
+
+### Broadcast graphics overlay
+
+`/broadcast/overlay` is a shell-free 16:9 graphics surface for OBS/browser
+capture. `scorebar`, `standings` and `bracket` layouts share a visible public
+delay marker, server-anchored round clock, public-feed health state and bounded
+polling. Transparent alpha, solid and chroma backgrounds are supported. The
+route ignores stored access tokens and consumes only the versioned public
+broadcast snapshot; no SSE events or operational fields enter its state.
+
 ## Responsive behavior
 
 - 1920×1080: fixed navigation, three-part header, two-column operational page.
@@ -53,14 +72,16 @@ or management details.
 The MVP does not yet render packet/flow telemetry, CPU/memory/network charts,
 connection-rate topology edges, browser notifications, sound hooks,
 announcements editor, round-extension/service-disable controls, score freeze
-controls or a production broadcast graphics overlay. Patch-stage timestamps are
+controls. Patch-stage timestamps are
 retained in runtime/audit records but are not yet projected as a per-stage
 participant timeline. Those require additional authoritative projections; no
 random fixture is used in their place.
 
 ## Verified screenshots
 
-These captures use the running demo API; they contain no random telemetry:
+The core role captures use the running demo API. Rows marked as a public
+fixture use the deterministic typed Playwright projection; none contain random
+telemetry:
 
 | Role / viewport | Capture |
 |---|---|
@@ -68,6 +89,10 @@ These captures use the running demo API; they contain no random telemetry:
 | Operator command center · 1920×1080 | [operator-command-1920x1080.png](screenshots/operator-command-1920x1080.png) |
 | Observer live · 1920×1080 | [observer-live-1920x1080.png](screenshots/observer-live-1920x1080.png) |
 | Observer live · 1440×900 | [observer-live-1440x900.png](screenshots/observer-live-1440x900.png) |
+| Observer LiveCTF bracket · 1920×1080 typed API fixture | [observer-tournament-1920.png](../../dashboards/livefire/e2e/snapshots/observer-tournament-1920.png) |
+| Broadcast standings · 1920×1080 public fixture | [broadcast-standings-1920.png](../../dashboards/livefire/e2e/snapshots/broadcast-standings-1920.png) |
+| Broadcast LiveCTF bracket · 1920×1080 public fixture | [broadcast-bracket-1920.png](../../dashboards/livefire/e2e/snapshots/broadcast-bracket-1920.png) |
+| Broadcast scorebar · 1920×1080 RGBA public fixture | [broadcast-scorebar-transparent-1920.png](../../dashboards/livefire/e2e/snapshots/broadcast-scorebar-transparent-1920.png) |
 
 `e2e/live-fire.spec.ts` uses an explicitly typed deterministic fixture for
 visual regression and permission behavior; production screens use

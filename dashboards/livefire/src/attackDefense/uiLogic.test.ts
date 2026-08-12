@@ -17,6 +17,8 @@ describe("role-aware live fire UI", () => {
       "Live Overview", "Scoreboard", "Match Timeline", "Service Status", "Major Events",
     ]);
     expect(visibleNavigation("observer")).not.toContain("Captures");
+    expect(visibleNavigation("observer", true)).toContain("Tournament Bracket");
+    expect(visibleNavigation("competitor", false)).not.toContain("Tournament Bracket");
   });
 
   it("validates and bounds local flag batches", () => {

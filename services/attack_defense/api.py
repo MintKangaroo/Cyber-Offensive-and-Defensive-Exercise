@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -56,11 +57,19 @@ from .schemas import (
     StealthConfigureRequest,
     StealthDetectionReportRequest,
     TeamCreateRequest,
+    TournamentCreateRequest,
+    TournamentEntryCreateRequest,
+    TournamentFixtureFinalizeRequest,
+    TournamentServiceCreateRequest,
 )
 from .scoring import ScoringService
 from .service_fabric import DeclaredComposeRuntime, ServiceRuntime
 from .stealth import StealthService
+from .tournament import TournamentService
 from .utils import json_load, stable_id
+
+
+logger = logging.getLogger("attack_defense.api")
 
 
 @dataclass
@@ -71,6 +80,7 @@ class Components:
     evidence: EvidenceRecorder
     koth: KothService
     stealth: StealthService
+    tournaments: TournamentService
     flags: FlagService
     scoring: ScoringService
     checker: HttpWorkflowChecker
@@ -103,6 +113,7 @@ def build_components(
     stealth = StealthService(db, repo, evidence)
     flags = FlagService(db, repo, settings, evidence, koth, stealth)
     scoring = ScoringService(db, repo, settings, evidence, koth, stealth)
+    tournaments = TournamentService(db, repo, scoring, evidence)
     injector = HttpFlagInjector(settings)
     checker = HttpWorkflowChecker(settings, injector)
     runtime = runtime or DeclaredComposeRuntime()
@@ -118,9 +129,68 @@ def build_components(
         koth=koth,
     )
     return Components(
-        settings, db, repo, evidence, koth, stealth, flags, scoring, checker, runtime, patches,
+        settings, db, repo, evidence, koth, stealth, tournaments, flags, scoring, checker, runtime, patches,
         captures, rate_limiter, engine,
     )
+
+
+def _public_service_summary(c: Components, match_id: str) -> dict:
+    if not c.repo.get_match(match_id):
+        raise KeyError(match_id)
+    conn = c.db.connect()
+    try:
+        rows = [
+            dict(row) for row in conn.execute(
+                """SELECT s.id AS service_id,s.slug AS service,s.name,
+                          COUNT(i.id) AS total,
+                          SUM(CASE WHEN i.status='healthy' THEN 1 ELSE 0 END) AS healthy,
+                          MAX(COALESCE(i.updated_at,0)) AS updated_at
+                   FROM game_services s
+                   LEFT JOIN team_service_instances i ON i.service_id=s.id
+                   WHERE s.match_id=? AND s.enabled=1
+                   GROUP BY s.id,s.slug,s.name ORDER BY s.slug""",
+                (match_id,),
+            )
+        ]
+    finally:
+        conn.close()
+    return {
+        "services": [
+            {
+                **row,
+                "degraded": int(row["total"]) - int(row["healthy"] or 0),
+                "status": (
+                    "healthy"
+                    if int(row["total"]) > 0
+                    and int(row["healthy"] or 0) == int(row["total"])
+                    else "degraded"
+                ),
+            }
+            for row in rows
+        ],
+        "disclosure": "aggregate-only",
+    }
+
+
+def _public_scoreboard(c: Components, match_id: str) -> dict:
+    rows = c.scoring.scoreboard(match_id, public=True)
+    current = c.repo.current_round(match_id)
+    match = c.repo.get_match(match_id)
+    match_config = json_load(match["config"]) if match else {}
+    delay = int(match_config.get(
+        "scoreboard_delay_rounds", c.settings.scoreboard_delay_rounds
+    ))
+    stealth = c.stealth.normalized_config(match_config.get("stealth", {}))
+    if stealth["enabled"]:
+        delay = max(delay, int(stealth["alert_delay_rounds"]))
+    return {
+        "view": "public", "delay_rounds": delay,
+        "last_public_round": max(
+            0, int(current["sequence"] if current else 0) - delay
+        ),
+        "provisional": bool(current and current["status"] != "finalized"),
+        "scoreboard": rows,
+    }
 
 
 def create_app(components: Components | None = None) -> FastAPI:
@@ -130,8 +200,48 @@ def create_app(components: Components | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         nonlocal worker_thread
-        # Recovering consists of ticking persisted running matches. Every stage
-        # is idempotent, so no separate volatile recovery state is needed.
+        # Recover ready tournament fixtures before ticking persisted running
+        # Matches. Both paths use stable IDs and database locks, so a replica
+        # restart cannot create a duplicate bracket Match.
+        if c.settings.enabled:
+            conn = c.db.connect()
+            try:
+                tournament_ids = [row[0] for row in conn.execute(
+                    """SELECT id FROM tournaments
+                       WHERE status IN ('seeded','running') ORDER BY created_at"""
+                )]
+            finally:
+                conn.close()
+            for tournament_id in tournament_ids:
+                try:
+                    with c.db.match_lock(
+                        f"tournament:{tournament_id}",
+                        c.engine.owner_id,
+                        c.settings.engine_lock_seconds,
+                    ) as acquired:
+                        if acquired:
+                            c.tournaments.reconcile(
+                                tournament_id, "startup-recovery"
+                            )
+                except Exception as exc:
+                    logger.exception(
+                        "tournament recovery failed",
+                        extra={"tournament_id": tournament_id},
+                    )
+                    c.evidence.record(AuditContext(
+                        actor="startup-recovery",
+                        event_type="tournament_recovery",
+                        result="failed",
+                        metadata={
+                            "tournament_id": tournament_id,
+                            "error_class": type(exc).__name__,
+                        },
+                        event_id=stable_id(
+                            "audit", "tournament-recovery", tournament_id,
+                            type(exc).__name__, int(time.time()),
+                        ),
+                    ))
+        # Persisted running Matches resume through the idempotent tick engine.
         if c.settings.auto_engine and c.settings.enabled:
             worker_thread = threading.Thread(
                 target=c.engine.run_forever, name="ad-game-engine", daemon=True
@@ -188,8 +298,8 @@ def create_app(components: Components | None = None) -> FastAPI:
         ident = require_role(authorization, {"competitor", "red", "blue"})
         if ident.dev_mode and not c.settings.allow_insecure_dev_auth:
             raise HTTPException(401, "competitor authentication must be configured")
-        if not ident.team_id:
-            raise HTTPException(403, "team membership claim required")
+        if not ident.team_id and not ident.tournament_id:
+            raise HTTPException(403, "team or tournament membership claim required")
         return ident
 
     def membership(match_id: str, ident: Identity) -> dict:
@@ -275,6 +385,220 @@ def create_app(components: Components | None = None) -> FastAPI:
     @app.get("/api/attack-defense/operator/matches")
     def operator_matches(_: Identity = Depends(operator)):
         return {"matches": c.repo.list_matches()}
+
+    # ---- LiveCTF tournament orchestration --------------------------------
+    @app.post("/api/attack-defense/operator/tournaments", status_code=201)
+    def create_tournament(
+        req: TournamentCreateRequest, ident: Identity = Depends(operator)
+    ):
+        try:
+            return c.tournaments.create(
+                name=req.name,
+                bracket_size=req.bracket_size,
+                match_mode=req.match_mode,
+                round_duration_seconds=(
+                    req.round_duration_seconds
+                    or c.settings.round_duration_seconds
+                ),
+                active_flag_window=(
+                    req.active_flag_window
+                    or c.settings.active_flag_window_rounds
+                ),
+                match_config=req.match_config,
+                actor=ident.actor,
+                tournament_id=req.id,
+            )
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+        except c.db.integrity_error:
+            raise HTTPException(409, "tournament already exists")
+
+    @app.get("/api/attack-defense/operator/tournaments")
+    def list_tournaments(_: Identity = Depends(operator)):
+        conn = c.db.connect()
+        try:
+            rows = [dict(row) for row in conn.execute(
+                """SELECT id,name,format,status,match_mode,bracket_size,
+                          current_stage,winner_entry_id,starts_at,completed_at,
+                          created_at,updated_at
+                   FROM tournaments ORDER BY created_at DESC"""
+            )]
+        finally:
+            conn.close()
+        return {"tournaments": rows}
+
+    @app.get("/api/attack-defense/operator/tournaments/{tournament_id}")
+    def operator_tournament(
+        tournament_id: str, _: Identity = Depends(operator)
+    ):
+        try:
+            return c.tournaments.state(tournament_id, operator=True)
+        except KeyError:
+            raise HTTPException(404, "tournament not found")
+
+    @app.post(
+        "/api/attack-defense/operator/tournaments/{tournament_id}/entries",
+        status_code=201,
+    )
+    def register_tournament_entry(
+        tournament_id: str,
+        req: TournamentEntryCreateRequest,
+        ident: Identity = Depends(operator),
+    ):
+        try:
+            return c.tournaments.add_entry(
+                tournament_id,
+                slug=req.slug,
+                name=req.name,
+                identity_subject=req.identity_subject,
+                seed=req.seed,
+                actor=ident.actor,
+                entry_id=req.id,
+            )
+        except KeyError:
+            raise HTTPException(404, "tournament not found")
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
+        except c.db.integrity_error:
+            raise HTTPException(409, "tournament entry already exists")
+
+    @app.post(
+        "/api/attack-defense/operator/tournaments/{tournament_id}/services",
+        status_code=201,
+    )
+    def register_tournament_service(
+        tournament_id: str,
+        req: TournamentServiceCreateRequest,
+        ident: Identity = Depends(operator),
+    ):
+        try:
+            return c.tournaments.add_service(
+                tournament_id,
+                slug=req.slug,
+                name=req.name,
+                base_image=req.base_image,
+                base_image_digest=req.base_image_digest,
+                internal_port=req.internal_port,
+                checker_type=req.checker_type,
+                config=req.config,
+                actor=ident.actor,
+                service_id=req.id,
+            )
+        except KeyError:
+            raise HTTPException(404, "tournament not found")
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
+        except c.db.integrity_error:
+            raise HTTPException(409, "tournament service already exists")
+
+    @app.post("/api/attack-defense/operator/tournaments/{tournament_id}/seed")
+    def seed_tournament(
+        tournament_id: str,
+        req: ReasonRequest,
+        ident: Identity = Depends(operator),
+    ):
+        try:
+            with c.engine.exclusive_match(f"tournament:{tournament_id}"):
+                return c.tournaments.seed(tournament_id, ident.actor, req.reason)
+        except KeyError:
+            raise HTTPException(404, "tournament not found")
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
+
+    @app.post("/api/attack-defense/operator/tournaments/{tournament_id}/start")
+    def start_tournament(
+        tournament_id: str,
+        req: ReasonRequest,
+        ident: Identity = Depends(operator),
+    ):
+        try:
+            with c.engine.exclusive_match(f"tournament:{tournament_id}"):
+                return c.tournaments.start(tournament_id, ident.actor, req.reason)
+        except KeyError:
+            raise HTTPException(404, "tournament not found")
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
+
+    @app.post("/api/attack-defense/operator/tournaments/{tournament_id}/reconcile")
+    def reconcile_tournament(
+        tournament_id: str,
+        req: ReasonRequest,
+        ident: Identity = Depends(operator),
+    ):
+        try:
+            with c.engine.exclusive_match(f"tournament:{tournament_id}"):
+                result = c.tournaments.reconcile(tournament_id, ident.actor)
+                result["reason"] = req.reason
+                return result
+        except KeyError:
+            raise HTTPException(404, "tournament not found")
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
+
+    @app.post(
+        "/api/attack-defense/operator/tournaments/{tournament_id}"
+        "/fixtures/{fixture_id}/start"
+    )
+    def start_tournament_fixture(
+        tournament_id: str,
+        fixture_id: str,
+        req: ReasonRequest,
+        ident: Identity = Depends(operator),
+    ):
+        try:
+            with c.engine.exclusive_match(f"tournament:{tournament_id}"):
+                fixture = c.tournaments.fixture(fixture_id, operator=True)
+                if fixture["tournament_id"] != tournament_id:
+                    raise KeyError(fixture_id)
+                if fixture["status"] == "running":
+                    return fixture
+                match = c.repo.get_match(fixture["match_id"])
+                if not match:
+                    raise ValueError("fixture has no materialized Match")
+                if match["status"] == "draft":
+                    c.engine.start_match(match["id"], ident.actor)
+                elif match["status"] != "running":
+                    raise ValueError("fixture Match cannot start from current state")
+                return c.tournaments.mark_fixture_running(
+                    fixture_id, ident.actor, req.reason
+                )
+        except KeyError:
+            raise HTTPException(404, "tournament fixture not found")
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
+
+    @app.post(
+        "/api/attack-defense/operator/tournaments/{tournament_id}"
+        "/fixtures/{fixture_id}/finalize"
+    )
+    def finalize_tournament_fixture(
+        tournament_id: str,
+        fixture_id: str,
+        req: TournamentFixtureFinalizeRequest,
+        ident: Identity = Depends(operator),
+    ):
+        try:
+            with c.engine.exclusive_match(f"tournament:{tournament_id}"):
+                fixture = c.tournaments.fixture(fixture_id, operator=True)
+                if fixture["tournament_id"] != tournament_id:
+                    raise KeyError(fixture_id)
+                if fixture["status"] == "finalized":
+                    return fixture
+                if fixture["status"] != "running":
+                    raise ValueError("only running fixtures can be finalized")
+                match = c.repo.get_match(fixture["match_id"])
+                if match and match["status"] in {"running", "paused"}:
+                    c.engine.end_match(match["id"], ident.actor, req.reason)
+                return c.tournaments.finalize_fixture(
+                    fixture_id,
+                    ident.actor,
+                    req.reason,
+                    req.winner_entry_id,
+                )
+        except KeyError:
+            raise HTTPException(404, "tournament fixture not found")
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
 
     @app.get("/api/attack-defense/operator/ha/status")
     def ha_status(_: Identity = Depends(operator)):
@@ -776,12 +1100,38 @@ def create_app(components: Components | None = None) -> FastAPI:
         return {"captures": c.captures.list(match_id, operator=True)}
 
     # ---- Participant/public views -----------------------------------------
+    @app.get("/api/attack-defense/public/tournaments/{tournament_id}")
+    def public_tournament(tournament_id: str):
+        try:
+            return c.tournaments.state(tournament_id, operator=False)
+        except KeyError:
+            raise HTTPException(404, "tournament not found")
+
+    @app.get("/api/attack-defense/tournaments/{tournament_id}")
+    def participant_tournament(
+        tournament_id: str, ident: Identity = Depends(competitor)
+    ):
+        entry = c.tournaments.resolve_entry(
+            tournament_id,
+            actor=ident.actor,
+            tournament_claim=ident.tournament_id,
+            match_id=ident.match_id,
+            team_id=ident.team_id,
+        )
+        if not entry:
+            raise HTTPException(403, "tournament membership required")
+        try:
+            return c.tournaments.participant_state(tournament_id, entry["id"])
+        except KeyError:
+            raise HTTPException(404, "tournament not found")
+
     @app.get("/api/attack-defense/public/matches/{match_id}/state")
     def public_match_state(match_id: str):
         match = c.repo.get_match(match_id)
         if not match:
             raise HTTPException(404, "match not found")
         round_row = c.repo.current_round(match_id)
+        config = json_load(match["config"])
         return {
             "id": match["id"], "name": match["name"], "mode": match["mode"],
             "status": match["status"], "starts_at": match["starts_at"],
@@ -789,6 +1139,8 @@ def create_app(components: Components | None = None) -> FastAPI:
             "round_status": round_row["status"] if round_row else None,
             "round_ends_at": round_row["ends_at"] if round_row else None,
             "server_time": server_now(),
+            "tournament_id": config.get("tournament_id"),
+            "tournament_fixture_id": config.get("tournament_fixture_id"),
         }
 
     @app.get("/api/attack-defense/matches/{match_id}/state")
@@ -798,6 +1150,7 @@ def create_app(components: Components | None = None) -> FastAPI:
         if not match:
             raise HTTPException(404, "match not found")
         round_row = c.repo.current_round(match_id)
+        config = json_load(match["config"])
         return {
             "id": match["id"], "name": match["name"], "mode": match["mode"],
             "status": match["status"], "starts_at": match["starts_at"],
@@ -806,6 +1159,8 @@ def create_app(components: Components | None = None) -> FastAPI:
             "round_ends_at": round_row["ends_at"] if round_row else None,
             "server_time": server_now(),
             "team": {"id": team["id"], "name": team["name"]},
+            "tournament_id": config.get("tournament_id"),
+            "tournament_fixture_id": config.get("tournament_fixture_id"),
         }
 
     @app.get("/api/attack-defense/matches/{match_id}/services/me")
@@ -829,39 +1184,10 @@ def create_app(components: Components | None = None) -> FastAPI:
 
     @app.get("/api/attack-defense/public/matches/{match_id}/service-summary")
     def public_service_summary(match_id: str):
-        if not c.repo.get_match(match_id):
+        try:
+            return _public_service_summary(c, match_id)
+        except KeyError:
             raise HTTPException(404, "match not found")
-        conn = c.db.connect()
-        rows = [
-            dict(row) for row in conn.execute(
-                """SELECT s.id AS service_id,s.slug AS service,s.name,
-                          COUNT(i.id) AS total,
-                          SUM(CASE WHEN i.status='healthy' THEN 1 ELSE 0 END) AS healthy,
-                          MAX(COALESCE(i.updated_at,0)) AS updated_at
-                   FROM game_services s
-                   LEFT JOIN team_service_instances i ON i.service_id=s.id
-                   WHERE s.match_id=? AND s.enabled=1
-                   GROUP BY s.id,s.slug,s.name ORDER BY s.slug""",
-                (match_id,),
-            )
-        ]
-        conn.close()
-        return {
-            "services": [
-                {
-                    **row,
-                    "degraded": int(row["total"]) - int(row["healthy"] or 0),
-                    "status": (
-                        "healthy"
-                        if int(row["total"]) > 0
-                        and int(row["healthy"] or 0) == int(row["total"])
-                        else "degraded"
-                    ),
-                }
-                for row in rows
-            ],
-            "disclosure": "aggregate-only",
-        }
 
     @app.get("/api/attack-defense/matches/{match_id}/services/{service_id}/docs")
     def service_docs(
@@ -1068,26 +1394,60 @@ def create_app(components: Components | None = None) -> FastAPI:
     @app.get("/api/attack-defense/matches/{match_id}/scoreboard")
     def public_scoreboard(match_id: str):
         try:
-            rows = c.scoring.scoreboard(match_id, public=True)
+            return _public_scoreboard(c, match_id)
+        except KeyError:
+            raise HTTPException(404, "match not found")
+
+    @app.get("/api/attack-defense/public/matches/{match_id}/broadcast")
+    def public_broadcast_snapshot(match_id: str, response: Response):
+        """Return one explicitly public, broadcast-safe graphics snapshot."""
+        match = c.repo.get_match(match_id)
+        if not match:
+            raise HTTPException(404, "match not found")
+        try:
+            scoreboard = _public_scoreboard(c, match_id)
+            services = _public_service_summary(c, match_id)
         except KeyError:
             raise HTTPException(404, "match not found")
         current = c.repo.current_round(match_id)
-        match = c.repo.get_match(match_id)
-        match_config = json_load(match["config"]) if match else {}
-        delay = int(match_config.get(
-            "scoreboard_delay_rounds", c.settings.scoreboard_delay_rounds
-        ))
-        stealth = c.stealth.normalized_config(match_config.get("stealth", {}))
-        if stealth["enabled"]:
-            delay = max(delay, int(stealth["alert_delay_rounds"]))
+        match_config = json_load(match["config"])
+        tournament_id = match_config.get("tournament_id")
+        tournament = None
+        if tournament_id:
+            try:
+                tournament = c.tournaments.state(tournament_id, operator=False)
+            except KeyError:
+                tournament = None
+        generated_at = server_now()
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
         return {
-            "view": "public", "delay_rounds": delay,
-            "last_public_round": max(
-                0, int(current["sequence"] if current else 0)
-                - delay
-            ),
-            "provisional": bool(current and current["status"] != "finalized"),
-            "scoreboard": rows,
+            "schema_version": "broadcast-overlay.v1",
+            "generated_at": generated_at,
+            "refresh_after_seconds": 5,
+            "match": {
+                "id": match["id"], "name": match["name"],
+                "mode": match["mode"], "status": match["status"],
+                "starts_at": match["starts_at"],
+                "round": current["sequence"] if current else 0,
+                "round_status": current["status"] if current else None,
+                "round_ends_at": current["ends_at"] if current else None,
+                "server_time": generated_at,
+                "tournament_id": tournament_id,
+            },
+            "scoreboard": scoreboard,
+            "services": services["services"],
+            "tournament": tournament,
+            "disclosure": {
+                "audience": "public-broadcast",
+                "scoreboard": "delayed-public-projection",
+                "scoreboard_delay_rounds": scoreboard["delay_rounds"],
+                "last_public_round": scoreboard["last_public_round"],
+                "services": services["disclosure"],
+                "events_included": False,
+                "sensitive_fields_included": False,
+            },
         }
 
     @app.get("/api/attack-defense/matches/{match_id}/koth")

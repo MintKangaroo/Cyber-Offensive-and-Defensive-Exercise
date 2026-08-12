@@ -102,3 +102,22 @@ copy a flag or token hash. Participant projections omit attacker, submission,
 report-match and evidence fields. Reconfiguration advances `activated_at` in
 Match config so historical rows remain auditable without re-entering current
 scoring or disclosure.
+
+## LiveCTF tournament tables
+
+Migration `0007_tournaments` adds an orchestration layer without changing the
+three Match modes or existing score tables.
+
+| Table | Purpose and key constraints |
+|---|---|
+| `tournaments` | Single-elimination policy, status, bracket size, fixture Match defaults and champion |
+| `tournament_entries` | Stable cross-fixture identity; unique tournament slug, identity subject and seed |
+| `tournament_services` | Service templates copied into every materialized fixture Match |
+| `tournament_stages` | Ordered bracket stages; unique `(tournament_id, sequence)` |
+| `tournament_fixtures` | Two entry slots, isolated Match, winner/result and lifecycle; unique stage position and Match |
+| `tournament_match_teams` | Operator-only mapping from stable entry to fresh Match-local team ID |
+
+Tournament rows do not own flags, checks, patches or scores. Those remain under
+the fixture's ordinary Match foreign-key boundary. Back up migration `0007`
+rows, every generated Match and its append-only evidence as one recovery set;
+do not drop only the tournament tables after play has begun.

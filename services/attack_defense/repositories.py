@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from .db import Database
 from .koth import KothService
 from .mode_strategies import strategy_for, supported_score_categories
-from .stealth import STEALTH_SCORE_TYPES, StealthService
 from .models import ROUND_TRANSITIONS, assert_transition
+from .stealth import STEALTH_SCORE_TYPES, StealthService
 from .utils import canonical_json, evidence_hash, json_load, stable_id
 
 
@@ -16,16 +17,10 @@ class AttackDefenseRepository:
     def __init__(self, db: Database):
         self.db = db
 
-    def create_match(
-        self,
-        name: str,
-        round_duration_seconds: int,
-        active_flag_window: int,
-        config: dict[str, Any],
-        match_id: str | None = None,
-        mode: str = "attack_defense",
-    ) -> dict:
-        mid = match_id or str(uuid.uuid4())
+    @staticmethod
+    def normalize_match_config(
+        mode: str, config: dict[str, Any]
+    ) -> dict[str, Any]:
         strategy = strategy_for(mode)
         koth_config = KothService.normalized_config(config.get("koth", {}))
         stealth_config = StealthService.normalized_config(config.get("stealth", {}))
@@ -85,6 +80,19 @@ class AttackDefenseRepository:
                 ),
             },
         }
+        return merged_config
+
+    def create_match(
+        self,
+        name: str,
+        round_duration_seconds: int,
+        active_flag_window: int,
+        config: dict[str, Any],
+        match_id: str | None = None,
+        mode: str = "attack_defense",
+    ) -> dict:
+        mid = match_id or str(uuid.uuid4())
+        merged_config = self.normalize_match_config(mode, config)
         with self.db.transaction(immediate=True) as conn:
             now = self.db.server_time(conn)
             conn.execute(

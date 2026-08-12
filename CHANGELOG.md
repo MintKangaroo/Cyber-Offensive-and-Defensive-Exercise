@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 ### Added
+- **Live Fire 방송 오버레이**: OBS/browser-source 전용 `scorebar`·`standings`·LiveCTF
+  `bracket` 레이아웃과 transparent/solid/chroma 출력을 추가. 전용 무인증
+  `broadcast-overlay.v1` API는 public delayed scoreboard, aggregate 서비스 상태와
+  공개 대진표만 화이트리스트로 합성하며 operator token·이벤트·endpoint·flag·checker/
+  patch/runtime 정보를 사용하지 않음. 1920×1080 시각 회귀와 실제 RGBA alpha 배경,
+  공개 projection 동일성/민감 필드 부재 검증 완료. 전체 `349 passed, 6 skipped`,
+  Live Fire Vitest `19 passed`, Playwright `5 passed`, npm audit 취약점 0건.
 - **클라우드 네이티브 공격면 트윈(신규 도메인)**: `services/cloud_native`(8209) — ICS 일변도에서
   현대 클라우드/컨테이너 공격면 추가. 5개 취약점: IMDS SSRF 자격증명 탈취(CLD-001, T1552.005)·
   노출된 Docker API exec(CLD-002, T1610)·kubelet 익명 exec(CLD-003, T1609)·시크릿 노출(CLD-004,

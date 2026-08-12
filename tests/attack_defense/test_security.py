@@ -79,6 +79,57 @@ def test_public_service_summary_is_aggregate_only(ad):
     assert "image_digest" not in serialized
 
 
+def test_broadcast_snapshot_uses_only_public_delayed_projections(ad):
+    bootstrap(ad, teams=2, services=1)
+    with ad.db.transaction(immediate=True) as conn:
+        conn.execute(
+            "UPDATE matches SET config=? WHERE id='match-1'",
+            ('{"scoreboard_delay_rounds":3}',),
+        )
+        conn.execute(
+            """UPDATE team_service_instances
+               SET status=CASE WHEN team_id='team-1' THEN 'healthy' ELSE 'degraded' END,
+                   endpoint='http://private-runtime:9000',
+                   management_endpoint='http://private-runtime:9001',
+                   image_digest='sha256:private-image'"""
+        )
+    client = TestClient(create_app(ad))
+    response = client.get(
+        "/api/attack-defense/public/matches/match-1/broadcast"
+    )
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["x-robots-tag"] == "noindex, nofollow"
+    body = response.json()
+    assert body["schema_version"] == "broadcast-overlay.v1"
+    assert body["scoreboard"] == client.get(
+        "/api/attack-defense/matches/match-1/scoreboard"
+    ).json()
+    assert body["services"] == client.get(
+        "/api/attack-defense/public/matches/match-1/service-summary"
+    ).json()["services"]
+    assert body["disclosure"] == {
+        "audience": "public-broadcast",
+        "scoreboard": "delayed-public-projection",
+        "scoreboard_delay_rounds": 3,
+        "last_public_round": 0,
+        "services": "aggregate-only",
+        "events_included": False,
+        "sensitive_fields_included": False,
+    }
+    assert body["services"][0]["healthy"] == 1
+    assert body["services"][0]["degraded"] == 1
+    serialized = response.text
+    for private_field in (
+        "endpoint", "management_endpoint", "image_digest", "checker_type",
+        "identity_subject", "validation_result", "event_id",
+    ):
+        assert private_field not in serialized
+    assert client.get(
+        "/api/attack-defense/public/matches/missing/broadcast"
+    ).status_code == 404
+
+
 def test_patch_submission_enters_durable_validation_queue(ad, monkeypatch):
     bootstrap(ad, teams=2, services=1)
     monkeypatch.setenv("AUTH_JWT_SECRET", SECRET)

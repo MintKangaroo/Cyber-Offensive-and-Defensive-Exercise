@@ -11,6 +11,8 @@ SQLite database or PostgreSQL schema.
 - `0005_metrics_indexes.sql`: covering indexes for cumulative checker latency
   and audit event metric aggregation on long-running Matches.
 - `0006_stealth.sql`: delayed attack incidents and defender detection reports.
+- `0007_tournaments.sql`: tournament identities, service templates, stages,
+  fixtures and isolated Match Team mappings.
 
 The MVP rollback boundary is the whole additive database:
 

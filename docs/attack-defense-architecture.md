@@ -14,6 +14,12 @@ No A/D round or flag behavior is injected into `exercise`. Mission injects are
 not required by `attack_defense`. Hybrid composition is explicit in the Match
 mode and its enabled score categories.
 
+LiveCTF tournament orchestration sits above these modes. It accepts only
+`attack_defense` or `hybrid_live_fire`, materializes each fixture as a fresh
+ordinary Match, and never introduces a fourth `mode` value. Tournament entry
+identity is mapped to a new Match-local team identity for every stage so Match
+flags, patches, scores and credentials remain isolated.
+
 ## Components
 
 ```mermaid
@@ -22,6 +28,7 @@ flowchart LR
   Competitor -->|JWT / submit / patch| API["Attack/Defense API :8100"]
   Operator --> API
   Observer -->|sanitized/delayed| API
+  Broadcast["OBS / venue graphics"] -->|public snapshot only| API
   Engine["Idempotent tick engine"] --> Flags["HMAC flag service"]
   Engine --> Checker["Functional checker"]
   Flags -->|signed management request| Game
@@ -36,6 +43,8 @@ flowchart LR
   API --> Privacy["In-memory scrub + pseudonymize"]
   Privacy --> Captures[("Sanitized artifacts")]
   Captures -->|delayed + team re-key + watermark| Competitor
+  Tournament["LiveCTF bracket orchestrator"] -->|materialize fixture Match| API
+  Tournament --> DB
 ```
 
 Responsibility is divided under `services/attack_defense/`:
@@ -57,9 +66,20 @@ Responsibility is divided under `services/attack_defense/`:
 - `evidence`: sanitized append-only audit events.
 - `pcap_privacy`: fail-closed classic-PCAP parsing, in-memory raw-data scrub,
   address pseudonymization, delayed team-specific release and watermark audit.
+- `tournament`: deterministic bracket seeding, isolated fixture materialization,
+  restart reconciliation and score/referee based advancement.
+- Public broadcast projection: a versioned, no-store whitelist composed from
+  delayed scores, aggregate service posture and the public tournament bracket;
+  it never consumes operator state or the event stream.
 - `api`, `schemas`, `repositories`, `migrations`: transport and persistence.
 - `mode_strategies`: `MatchModeStrategy`, `AttackPolicy`, `CheckerPolicy`,
   `InjectPolicy`, `ServiceDeploymentPolicy`, and `ScoreVisibilityPolicy`.
+
+The browser graphics route is intentionally outside the role-aware operations
+shell. Even if the browser profile contains an operator token, it calls only
+`/public/matches/{id}/broadcast` without authorization. This makes the backend
+field whitelist—not UI hiding—the disclosure boundary. See
+[Broadcast Graphics Overlay](attack-defense-broadcast.md).
 
 ## Round processing
 
@@ -136,3 +156,16 @@ attacker-redacted incidents after the disclosure round; observers receive a
 delayed service aggregate. Public scoreboard and KOTH state use the same delay
 floor, while immediate incident and KOTH ownership SSE events are suppressed.
 See [Stealth Mode Policy](attack-defense-stealth.md).
+
+## LiveCTF tournament composition
+
+The tournament service pre-creates stable bracket stages and fixtures, then
+materializes only fixtures whose two entry slots are known. A materialized
+fixture receives fresh Match/team/service IDs and is thereafter handled by the
+normal Game Engine. Finalization reads that Match's authoritative operator
+scoreboard, advances one stable entry in the same transaction, and reconciles
+the next stage. Exact ties require an explicit referee decision and reason.
+
+Public projections omit Match IDs and identity subjects. Tournament-scoped JWTs
+cannot submit flags or patches; every fixture requires fresh Match-local claims.
+See [LiveCTF Tournament Orchestration](attack-defense-tournament.md).

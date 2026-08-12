@@ -75,6 +75,25 @@ def test_refresh_token_not_accepted_as_access():
     assert ei.value.status_code == 401
 
 
+def test_tournament_identity_claim_is_preserved():
+    token = jwt.encode(
+        {
+            "sub": "captain-1",
+            "role": "competitor",
+            "tournament_id": "tournament-1",
+            "type": "access",
+            "exp": int(time.time()) + 300,
+        },
+        SECRET,
+        algorithm="HS256",
+    )
+    ident = rbac.require_role(f"Bearer {token}", {"competitor"})
+    assert ident.actor == "captain-1"
+    assert ident.tournament_id == "tournament-1"
+    assert ident.match_id == ""
+    assert ident.team_id == ""
+
+
 def test_static_token_backward_compat(monkeypatch):
     # JWT 시크릿 없이 정적 토큰만 있어도 기존 방식 동작(하위호환)
     monkeypatch.delenv("AUTH_JWT_SECRET", raising=False)

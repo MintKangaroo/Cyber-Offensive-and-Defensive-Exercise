@@ -15,12 +15,93 @@ export interface MatchState {
   round_ends_at?: number | null;
   server_time: number;
   team?: { id: string; name: string };
+  tournament_id?: string | null;
+  tournament_fixture_id?: string | null;
+}
+
+export interface TournamentEntry {
+  id: string;
+  slug: string;
+  name: string;
+  seed: number | null;
+  status: "registered" | "eliminated" | "champion";
+}
+
+export interface TournamentStage {
+  id: string;
+  sequence: number;
+  name: string;
+  status: "pending" | "scheduled" | "active" | "finalized";
+  completed_at?: number | null;
+}
+
+export interface TournamentFixture {
+  id: string;
+  stage_id: string;
+  stage_sequence: number;
+  bracket_position: number;
+  status: "pending" | "scheduled" | "running" | "finalized";
+  team_a_entry_id?: string | null;
+  team_b_entry_id?: string | null;
+  team_a?: string | null;
+  team_b?: string | null;
+  winner_entry_id?: string | null;
+  winner?: string | null;
+  match_id?: string | null;
+  result?: { scores?: Record<string, { total: number }> };
+  scheduled_at?: number | null;
+  started_at?: number | null;
+  completed_at?: number | null;
+}
+
+export interface TournamentState {
+  id: string;
+  name: string;
+  format: "single_elimination";
+  status: "draft" | "seeded" | "running" | "completed" | "failed";
+  match_mode: "attack_defense" | "hybrid_live_fire";
+  bracket_size: number;
+  current_stage: number;
+  winner_entry_id?: string | null;
+  entries: TournamentEntry[];
+  stages: TournamentStage[];
+  fixtures: TournamentFixture[];
+  services: Array<{ id: string; slug: string; name: string }>;
+  disclosure: string;
+  identity?: {
+    entry_id: string;
+    fixtures: Array<{
+      fixture_id: string; match_id: string; match_team_id: string;
+      status: string; stage_sequence: number; bracket_position: number;
+    }>;
+    credential_scope: string;
+  };
+}
+
+export interface BroadcastSnapshot {
+  schema_version: "broadcast-overlay.v1";
+  generated_at: number;
+  refresh_after_seconds: number;
+  match: MatchState;
+  scoreboard: ScoreboardResponse;
+  services: ServiceInstance[];
+  tournament: TournamentState | null;
+  disclosure: {
+    audience: "public-broadcast";
+    scoreboard: "delayed-public-projection";
+    scoreboard_delay_rounds: number;
+    last_public_round: number;
+    services: "aggregate-only";
+    events_included: false;
+    sensitive_fields_included: false;
+  };
 }
 
 export interface ServiceInstance {
   id: string;
   service_id: string;
   service: string;
+  name?: string;
   team_id?: string;
   team_slug?: string;
   service_slug?: string;
@@ -205,6 +286,7 @@ export interface RuntimeSnapshot {
   captures: CaptureRecord[];
   koth: KothState | null;
   stealth: StealthState | null;
+  tournament: TournamentState | null;
 }
 
 export const NAVIGATION: Record<LiveRole, string[]> = {

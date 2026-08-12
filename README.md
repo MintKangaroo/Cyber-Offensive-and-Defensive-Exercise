@@ -145,10 +145,10 @@ rollback합니다.
 
 검증된 상태:
 
-- 기존 exercise/ICS를 포함한 Python 전체 회귀: **341 passed, 6 skipped**
+- 기존 exercise/ICS를 포함한 Python 전체 회귀: **349 passed, 6 skipped**
   (PostgreSQL 전용 6개는 별도 PostgreSQL 17 실행에서 모두 통과)
-- React/Vitest 컴포넌트 테스트: **17 passed**
-- Playwright 역할·권한·키보드·시각 회귀: **3 passed**
+- React/Vitest 컴포넌트 테스트: **19 passed**
+- Playwright 역할·권한·키보드·시각 회귀: **5 passed**
 - 3팀 × 2서비스 실제 Compose health, round 재시작 복구, flag 제출·중복 차단,
   digest-pinned patch 배포·rollback 경로 검증
 - Vite production build 및 `npm audit` 통과
@@ -389,6 +389,99 @@ python3 -m services.attack_defense.cli ad stealth-status ad-demo
 `pending_verification`으로 응답하므로 탐지 oracle로 사용할 수 없습니다. 공개
 scoreboard와 KOTH 상태에도 동일한 공개 지연 하한이 적용됩니다. 자세한 사용법과
 한계는 [Stealth Mode Policy](docs/attack-defense-stealth.md)를 참고하십시오.
+
+### 선택 사항: LiveCTF 토너먼트 운영
+
+LiveCTF는 네 번째 경기 모드가 아닙니다. 여러 개의 `attack_defense` 또는
+`hybrid_live_fire` 경기를 단일 탈락 대진으로 묶는 상위 운영 계층입니다. 각
+대진은 새 Match·팀 ID·서비스 인스턴스·플래그·점수 ledger를 사용하므로 이전
+대진의 토큰이나 패치 상태가 다음 대진으로 넘어가지 않습니다. 기존 `exercise`
+모드는 토너먼트에 등록되지 않으며 그대로 유지됩니다.
+
+가장 짧은 4팀 생성 흐름은 다음과 같습니다.
+
+```bash
+export INSTRUCTOR_TOKEN='<operator token>'
+
+# 1) 토너먼트 생성
+python3 -m services.attack_defense.cli ad tournament-create \
+  --id livectf-demo --name "LiveCTF Demo" --bracket-size 4 \
+  --match-mode attack_defense
+
+# 2) 팀 등록: identity-subject는 로그인 username/JWT sub와 일치시킵니다.
+for n in 1 2 3 4; do
+  python3 -m services.attack_defense.cli ad tournament-entry-add livectf-demo \
+    --id "entry-${n}" --slug "team-0${n}" --name "Team ${n}" \
+    --identity-subject "team0${n}" --seed "${n}"
+done
+
+# 3) 공통 취약 서비스 등록(두 번째 서비스도 같은 방식으로 추가 가능)
+python3 -m services.attack_defense.cli ad tournament-service-add livectf-demo \
+  --id tournament-notes --slug vulnerable-notes --name "Vulnerable Notes" \
+  --base-image registry.local:5000/base/vulnerable-notes:v1 \
+  --internal-port 9000 --checker-type vulnerable_notes \
+  --config '{"endpoint_template":"http://{team_slug}-{service_slug}:9000","management_endpoint_template":"http://{team_slug}-{service_slug}:9001"}'
+
+# 4) 대진 확정 및 토너먼트 시작
+python3 -m services.attack_defense.cli ad tournament-seed livectf-demo \
+  --reason "approved tournament seeding"
+python3 -m services.attack_defense.cli ad tournament-start livectf-demo \
+  --reason "competition window opened"
+python3 -m services.attack_defense.cli ad tournament-status livectf-demo
+```
+
+`tournament-status`에서 `scheduled` fixture의 ID와 Match ID를 확인하고, 서비스
+배포 및 참가자용 새 Match JWT 발급이 끝난 뒤 경기를 시작합니다.
+
+```bash
+python3 -m services.attack_defense.cli ad tournament-fixture-start \
+  livectf-demo '<fixture-id>' --reason "teams and checker ready"
+python3 -m services.attack_defense.cli ad tournament-fixture-finalize \
+  livectf-demo '<fixture-id>' --reason "fixture and dispute window closed"
+```
+
+점수가 완전히 같으면 자동 진출자를 정하지 않습니다. 심판 판정이 필요할 때만
+`--winner-entry-id <entry-id>`를 추가하고 구체적인 사유를 기록합니다. 프로세스
+재시작 후에는 `tournament-reconcile`을 실행하면 다음 대진을 중복 없이 복구합니다.
+Live Fire UI는 토너먼트 Match에서 **Tournament Bracket** 메뉴를 자동 표시하며,
+관전자 화면에는 Match ID·계정 매핑·운영 사유가 노출되지 않습니다.
+
+> 현재 기본 Docker Compose 데모는 고정 3팀 서비스만 실행하므로 임의 대진의
+> 컨테이너를 동적으로 만들지 않습니다. 실제 토너먼트 서비스는 Kubernetes
+> runtime 또는 별도로 검토한 대진별 Compose project에 배포해야 합니다. 상세
+> 절차와 보안 경계는
+> [LiveCTF Tournament](docs/attack-defense-tournament.md)를 참고하십시오.
+
+![Observer LiveCTF single-elimination bracket](dashboards/livefire/e2e/snapshots/observer-tournament-1920.png)
+
+### 선택 사항: OBS 방송 오버레이
+
+Live Fire는 일반 관전자 화면과 별도로, 내비게이션이나 로그인 UI가 없는
+1920×1080 방송 소스를 제공합니다. OBS Browser Source에 다음 URL 중 하나를
+입력합니다.
+
+```text
+# 투명 하단 scorebar
+http://localhost:5178/broadcast/overlay?match_id=ad-demo&layout=scorebar&background=transparent
+
+# 전체 순위/서비스 집계 화면
+http://localhost:5178/broadcast/overlay?match_id=ad-demo&layout=standings&background=solid
+
+# LiveCTF 대진표
+http://localhost:5178/broadcast/overlay?match_id=<fixture-match>&layout=bracket&background=solid
+```
+
+방송 경로는 브라우저에 운영자 토큰이 남아 있어도 이를 읽거나 전송하지 않고,
+무인증 공개 전용 snapshot API만 호출합니다. 화면에 표시되는 점수는 public delay
+정책과 Stealth disclosure floor를 그대로 따르며, 서비스 상태는 팀 매핑 없는
+aggregate입니다. 이벤트, endpoint, flag, checker/patch 증거, image digest와 계정
+매핑은 snapshot에 포함되지 않습니다. 투명 배경 외에 `background=chroma`, 표시 팀
+수 `max_teams=2..16`, URL 인코딩한 6자리 `accent` 색을 지정할 수 있습니다.
+
+![Transparent public scorebar](dashboards/livefire/e2e/snapshots/broadcast-scorebar-transparent-1920.png)
+
+OBS 설정, 장애 시 stale 동작과 전체 보안 경계는
+[Broadcast Graphics Overlay](docs/attack-defense-broadcast.md)를 참고하십시오.
 
 ### 관전과 운영 모니터링
 

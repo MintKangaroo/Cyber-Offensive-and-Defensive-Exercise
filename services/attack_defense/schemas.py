@@ -163,6 +163,43 @@ class StealthDetectionReportRequest(BaseModel):
     evidence_summary: str = Field(min_length=3, max_length=280)
 
 
+class TournamentCreateRequest(BaseModel):
+    id: str | None = Field(
+        default=None, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"
+    )
+    name: str = Field(min_length=1, max_length=120)
+    bracket_size: int = Field(ge=2, le=16)
+    match_mode: str = Field(pattern=r"^(attack_defense|hybrid_live_fire)$")
+    round_duration_seconds: int | None = Field(default=None, ge=5, le=3600)
+    active_flag_window: int | None = Field(default=None, ge=1, le=20)
+    match_config: dict[str, Any] = Field(default_factory=dict)
+
+
+class TournamentEntryCreateRequest(BaseModel):
+    id: str | None = Field(
+        default=None, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"
+    )
+    slug: str = Field(
+        min_length=2, max_length=40, pattern=r"^[a-z0-9][a-z0-9-]+$"
+    )
+    name: str = Field(min_length=1, max_length=80)
+    identity_subject: str = Field(
+        min_length=1, max_length=120, pattern=r"^[A-Za-z0-9@._:-]+$"
+    )
+    seed: int | None = Field(default=None, ge=1, le=16)
+
+
+class TournamentServiceCreateRequest(ServiceCreateRequest):
+    pass
+
+
+class TournamentFixtureFinalizeRequest(BaseModel):
+    winner_entry_id: str | None = Field(
+        default=None, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"
+    )
+    reason: str = Field(min_length=3, max_length=500)
+
+
 class ScoreEventRequest(BaseModel):
     event_id: str = Field(min_length=8, max_length=160)
     team_id: str = Field(min_length=1, max_length=64)
