@@ -3,14 +3,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from pathlib import Path
 import signal
 import subprocess
 import sys
 import time
+from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
-
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_DIR = ROOT / ".runtime" / "training"
@@ -18,34 +17,39 @@ STATE_PATH = RUNTIME_DIR / "processes.json"
 
 DASHBOARDS = (
     {
+        "name": "START HERE", "slug": "start", "port": 5179,
+        "cwd": ROOT / "dashboards" / "start-here",
+        "serve_dir": ".",
+    },
+    {
         "name": "EDR Console", "slug": "edr", "port": 5173,
         "cwd": ROOT / "services" / "edr" / "console",
-        "command": ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173", "--strictPort"],
+        "build_command": ["npm", "run", "build"], "serve_dir": "dist",
     },
     {
         "name": "Live Fire", "slug": "livefire", "port": 5178,
         "cwd": ROOT / "dashboards" / "livefire",
-        "command": ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5178", "--strictPort"],
+        "build_command": ["npm", "run", "build"], "serve_dir": "dist",
     },
     {
         "name": "SIEM Console", "slug": "siem", "port": 5175,
         "cwd": ROOT / "dashboards" / "siem",
-        "command": ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5175", "--strictPort"],
+        "build_command": ["npm", "run", "build"], "serve_dir": "dist",
     },
     {
         "name": "Red Portal", "slug": "red", "port": 5176,
         "cwd": ROOT / "dashboards" / "redportal",
-        "command": ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5176", "--strictPort"],
+        "build_command": ["npm", "run", "build"], "serve_dir": "dist",
     },
     {
         "name": "Blue Portal", "slug": "blue", "port": 5177,
         "cwd": ROOT / "dashboards" / "blueportal",
-        "command": ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5177", "--strictPort"],
+        "build_command": ["npm", "run", "build"], "serve_dir": "dist",
     },
     {
         "name": "Control Tower", "slug": "control", "port": 5180,
         "cwd": ROOT / "dashboards" / "control-tower",
-        "command": [sys.executable, "-m", "http.server", "5180", "--bind", "0.0.0.0"],
+        "serve_dir": ".",
     },
 )
 
@@ -142,22 +146,43 @@ def stop_dashboards() -> None:
 
 def install_frontend_dependencies(item: dict) -> None:
     cwd = item["cwd"]
-    if item["slug"] == "control" or (cwd / "node_modules").is_dir():
+    if not item.get("build_command") or (cwd / "node_modules").is_dir():
         return
     command = ["npm", "ci"] if (cwd / "package-lock.json").exists() else ["npm", "install"]
     subprocess.run(command, cwd=cwd, check=True)
 
 
+def prepare_dashboard(item: dict) -> Path:
+    install_frontend_dependencies(item)
+    if build_command := item.get("build_command"):
+        subprocess.run(build_command, cwd=item["cwd"], check=True)
+    serve_dir = (item["cwd"] / item["serve_dir"]).resolve()
+    if not (serve_dir / "index.html").is_file():
+        raise RuntimeError(f"dashboard build is missing {serve_dir / 'index.html'}")
+    return serve_dir
+
+
+def static_server_command(item: dict, serve_dir: Path) -> list[str]:
+    return [
+        sys.executable, "-m", "http.server", str(item["port"]),
+        "--bind", "0.0.0.0", "--directory", str(serve_dir),
+    ]
+
+
 def start_dashboards() -> None:
     stop_dashboards()
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    serve_dirs = {
+        item["slug"]: prepare_dashboard(item)
+        for item in DASHBOARDS
+    }
     processes: list[dict] = []
     for item in DASHBOARDS:
-        install_frontend_dependencies(item)
         log_path = RUNTIME_DIR / f"{item['slug']}.log"
         with log_path.open("wb") as output:
             child = subprocess.Popen(
-                item["command"], cwd=item["cwd"], stdout=output,
+                static_server_command(item, serve_dirs[item["slug"]]),
+                cwd=item["cwd"], stdout=output,
                 stderr=subprocess.STDOUT, start_new_session=True,
             )
         processes.append({
@@ -199,13 +224,22 @@ def up() -> None:
     start_dashboards()
     for item in DASHBOARDS:
         wait_for_url(f"http://127.0.0.1:{item['port']}/")
-    print("\nTraining environment is ready:")
+    print("\n" + "=" * 62)
+    print("  START HERE  ->  http://localhost:5179/")
+    print("  Open that single address and follow the on-screen guide:")
+    print("  Attack  ->  Defense  ->  Results. No other ports needed.")
+    print("  Login:  team01 / demo-team-01-change-me")
+    print("=" * 62)
+    print("\nAdvanced / instructor dashboards (optional):")
     for item in DASHBOARDS:
+        if item["slug"] == "start":
+            continue
         suffix = "/?mode=attack_defense" if item["slug"] == "livefire" else "/"
         print(f"  {item['name']:<15} http://localhost:{item['port']}{suffix}")
-    print("  Team 01 login   team01 / demo-team-01-change-me")
     print("  Team 02 login   team02 / demo-team-02-change-me")
     print("  Team 03 login   team03 / demo-team-03-change-me")
+    print("\nBeginner Blue Team defense (one command):")
+    print("  make beginner-defense     # or:  ./training defense")
 
 
 def down() -> None:

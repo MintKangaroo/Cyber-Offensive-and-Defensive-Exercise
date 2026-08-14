@@ -213,6 +213,8 @@ function Page(props: {
     return <ObserverView {...props} />;
   }
   switch (props.active) {
+    case "Defense Guide":
+      return <DefenseGuide services={props.services} patches={props.patches} />;
     case "Attack Console":
       return <FlagSubmissionPanel onSubmit={(flag) => httpAttackDefenseApi.submitFlag(props.matchId, props.token, flag)} />;
     case "Defense Console":
@@ -286,6 +288,79 @@ function BattleOverview(props: {
         }}
       />}
       <LiveEventFeed events={props.events} />
+    </div>
+  );
+}
+
+function DefenseGuide({ services, patches }: { services: ServiceInstance[]; patches: PatchRecord[] }) {
+  const latestPatch = patches[0];
+  const built = patches.length > 0;
+  const deployed = patches.some((patch) => patch.status === "deployed");
+  const healthy = services.some((service) => service.status === "healthy");
+  const rejected = latestPatch?.status === "rejected" || latestPatch?.status === "failed";
+  const checks: Array<{ label: string; done: boolean; pending?: boolean }> = [
+    { label: "패치 이미지 빌드 (Patch built)", done: built },
+    { label: "패치 배포 (Patch deployed)", done: deployed },
+    { label: "서비스 정상 (Service healthy)", done: deployed && healthy },
+    { label: "취약점 차단 (Vulnerability blocked)", done: deployed && healthy && !rejected },
+  ];
+  return (
+    <div className="page-grid defense-guide">
+      <section className="panel span-all">
+        <div className="panel-heading">
+          <div><span>BEGINNER · BLUE TEAM</span><h1>Defense Mission — 내 서비스 방어하기</h1></div>
+        </div>
+        <div style={{ padding: "16px 18px", display: "grid", gap: 16 }}>
+          <p style={{ margin: 0, lineHeight: 1.7, color: "var(--dim2, #8A98B8)" }}>
+            방금 공격에 사용된 것과 같은 취약점이 <strong>내 Notes 서비스</strong>에도 있습니다.
+            목표는 이 취약한 엔드포인트를 고치는 것입니다. Docker 명령을 직접 몰라도,
+            아래 한 줄 명령이 <em>코드 검증 → 이미지 빌드 → 패치 배포 → runtime worker → 서비스 검증</em>을 자동으로 처리합니다.
+          </p>
+
+          <div>
+            <div style={{ fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--dim,#6B7A99)", marginBottom: 6 }}>
+              1. 방어 검증 실행 (터미널에서)
+            </div>
+            <pre style={{
+              margin: 0, background: "#0A0E1A", border: "1px solid var(--border,#1E2A3F)",
+              borderRadius: 8, padding: "12px 14px", fontSize: 13, overflowX: "auto",
+            }}><code>make beginner-defense
+# 또는:  ./training defense</code></pre>
+            <small style={{ color: "var(--dim,#6B7A99)" }}>
+              고급 사용자는 기존 수동 워크플로(직접 docker build/push → Patches 탭 제출 → runtime worker)를 그대로 사용할 수 있습니다.
+            </small>
+          </div>
+
+          <div>
+            <div style={{ fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--dim,#6B7A99)", marginBottom: 8 }}>
+              2. 진행 상태 (실시간)
+            </div>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+              {checks.map((check) => (
+                <li key={check.label} style={{
+                  display: "flex", alignItems: "center", gap: 10, fontSize: 14,
+                  color: check.done ? "var(--ink,#E8EDF5)" : "var(--dim,#6B7A99)",
+                }}>
+                  <span aria-hidden="true" style={{ color: check.done ? "var(--green,#34D399)" : "var(--dim,#6B7A99)", fontWeight: 700 }}>
+                    {check.done ? "✓" : "○"}
+                  </span>
+                  {check.label}
+                </li>
+              ))}
+            </ul>
+            {rejected && (
+              <p role="alert" style={{ color: "var(--red,#FB7185)", fontSize: 12, marginTop: 10 }}>
+                최근 패치가 거절/실패했습니다. 다시 <code>make beginner-defense</code>를 실행하거나 로그를 확인하세요.
+              </p>
+            )}
+          </div>
+
+          <div style={{ borderTop: "1px solid var(--border,#1E2A3F)", paddingTop: 12, fontSize: 12, color: "var(--dim,#6B7A99)", lineHeight: 1.7 }}>
+            고칠 취약점: <code>services/attack_defense/demo_services/vulnerable_notes/main.py</code> 의 노트 조회에서
+            소유자 검증이 빠져 있습니다 (IDOR). 패치는 조회 조건에 소유자(username)를 추가합니다.
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -711,6 +786,7 @@ function LoginPanel({ onLogin }: { onLogin: (value: { access_token: string; matc
 
 function navIcon(label: string) {
   if (label.includes("Tournament")) return "◆";
+  if (label.includes("Guide")) return "✪";
   if (label.includes("Attack")) return "↗";
   if (label.includes("Defense") || label.includes("Service")) return "⬡";
   if (label.includes("Patch")) return "⇪";

@@ -15,14 +15,78 @@
 Docker와 Docker Compose v2, Node.js 20+가 설치돼 있다면 아래 순서만 따라 하면
 됩니다. 첫 실행은 image build 때문에 시간이 조금 걸릴 수 있습니다.
 
-### 전체 실전 훈련 환경 한 번에 관리
+### 🟢 초보자용 빠른 시작 (Beginner Quickstart)
 
-저장소 루트에서 다음 명령만 사용하면 됩니다.
+> **처음이라면 포트 번호나 내부 구조를 몰라도 됩니다. 아래 두 줄만 실행한 뒤,
+> 안내되는 단 하나의 START HERE 주소만 브라우저에서 열고 화면 안내를 따라가세요.**
 
 ```bash
-make training-up       # 전체 백엔드·트윈·A/D 경기·대시보드 시작
-make training-status   # 컨테이너와 대시보드 상태 확인
-make training-down     # 전체 프로세스와 컨테이너 한 번에 종료
+cd cyber-range-platform
+make training-up
+```
+
+기동이 끝나면 터미널에 다음 주소가 안내됩니다.
+
+```
+START HERE  ->  http://localhost:5179/
+```
+
+이 **하나의 주소**만 열면 됩니다. 로그인은 기본 계정
+`team01 / demo-team-01-change-me` 가 미리 채워져 있습니다. 이후 화면은
+`공격(Attack) → 방어(Defense) → 결과(Results)` 순서로 자동 안내됩니다.
+
+| 단계 | 화면에서 하는 일 | 초보자가 몰라도 되는 것 |
+|---|---|---|
+| **① 공격** | START HERE의 “공격 시작” 버튼 → Red Portal의 **초보자 가이드 모드**가 단계별(계정 생성 → 로그인 → 탐색 → FLAG → 제출)로 진행. access token은 자동 추출·설정됩니다. | 어느 칸에 토큰을 붙여넣는지, API 경로 |
+| **② 방어** | START HERE의 “방어 화면 열기” → Live Fire의 **Defense Guide** 탭. 또는 터미널에서 `make beginner-defense` (=`./training defense`) 한 줄. | docker build/push 순서, runtime worker 실행 |
+| **③ 결과** | START HERE로 돌아오면 진행 상태가 자동 갱신되고 결과 화면에서 Attack/Defense/Availability 점수를 확인합니다. | 5176/5177/5178 포트 차이, exercise vs attack_defense |
+
+초보자 흐름은 기존 기능을 **대체하지 않고 추가**한 것입니다. 고급/교관용 화면과
+수동 Docker 패치 워크플로는 그대로 유지됩니다(아래 상세 절 참고). Red Portal 우측
+상단의 `초보자 가이드 / 고급(워크벤치)` 토글로 언제든 전환할 수 있습니다.
+
+**한 줄 방어 명령** — 초보자는 코드 수정 위치만 알면 나머지(검증·빌드·push·패치
+제출·runtime worker·재검증)는 다음 한 줄이 자동 처리합니다.
+
+```bash
+make beginner-defense          # 기본: Team 01 Notes 방어
+# 또는
+./training defense --service both   # Notes + Vault 모두 방어
+./training defense --dry-run        # 실제 실행 없이 수행할 작업만 미리보기
+```
+
+`./training` 래퍼는 초보자용 단일 진입점입니다: `./training up | defense | status | down | start`.
+
+---
+
+### 전체 실전 훈련 환경 한 번에 시작·종료
+
+모든 명령은 `cyber-range-platform` 저장소 루트에서 실행합니다. 상위 프로젝트
+디렉터리에 있다면 먼저 다음과 같이 이동하십시오.
+
+```bash
+cd cyber-range-platform
+```
+
+전체 백엔드, ICS/OT 트윈, Attack/Defense 경기와 대시보드를 한 번에 시작합니다.
+
+```bash
+make training-up
+```
+
+첫 실행에서는 Docker 이미지를 만들고 프런트엔드 의존성을 설치하므로 시간이
+걸릴 수 있습니다. 준비가 끝나면 터미널에 각 대시보드 URL과 데모 계정이
+출력됩니다. 실행 상태는 언제든 다음 명령으로 확인할 수 있습니다.
+
+```bash
+make training-status
+```
+
+훈련을 마치면 같은 저장소 루트에서 다음 명령 하나로 대시보드 프로세스와
+Docker Compose 훈련 스택을 모두 종료합니다.
+
+```bash
+make training-down
 ```
 
 `training-up`은 세 팀의 실제 게임 서비스와 Red/Blue Portal, EDR, SIEM,
@@ -32,15 +96,24 @@ Live Fire, Control Tower를 함께 띄웁니다. Red Portal은 CTF 문제 카드
 
 | 화면 | URL |
 |---|---|
+| **⭐ START HERE (초보자 단일 허브)** | **`http://localhost:5179`** |
 | Red 실제 서비스 공격 | `http://localhost:5176` |
 | Blue 방어 운영 | `http://localhost:5177` |
 | EDR / SIEM | `http://localhost:5173` / `http://localhost:5175` |
 | Live Fire | `http://localhost:5178/?mode=attack_defense` |
 | Control Tower | `http://localhost:5180` |
 
-`training-down`은 훈련 진행 데이터가 든 Docker volume은 보존합니다. 완전한
-새 경기로 초기화해야 할 때만 종료 후 해당 데이터 volume을 명시적으로
-삭제하십시오.
+> 초보자는 **START HERE(5179)** 하나만 열면 됩니다. 나머지 포트는 고급
+> 사용자·교관용이며, START HERE 화면이 필요한 순간 자동으로 연결해 줍니다.
+
+`training-down`은 이 프로젝트가 관리하는 프로세스와 컨테이너만 종료하며,
+훈련 진행 데이터가 든 Docker volume과 빌드된 이미지는 보존합니다. 따라서
+다음 실행도 `make training-up` 한 번이면 됩니다. 완전히 새로운 경기로
+초기화해야 할 때만 종료 후 해당 데이터 volume을 명시적으로 삭제하십시오.
+
+> 아래의 1~3단계는 Attack/Defense 구성 요소만 따로 개발하거나 점검할 때 쓰는
+> 수동 절차입니다. 전체 훈련 환경을 사용할 때는 위의 `make training-up`과
+> `make training-down`만 사용하면 됩니다.
 
 ### 1. 경기 서버 시작
 
@@ -295,6 +368,12 @@ python3 -m services.attack_defense.cli ad score-recalculate ad-demo
 인프라 장애라면 팀이 불이익을 받기 전에 경기를 pause하는 것이 기본 운영 원칙입니다.
 
 ### 패치 제출과 배포
+
+> **초보자는 이 수동 절차 대신 `make beginner-defense`(=`./training defense`) 한
+> 줄을 쓰면 됩니다.** 이 명령이 아래 1~3단계(build → push → 제출 → runtime worker
+> 반복 → 검증)를 자동으로 수행하고, 마지막에 자신의 서비스를 다시 공격해 취약점이
+> 실제로 차단됐는지까지 확인해 줍니다. 아래는 동작 원리를 이해하거나 직접 제어하려는
+> 고급 사용자를 위한 수동 워크플로입니다.
 
 1. 참가팀이 자기 namespace에 patch image를 build합니다. 호스트에서 push할 때는
    `localhost:5000/<team>/<service>:<tag>`를 사용합니다.

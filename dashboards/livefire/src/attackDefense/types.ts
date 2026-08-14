@@ -301,7 +301,7 @@ export interface RuntimeSnapshot {
 
 export const NAVIGATION: Record<LiveRole, string[]> = {
   competitor: [
-    "Battle Overview", "Attack Console", "Defense Console", "Services",
+    "Battle Overview", "Defense Guide", "Attack Console", "Defense Console", "Services",
     "Patches", "Captures", "Scoreboard", "Event Feed", "Team Settings",
   ],
   operator: [

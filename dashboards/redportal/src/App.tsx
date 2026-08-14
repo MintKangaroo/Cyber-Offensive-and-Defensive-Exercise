@@ -4,8 +4,15 @@ import {
   submitCapturedFlag, targetBaseUrl,
   type AttackSurface, type AttackTarget, type MatchState, type ScoreRow, type Session,
 } from "./api";
+import { GuidedMode } from "./GuidedMode";
 
 const SESSION_KEY = "redportal_ad_session";
+const MODE_KEY = "redportal_mode";
+type PortalMode = "beginner" | "advanced";
+
+function storedMode(): PortalMode {
+  return localStorage.getItem(MODE_KEY) === "advanced" ? "advanced" : "beginner";
+}
 
 function storedSession(): Session | null {
   try {
@@ -22,7 +29,13 @@ export default function App() {
   const [surface, setSurface] = useState<AttackSurface | null>(null);
   const [scoreboard, setScoreboard] = useState<ScoreRow[]>([]);
   const [selected, setSelected] = useState<AttackTarget | null>(null);
+  const [mode, setMode] = useState<PortalMode>(storedMode);
   const [error, setError] = useState("");
+
+  const changeMode = useCallback((next: PortalMode) => {
+    localStorage.setItem(MODE_KEY, next);
+    setMode(next);
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!session) return;
@@ -72,6 +85,12 @@ export default function App() {
           {state?.status?.toUpperCase() ?? "CONNECTING"}
         </span>
         <div className="flex-1" />
+        <div className="inline-flex rounded border border-[#382127] overflow-hidden font-mono text-[10px]" role="group" aria-label="Portal mode">
+          <button aria-pressed={mode === "beginner"} onClick={() => changeMode("beginner")}
+            className={`px-3 py-1 ${mode === "beginner" ? "bg-[#FB7185]/20 text-[#FB7185]" : "text-[#9b737b]"}`}>초보자 가이드</button>
+          <button aria-pressed={mode === "advanced"} onClick={() => changeMode("advanced")}
+            className={`px-3 py-1 border-l border-[#382127] ${mode === "advanced" ? "bg-[#FB7185]/20 text-[#FB7185]" : "text-[#9b737b]"}`}>고급(워크벤치)</button>
+        </div>
         <div className="font-mono text-[10px] text-[#9b737b]">{state?.name ?? session.match_id} · R{state?.round ?? "—"}</div>
         <div className="font-mono text-xs text-[#FB7185]">ATK {ownScore?.attack ?? 0} · TOTAL {ownScore?.total ?? 0}</div>
         <button className="border border-[#382127] rounded px-2 py-1 text-[10px] text-[#9b737b]" onClick={() => {
@@ -84,9 +103,11 @@ export default function App() {
 
       <main className="grid grid-cols-1 xl:grid-cols-[310px_minmax(0,1fr)_350px] min-h-[calc(100vh-4rem)]">
         <TargetList targets={surface?.targets ?? []} selected={selected} onSelect={setSelected} />
-        <RequestWorkbench target={selected} />
+        {mode === "beginner"
+          ? <GuidedMode target={selected} session={session} onFlagAccepted={refresh} />
+          : <RequestWorkbench target={selected} />}
         <aside className="border-l border-[#2a1a1c] bg-[#0c090a] p-4 flex flex-col gap-4">
-          <FlagSubmission session={session} onAccepted={refresh} />
+          {mode === "advanced" && <FlagSubmission session={session} onAccepted={refresh} />}
           <Scoreboard rows={scoreboard} ownTeamId={session.team_id} />
           <section className="border border-[#2a1a1c] rounded-lg p-3 bg-[#120c0e]">
             <div className="text-[10px] text-[#9b737b] tracking-widest uppercase">Rules of engagement</div>

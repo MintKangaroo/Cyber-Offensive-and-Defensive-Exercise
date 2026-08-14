@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Beginner-friendly single entrypoint for the Cyber Range training environment.
+#
+#   ./training up        Start the whole range (Docker + dashboards) and print the
+#                        single START HERE address to open in a browser.
+#   ./training defense   Run the one-command beginner Blue Team defense (build,
+#                        patch, deploy and validate the fix automatically).
+#   ./training status    Show what is running.
+#   ./training down      Stop everything.
+#   ./training start     Just print the START HERE address again.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT"
+
+START_URL="http://localhost:5179/"
+
+usage() {
+  sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+action="${1:-help}"
+case "$action" in
+  up)
+    python3 -m scripts.training_environment up
+    ;;
+  down)
+    python3 -m scripts.training_environment down
+    ;;
+  status)
+    python3 -m scripts.training_environment status
+    ;;
+  defense)
+    shift || true
+    python3 -m scripts.beginner_defense "$@"
+    ;;
+  start)
+    echo "START HERE -> ${START_URL}"
+    echo "Open that address in your browser and follow the guide."
+    ;;
+  help|-h|--help)
+    usage
+    ;;
+  *)
+    echo "unknown command: ${action}" >&2
+    usage
+    exit 2
+    ;;
+esac
