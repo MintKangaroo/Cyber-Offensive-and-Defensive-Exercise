@@ -16,7 +16,11 @@ import os
 import random
 import sys
 
-CHALLENGE_SECRET = os.environ.get("CHALLENGE_SECRET", "net007-dev-secret")
+CHALLENGE_SECRET = os.environ.get("CHALLENGE_SECRET")
+if not CHALLENGE_SECRET:
+    raise RuntimeError(
+        "CHALLENGE_SECRET 미설정 — 동적 플래그 HMAC 키는 기본값 없이 fail-fast. "
+        "배포/채점 환경에 CHALLENGE_SECRET 을 주입하세요.")
 
 INTERNAL = ["10.4.1.11", "10.4.1.23", "10.4.2.7", "10.4.2.39", "10.4.3.5", "10.4.3.88"]
 DC = "10.4.0.10"

@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import inspect
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -80,6 +81,10 @@ def main() -> int:
     ap.add_argument("--team-id", default="qa_team")
     ap.add_argument("--base-url", default="http://localhost:8100")
     args = ap.parse_args()
+
+    # 그레이더/생성기/익스플로잇은 CHALLENGE_SECRET 을 모듈 로드 시 요구(기본값 제거됨).
+    # QA 하버스는 결정적 더미 secret 을 주입(외부에서 이미 설정했으면 존중).
+    os.environ.setdefault("CHALLENGE_SECRET", "qa-challenge-secret")
 
     challenge_dir = Path(args.challenge_dir)
     deploy_dir = challenge_dir / "deploy"

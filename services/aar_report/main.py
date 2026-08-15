@@ -11,11 +11,12 @@ import time
 from typing import Optional
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
+from shared.rbac import require_role, ROLES  # noqa: E402
 from services.aar_report.metrics import (  # noqa: E402
     compute_mttd, compute_mttr, compute_detection_rate, compute_false_positive_rate, stealth_bonus_total,
 )
@@ -39,13 +40,21 @@ PDF_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title="AAR Report API")
 
 
+def _require_viewer(authorization: str) -> None:
+    """AAR 리포트는 매치 전체 데이터(점수·이벤트·히트맵)를 담으므로 무인증 노출 금지.
+    인증된 아무 역할(instructor/observer/red/blue/...)이면 열람 허용, 무토큰은 401.
+    (감사 1.8 DoD: aar_report 전 엔드포인트 require_role, 무토큰 401)"""
+    require_role(authorization, set(ROLES))
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "aar_report"}
 
 
 @app.get("/report/aar")
-async def get_aar_report(scenario_id: str = "default"):
+async def get_aar_report(scenario_id: str = "default", authorization: str = Header(default="")):
+    _require_viewer(authorization)
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
             events_resp = await client.get(f"{EVENT_COLLECTOR_URL}/replay/events", params={"scenario_id": scenario_id})
@@ -125,12 +134,13 @@ async def get_aar_report(scenario_id: str = "default"):
 
 
 @app.get("/report/aar/pdf")
-async def get_aar_report_pdf(scenario_id: str = "default"):
+async def get_aar_report_pdf(scenario_id: str = "default", authorization: str = Header(default="")):
     """/report/aar과 동일한 데이터를 PDF로 렌더링해 파일 경로를 반환.
     reportlab 사용(WeasyPrint의 시스템 라이브러리 의존성 회피, 27번 문서 1.5절)."""
     from fastapi.responses import FileResponse
 
-    report = await get_aar_report(scenario_id)
+    _require_viewer(authorization)
+    report = await get_aar_report(scenario_id, authorization)
     output_path = PDF_OUTPUT_DIR / f"aar_{scenario_id}_{int(time.time())}.pdf"
     render_pdf(report, str(output_path))
     return FileResponse(str(output_path), media_type="application/pdf",

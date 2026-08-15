@@ -28,28 +28,41 @@ services:
 
   # --- prod 보안 기본값: 관전자 read 게이트 ON (read도 인증 요구) ---
   scoring_engine:
-    environment: [ "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
+    environment: [ "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
   edr_backend:
-    environment: [ "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
+    environment: [ "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
 
   event_collector:
     environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET}" ]
   config_service:
-    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
+    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
   instructor_api:
-    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
+    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
   challenge_portal:
-    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
+    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
   range_control:
-    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
+    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
   siem_api:
-    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
+    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
   auth:
-    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
+    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
   incident:
-    environment: [ "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
+    environment: [ "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
   injects:
-    environment: [ "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET}" ]
+    environment: [ "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
+
+  # --- prod fail-fast 전면화: A/D·PCAP·DB 시크릿도 미설정이면 부팅 실패(base의 dev 기본값 override) ---
+  attack_defense:
+    environment:
+      - ATTACK_DEFENSE_FLAG_SECRET=${ATTACK_DEFENSE_FLAG_SECRET:?prod requires ATTACK_DEFENSE_FLAG_SECRET — run ./scripts/gen_secrets.sh}
+      - ATTACK_DEFENSE_FLAG_HASH_SECRET=${ATTACK_DEFENSE_FLAG_HASH_SECRET:?prod requires ATTACK_DEFENSE_FLAG_HASH_SECRET}
+      - ATTACK_DEFENSE_MANAGEMENT_TOKEN=${ATTACK_DEFENSE_MANAGEMENT_TOKEN:?prod requires ATTACK_DEFENSE_MANAGEMENT_TOKEN}
+      - PCAP_ANONYMIZATION_SECRET=${PCAP_ANONYMIZATION_SECRET:?prod requires PCAP_ANONYMIZATION_SECRET}
+      - PCAP_WATERMARK_SECRET=${PCAP_WATERMARK_SECRET:?prod requires PCAP_WATERMARK_SECRET}
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:?prod requires CHALLENGE_SECRET}
+  ad_postgres:
+    environment:
+      POSTGRES_PASSWORD: ${AD_POSTGRES_PASSWORD:?prod requires AD_POSTGRES_PASSWORD — run ./scripts/gen_secrets.sh}
 
 volumes:
   gateway_certs: {}

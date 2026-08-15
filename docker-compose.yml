@@ -39,7 +39,8 @@ services:
     ports: ["8020:8020"]
     environment:
       # /score/adjust(수동 점수조정) RBAC용. 토큰 미설정 시 dev 모드로 열리므로 반드시 주입.
-      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-dev-instructor-token}
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-}
+      - RBAC_ALLOW_INSECURE_DEV=${RBAC_ALLOW_INSECURE_DEV:-}
       - RED_TOKEN=${RED_TOKEN:-}
       - BLUE_TOKEN=${BLUE_TOKEN:-}
       - OBSERVER_TOKEN=${OBSERVER_TOKEN:-}
@@ -55,7 +56,8 @@ services:
       - cf_data:/data
     ports: ["8030:8030"]
     environment:
-      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-dev-instructor-token}
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-}
+      - RBAC_ALLOW_INSECURE_DEV=${RBAC_ALLOW_INSECURE_DEV:-}
       - RED_TOKEN=${RED_TOKEN:-}
       - BLUE_TOKEN=${BLUE_TOKEN:-}
       - OBSERVER_TOKEN=${OBSERVER_TOKEN:-}
@@ -71,7 +73,8 @@ services:
     ports: ["8080:8080"]
     environment:
       - CONFIG_SERVICE_URL=http://config_service:8030
-      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-dev-instructor-token}
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-}
+      - RBAC_ALLOW_INSECURE_DEV=${RBAC_ALLOW_INSECURE_DEV:-}
       - RED_TOKEN=${RED_TOKEN:-}
       - BLUE_TOKEN=${BLUE_TOKEN:-}
       - OBSERVER_TOKEN=${OBSERVER_TOKEN:-}
@@ -115,7 +118,8 @@ services:
       - EVENT_COLLECTOR_URL=http://event_collector:8010
       - EVENT_COLLECTOR_WS_URL=ws://event_collector:8010/ws
       - CONFIG_SERVICE_URL=http://config_service:8030
-      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-dev-instructor-token}
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-}
+      - RBAC_ALLOW_INSECURE_DEV=${RBAC_ALLOW_INSECURE_DEV:-}
     depends_on: [event_collector, config_service]
     networks: [range_control]
 
@@ -129,7 +133,8 @@ services:
       - SCENARIO_ENGINE_URL=http://scenario_engine:8045
       - SCORING_ENGINE_URL=http://scoring_engine:8020
       - EVENT_COLLECTOR_URL=http://event_collector:8010
-      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-dev-instructor-token}
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-}
+      - RBAC_ALLOW_INSECURE_DEV=${RBAC_ALLOW_INSECURE_DEV:-}
       - RED_TOKEN=${RED_TOKEN:-}
       - BLUE_TOKEN=${BLUE_TOKEN:-}
       - OBSERVER_TOKEN=${OBSERVER_TOKEN:-}
@@ -174,7 +179,8 @@ services:
       - SIEM_API_URL=http://siem_api:8040
       - CHALLENGE_PORTAL_URL=http://challenge_portal:8060
       - EDR_BACKEND_URL=http://edr_backend:8080
-      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-dev-instructor-token}
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-}
+      - RBAC_ALLOW_INSECURE_DEV=${RBAC_ALLOW_INSECURE_DEV:-}
       - DATA_DIR=/data
     depends_on: [event_collector, scoring_engine, config_service, challenge_portal]
     networks: [range_control]
@@ -185,8 +191,8 @@ services:
     ports: ["8051:8051"]
     environment:
       - DATA_DIR=/data
-      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-demo-jwt-secret-change-before-production-32bytes}
-      - AUTH_ADMIN_PASSWORD=${AUTH_ADMIN_PASSWORD:-demo-operator-change-me}
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-}
+      - AUTH_ADMIN_PASSWORD=${AUTH_ADMIN_PASSWORD:-}
     volumes: [ auth_data:/data ]
     networks: [range_control]
 
@@ -239,8 +245,9 @@ services:
       - ATTACK_DEFENSE_FLAG_SECRET=${ATTACK_DEFENSE_FLAG_SECRET:-attack-defense-dev-flag-secret-change-me}
       - ATTACK_DEFENSE_FLAG_HASH_SECRET=${ATTACK_DEFENSE_FLAG_HASH_SECRET:-attack-defense-dev-hash-secret-change-me}
       - ATTACK_DEFENSE_MANAGEMENT_TOKEN=${ATTACK_DEFENSE_MANAGEMENT_TOKEN:-attack-defense-dev-management-token}
-      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-demo-jwt-secret-change-before-production-32bytes}
-      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-dev-instructor-token}
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-}
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-}
+      - RBAC_ALLOW_INSECURE_DEV=${RBAC_ALLOW_INSECURE_DEV:-}
       - OPERATOR_TOKEN=${OPERATOR_TOKEN:-}
       - ROUND_DURATION_SECONDS=${ROUND_DURATION_SECONDS:-120}
       - ACTIVE_FLAG_WINDOW_ROUNDS=${ACTIVE_FLAG_WINDOW_ROUNDS:-3}
@@ -338,8 +345,9 @@ services:
       ATTACK_DEFENSE_FLAG_SECRET: ${ATTACK_DEFENSE_FLAG_SECRET:-attack-defense-dev-flag-secret-change-me}
       ATTACK_DEFENSE_FLAG_HASH_SECRET: ${ATTACK_DEFENSE_FLAG_HASH_SECRET:-attack-defense-dev-hash-secret-change-me}
       ATTACK_DEFENSE_MANAGEMENT_TOKEN: ${ATTACK_DEFENSE_MANAGEMENT_TOKEN:-attack-defense-dev-management-token}
-      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-demo-jwt-secret-change-before-production-32bytes}
-      INSTRUCTOR_TOKEN: ${INSTRUCTOR_TOKEN:-dev-instructor-token}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-}
+      INSTRUCTOR_TOKEN: ${INSTRUCTOR_TOKEN:-}
+      RBAC_ALLOW_INSECURE_DEV: ${RBAC_ALLOW_INSECURE_DEV:-}
       OPERATOR_TOKEN: ${OPERATOR_TOKEN:-}
       ROUND_DURATION_SECONDS: ${ROUND_DURATION_SECONDS:-120}
       ACTIVE_FLAG_WINDOW_ROUNDS: ${ACTIVE_FLAG_WINDOW_ROUNDS:-3}
@@ -504,7 +512,10 @@ services:
     environment:
       - EVENT_COLLECTOR_URL=http://event_collector:8010
       - CONFIG_SERVICE_URL=http://config_service:8030
-      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-dev-instructor-token}
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-}
+      - RBAC_ALLOW_INSECURE_DEV=${RBAC_ALLOW_INSECURE_DEV:-}
+      # 동적 플래그 HMAC 키 — 미설정 시 컨테이너 기동 실패(감사 1.4). cp .env.example .env && ./scripts/gen_secrets.sh
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:?set CHALLENGE_SECRET (run ./scripts/gen_secrets.sh)}
       - DATA_DIR=/data
     depends_on: [event_collector, config_service]
     networks: [range_control]

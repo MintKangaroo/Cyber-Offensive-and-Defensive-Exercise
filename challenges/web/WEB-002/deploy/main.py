@@ -15,7 +15,11 @@ import jwt
 app = FastAPI(title="WEB-002 Challenge Deploy (TRAINING ONLY)")
 
 JWT_SECRET = "supersecret123"  # 의도된 취약 시크릿(문서화됨, 08번 안전장치 secret_scan 허용리스트 대상)
-CHALLENGE_SECRET = os.environ.get("CHALLENGE_SECRET", "web002-dev-secret")  # 동적 플래그 HMAC 키
+CHALLENGE_SECRET = os.environ.get("CHALLENGE_SECRET")
+if not CHALLENGE_SECRET:
+    raise RuntimeError(
+        "CHALLENGE_SECRET 미설정 — 동적 플래그 HMAC 키는 기본값 없이 fail-fast. "
+        "배포/채점 환경에 CHALLENGE_SECRET 을 주입하세요.")
 PATCHED = os.environ.get("PATCH_WEB_002", "false").lower() == "true"
 
 

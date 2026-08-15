@@ -259,9 +259,11 @@ def verify_baseline(range_id: str, authorization: str = Header(default="")):
     # 2) probe 전 이벤트 클린(리셋 직후여야 0)
     pre_events = _count_events()
     clean_events = pre_events == 0
-    # 3) safe_probe 전수 — baseline은 전부 VULNERABLE(패치 0)
+    # 3) safe_probe 전수 — baseline은 전부 VULNERABLE(패치 0)이고, 도달 불가(UNREACHABLE)가
+    #    1건이라도 있으면 '검증 불가'로 실패시킨다(도달성을 확인 못 한 걸 통과로 위장 금지).
     probe = safe_probe.run(emit=False)["summary"]
-    all_vulnerable = probe["patched"] == 0
+    unreachable = probe.get("unreachable", 0)
+    all_vulnerable = probe["patched"] == 0 and unreachable == 0
     # 4) probe가 취약 엔드포인트를 찔러 만든 이벤트(트윈 access-log → SIEM 비동기 탐지 →
     #    blue_detection_success, scoring 소비)를 정리. SIEM 탐지가 비동기라 잠깐 flush를 기다린 뒤
     #    event_collector + scoring을 리셋해 클린 유지.
@@ -277,9 +279,11 @@ def verify_baseline(range_id: str, authorization: str = Header(default="")):
         "checks": {
             "all_services_healthy": health_ok,
             "all_vulns_open (baseline)": all_vulnerable,
+            "all_probes_reachable": unreachable == 0,
             "events_clean_before_probe": clean_events,
         },
-        "detail": {"health": health, "probe": probe, "pre_probe_event_count": pre_events},
+        "detail": {"health": health, "probe": probe, "pre_probe_event_count": pre_events,
+                   "unreachable_probes": unreachable},
         "verdict": "✅ 다음 훈련 시작 가능" if passed else "❌ baseline 미달 — reset/health 재확인",
     }
 
@@ -303,22 +307,32 @@ def _killswitch_active() -> bool:
 
 @app.get("/safety/status")
 def safety_status():
-    """교관 대시보드용 격리/안전 상태. egress·cross-team 차단은 per-twin internal 네트워크가,
-    docker 소켓 미노출은 compose 설계가 보장(격리 테스트로 실측 검증됨)."""
+    """교관 대시보드용 격리/안전 상태.
+
+    ⚠️ 격리(egress·cross-team·docker 소켓)는 **compose 설계상의 의도**이지 이 엔드포인트가
+    런타임에 실측한 값이 아니다. 과거 이 자리에서 상수 BLOCKED/NONE 을 반환해 '검증됨'처럼
+    보이게 했으나(허위 안전 보증), 실제 도달성은 `infra/ci/isolation_test.py` 같은 능동 프로브
+    없이는 알 수 없다. 실측하지 않는 항목은 `UNKNOWN` 으로 표기하고, 근거를 함께 노출한다.
+    긴급정지(estop)만 config_service killswitch 에서 실제로 읽어 온다."""
     estop = _killswitch_active()
     checks = {
-        "internet_egress": "BLOCKED",          # 11개 트윈 internal:true 네트워크
-        "cross_team_traffic": "BLOCKED",        # per-twin 네트워크 격리(형제 트윈 도달 불가)
-        "docker_socket_exposure": "NONE",       # compose에 docker.sock 마운트 없음
+        # 실측 안 함 → UNKNOWN. 각 항목의 '설계상 근거'는 evidence 로 별도 노출.
+        "internet_egress": "UNKNOWN",
+        "cross_team_traffic": "UNKNOWN",
+        "docker_socket_exposure": "UNKNOWN",
+        # 실제로 config_service 에서 읽는 값.
         "active_emergency_stop": estop,
-        "unauthorized_destination_attempts": 0,  # egress 차단으로 시도 자체가 도달 불가
         "paused_teams": sorted(_PAUSED_TEAMS),
     }
-    # containment score: 격리 3요소 + 긴급정지 가용성(항상 True). estop이 켜져도 격리는 유지.
-    contained = [checks["internet_egress"] == "BLOCKED",
-                 checks["cross_team_traffic"] == "BLOCKED",
-                 checks["docker_socket_exposure"] == "NONE"]
-    checks["range_containment_score"] = f"{round(100 * sum(contained) / len(contained))}%"
+    # 설계 의도(측정값 아님) — 실측은 격리 테스트가 담당.
+    checks["design_intent"] = {
+        "internet_egress": "per-twin internal:true 네트워크 (설계상 차단)",
+        "cross_team_traffic": "per-twin 네트워크 격리 (설계상 형제 트윈 도달 불가)",
+        "docker_socket_exposure": "compose 에 docker.sock 마운트 없음",
+        "verified_by": "infra/ci/isolation_test.py — 스택 기동 후 능동 검증 필요",
+    }
+    # 실측하지 않으므로 정량 점수를 단언하지 않는다.
+    checks["range_containment_score"] = "UNKNOWN"
     return {"safety": checks}
 
 

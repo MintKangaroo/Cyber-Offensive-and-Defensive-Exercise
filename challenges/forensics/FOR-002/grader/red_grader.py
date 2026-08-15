@@ -12,7 +12,11 @@ class GradeResult:
     detail: str = ""
 
 
-CHALLENGE_SECRET = os.environ.get("CHALLENGE_SECRET", "for002-dev-secret")
+CHALLENGE_SECRET = os.environ.get("CHALLENGE_SECRET")
+if not CHALLENGE_SECRET:
+    raise RuntimeError(
+        "CHALLENGE_SECRET 미설정 — 동적 플래그 HMAC 키는 기본값 없이 fail-fast. "
+        "배포/채점 환경에 CHALLENGE_SECRET 을 주입하세요.")
 ATTACKER_IP = "10.13.37.66"
 EXPLOITED_ENDPOINT = "/api/telemetry"
 ATTACK_TECHNIQUE = "T1190"

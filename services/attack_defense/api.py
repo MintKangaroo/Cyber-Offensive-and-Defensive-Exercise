@@ -292,10 +292,13 @@ def create_app(components: Components | None = None) -> FastAPI:
         return await call_next(request)
 
     def operator(authorization: str = Header(default="")) -> Identity:
-        return require_role(authorization, {"instructor", "operator"})
+        # attack_defense 자체 설정(allow_insecure_dev_auth)이 dev 우회 허용 여부를 결정.
+        return require_role(authorization, {"instructor", "operator"},
+                            allow_dev=c.settings.allow_insecure_dev_auth)
 
     def competitor(authorization: str = Header(default="")) -> Identity:
-        ident = require_role(authorization, {"competitor", "red", "blue"})
+        ident = require_role(authorization, {"competitor", "red", "blue"},
+                             allow_dev=c.settings.allow_insecure_dev_auth)
         if ident.dev_mode and not c.settings.allow_insecure_dev_auth:
             raise HTTPException(401, "competitor authentication must be configured")
         if not ident.team_id and not ident.tournament_id:

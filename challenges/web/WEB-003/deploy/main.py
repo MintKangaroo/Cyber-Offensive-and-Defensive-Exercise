@@ -12,7 +12,11 @@ from fastapi import FastAPI, HTTPException, Header
 
 app = FastAPI(title="WEB-003 Challenge Deploy (TRAINING ONLY)")
 
-CHALLENGE_SECRET = os.environ.get("CHALLENGE_SECRET", "web003-dev-secret")  # 동적 플래그 HMAC 키
+CHALLENGE_SECRET = os.environ.get("CHALLENGE_SECRET")
+if not CHALLENGE_SECRET:
+    raise RuntimeError(
+        "CHALLENGE_SECRET 미설정 — 동적 플래그 HMAC 키는 기본값 없이 fail-fast. "
+        "배포/채점 환경에 CHALLENGE_SECRET 을 주입하세요.")
 PATCHED = os.environ.get("PATCH_WEB_003", "false").lower() == "true"
 
 OWN_IDS = range(4000, 4005)     # 요청자 팀이 소유한 일상 계획

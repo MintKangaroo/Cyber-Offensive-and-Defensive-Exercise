@@ -13,7 +13,11 @@ import os
 import random
 import sys
 
-CHALLENGE_SECRET = os.environ.get("CHALLENGE_SECRET", "ics004-dev-secret")
+CHALLENGE_SECRET = os.environ.get("CHALLENGE_SECRET")
+if not CHALLENGE_SECRET:
+    raise RuntimeError(
+        "CHALLENGE_SECRET 미설정 — 동적 플래그 HMAC 키는 기본값 없이 fail-fast. "
+        "배포/채점 환경에 CHALLENGE_SECRET 을 주입하세요.")
 LEGIT_MASTER = "10.40.0.3"
 CB_IOA = 7
 CONTROL_TYPES = {45, 46, 47, 48, 49, 50, 51}  # C_SC/C_DC/C_RC/C_SE/C_BO

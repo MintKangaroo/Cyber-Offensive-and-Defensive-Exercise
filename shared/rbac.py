@@ -82,15 +82,26 @@ def _decode_jwt(token: str) -> Identity | None:
     )
 
 
+def insecure_dev_allowed() -> bool:
+    """토큰/JWT 시크릿이 하나도 없을 때 '미인증 → instructor 통과'(dev 편의)를 허용할지.
+
+    ⚠️ 기본값 False(fail-closed). 과거에는 시크릿 미설정이면 무조건 dev_mode로 통과시켜(fail-open)
+    운영에 시크릿을 안 넣고 띄우면 컨트롤플레인 전체가 무인증으로 열렸다(감사 S-4). 이제 로컬
+    개발에서 의도적으로 열려면 RBAC_ALLOW_INSECURE_DEV=true 를 **명시**해야 하고, 그 외에는
+    require_role()이 401로 거부한다."""
+    return os.environ.get("RBAC_ALLOW_INSECURE_DEV", "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def authenticate(authorization: str) -> Identity:
     """Authorization 헤더 → Identity. JWT(P0-2) 또는 정적 토큰(하위호환)을 검증.
-    JWT 시크릿·정적 토큰이 모두 없으면 dev 모드(로컬 편의)."""
+    JWT 시크릿·정적 토큰이 모두 없으면 dev 모드 후보(dev_mode=True)로 표시만 한다 —
+    실제 통과 허용 여부는 require_role()이 insecure_dev_allowed()로 판정(fail-closed)."""
     from fastapi import HTTPException
     mapping = _token_role_map()
     has_jwt = bool(_jwt_secret())
     token = _bearer(authorization)
     if not mapping and not has_jwt:
-        # dev 모드: 인증 구성 자체가 없음 → 미인증도 instructor로 통과(dev 프로파일 전용)
+        # 인증 구성 자체가 없음 → dev_mode 후보로만 표시(통과 여부는 require_role에서 게이트)
         return Identity(actor="unauthenticated", role="instructor", dev_mode=True)
     # 1) JWT 우선(서명 검증)
     ident = _decode_jwt(token) if has_jwt else None
@@ -127,12 +138,24 @@ def require_read(authorization: str) -> Identity | None:
     return require_role(authorization, set(ROLES))
 
 
-def require_role(authorization: str, allowed: set[str]) -> Identity:
+def require_role(authorization: str, allowed: set[str], allow_dev: bool | None = None) -> Identity:
     """허용 역할 집합에 속하면 Identity 반환. 인증 실패는 401, 역할 불충분은 403.
-    dev 모드(토큰 미설정)에서는 모든 검사를 우회한다."""
+
+    dev 모드(토큰/JWT 미설정)에서는 dev 우회를 명시적으로 허용한 경우에만 통과한다.
+    - allow_dev=None(기본): RBAC_ALLOW_INSECURE_DEV 환경변수로 판정(전역 fail-closed 기본).
+    - allow_dev=True/False: 호출자(예: attack_defense의 자체 allow_insecure_dev_auth 설정)가
+      직접 결정. 환경변수보다 우선한다.
+    허용되지 않으면 fail-closed로 401(인증 미구성 = 거부)."""
     from fastapi import HTTPException
     ident = authenticate(authorization)
+    dev_ok = insecure_dev_allowed() if allow_dev is None else allow_dev
     if ident.dev_mode:
+        if not dev_ok:
+            raise HTTPException(
+                status_code=401,
+                detail="auth not configured (fail-closed): set RBAC_TOKENS/AUTH_JWT_SECRET, "
+                       "or RBAC_ALLOW_INSECURE_DEV=true for local dev only",
+            )
         return ident
     if ident.role not in allowed:
         raise HTTPException(

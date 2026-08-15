@@ -4,13 +4,14 @@ const H = typeof window !== "undefined" ? window.location.hostname : "localhost"
 export const RANGE = import.meta.env.VITE_RANGE_CONTROL_URL ?? `http://${H}:8055`;
 
 export interface SafetyStatus {
+  // 격리 3항목은 실측이 아니라 UNKNOWN(설계 의도는 design_intent 참조).
   internet_egress: string;
   cross_team_traffic: string;
   docker_socket_exposure: string;
   active_emergency_stop: boolean;
-  unauthorized_destination_attempts: number;
   paused_teams: string[];
   range_containment_score: string;
+  design_intent?: Record<string, string>;
 }
 export interface Match {
   range_id: string; match_id: string;

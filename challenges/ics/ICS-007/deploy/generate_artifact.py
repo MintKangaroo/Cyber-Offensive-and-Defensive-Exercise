@@ -15,7 +15,11 @@ import os
 import random
 import sys
 
-CHALLENGE_SECRET = os.environ.get("CHALLENGE_SECRET", "ics007-dev-secret")
+CHALLENGE_SECRET = os.environ.get("CHALLENGE_SECRET")
+if not CHALLENGE_SECRET:
+    raise RuntimeError(
+        "CHALLENGE_SECRET 미설정 — 동적 플래그 HMAC 키는 기본값 없이 fail-fast. "
+        "배포/채점 환경에 CHALLENGE_SECRET 을 주입하세요.")
 LEGIT_AMS = "10.60.0.5"
 SAFETY_TAG = "PT-101"
 WRITE_CMDS = {34, 35, 45, 46}   # damping / range / DAC trim

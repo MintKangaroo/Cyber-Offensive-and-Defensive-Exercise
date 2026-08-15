@@ -17,6 +17,7 @@ red/artifact형과 달라(`grade_blue(context)`, submission=규칙 파일) 별�
 from __future__ import annotations
 import argparse
 import importlib.util
+import os
 import subprocess
 import sys
 import tempfile
@@ -44,6 +45,9 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--challenge-dir", required=True)
     args = ap.parse_args()
+
+    # 그레이더/생성기는 CHALLENGE_SECRET 을 모듈 로드 시 요구(기본값 제거됨). QA 더미 주입.
+    os.environ.setdefault("CHALLENGE_SECRET", "qa-challenge-secret")
 
     challenge_dir = Path(args.challenge_dir)
     deploy_dir = challenge_dir / "deploy"

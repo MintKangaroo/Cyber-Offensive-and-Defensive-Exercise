@@ -11,3 +11,4 @@ pyyaml==6.0.2
 psycopg[binary]==3.3.4
 python-ulid==2.7.0
 reportlab==4.2.5
+python-dotenv==1.0.1
