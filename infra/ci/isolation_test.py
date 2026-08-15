@@ -126,6 +126,15 @@ def default_checks() -> list:
     # 강격리 대상(커맨드인젝션/역직렬화 트윈)
     checks.append(lambda: check_readonly_fs("pp_twin"))
     checks.append(lambda: check_resource_limits("pp_twin", expected_mem_mb=512, expected_cpus=0.5))
+
+    # ---- Attack/Defense 격리(감사 2.3/2.4) ----
+    # 팀 컨테이너는 ad_team_access(internal:true)에만 붙어 외부 egress 불가여야 하고,
+    # ad_management(엔진↔postgres/registry 평면)에서 분리돼 ad_postgres·ad_registry 도달 불가여야 한다.
+    ad_teams = ["ad_team_01_notes", "ad_team_01_vault"]
+    for c in ad_teams:
+        checks.append(lambda c=c: check_external_egress_blocked(c))                    # 2.3 egress 차단
+        checks.append(lambda c=c: check_twin_to_twin_blocked(c, "ad_postgres", 5432))  # 2.4 DB 도달 불가
+        checks.append(lambda c=c: check_twin_to_twin_blocked(c, "ad_registry", 5000))  # 2.4 registry 도달 불가
     return checks
 
 

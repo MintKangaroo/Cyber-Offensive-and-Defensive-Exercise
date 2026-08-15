@@ -9,8 +9,6 @@
 #   - internal 네트워크로 실제 배포 시 외부 egress 차단(개발 편의를 위해 기본은 false,
 #     배포 전 체크리스트에서 true로 전환 확인)
 
-version: "3.8"
-
 services:
   ground_station:
     cpus: "0.5"

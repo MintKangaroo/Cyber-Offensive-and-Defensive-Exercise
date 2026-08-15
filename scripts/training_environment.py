@@ -15,6 +15,23 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_DIR = ROOT / ".runtime" / "training"
 STATE_PATH = RUNTIME_DIR / "processes.json"
 
+# 감사 2.1: 모든 기동 경로가 하드닝 오버레이(리소스/rootfs 하드닝)를 함께 로드하도록
+# compose 파일 목록을 한곳에서 구성한다. override.yml(로컬 편의)이 있으면 유지하고,
+# infra/hardening 오버레이를 항상 마지막에 덮는다.
+def _compose_file_args() -> list[str]:
+    files = ["docker-compose.yml"]
+    if (ROOT / "docker-compose.override.yml").exists():
+        files.append("docker-compose.override.yml")
+    files.append("infra/hardening/docker-compose.hardening.yml")
+    args: list[str] = []
+    for f in files:
+        args += ["-f", f]
+    return args
+
+
+def _compose(*cmd: str) -> list[str]:
+    return ["docker", "compose", *_compose_file_args(), *cmd]
+
 DASHBOARDS = (
     {
         "name": "START HERE", "slug": "start", "port": 5179,
@@ -215,9 +232,9 @@ def wait_for_url(url: str, timeout_seconds: int = 45) -> None:
 def up() -> None:
     print("[training] preparing Attack/Defense images")
     if os.environ.get("TRAINING_SKIP_BUILD", "").lower() not in {"1", "true", "yes"}:
-        run(["docker", "compose", "build", *A_D_BUILD_SERVICES])
+        run(_compose("build", *A_D_BUILD_SERVICES))
     print("[training] starting all default Docker Compose services")
-    run(["docker", "compose", "up", "-d"])
+    run(_compose("up", "-d"))
     print("[training] bootstrapping the three-team Attack/Defense match")
     run([sys.executable, "-m", "scripts.bootstrap_attack_defense_demo"])
     print("[training] starting all team and operations dashboards")
@@ -246,11 +263,11 @@ def down() -> None:
     print("[training] stopping dashboard process groups")
     stop_dashboards()
     print("[training] stopping Docker Compose services")
-    run(["docker", "compose", "down", "--remove-orphans"], check=False)
+    run(_compose("down", "--remove-orphans"), check=False)
 
 
 def status() -> None:
-    run(["docker", "compose", "ps"], check=False)
+    run(_compose("ps"), check=False)
     state_by_slug = {item.get("slug"): item for item in read_state()}
     print("\nDashboards:")
     for dashboard in DASHBOARDS:
