@@ -25,6 +25,7 @@ from starlette.websockets import WebSocketState
 import sys
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 from shared.storage_interface import SearchQuery  # noqa: E402
+from shared.service_auth import service_headers  # noqa: E402
 from services.siem.storage.sqlite_backend import SqliteBackend  # noqa: E402
 from services.siem.storage.alert_store import AlertStore  # noqa: E402
 from services.siem.parsers.base import parse_any  # noqa: E402
@@ -176,7 +177,7 @@ async def _push_detection_to_livefire(alert, event) -> None:
     }
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
-            await client.post(f"{EVENT_COLLECTOR_URL}/events", json=payload)
+            await client.post(f"{EVENT_COLLECTOR_URL}/events", json=payload, headers=service_headers())
     except httpx.HTTPError:
         pass  # Event Collector 다운이어도 SIEM 자체 탐지/저장은 계속 동작
 

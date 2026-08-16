@@ -144,7 +144,9 @@ def default_checks() -> list:
     checks = []
     for c in twins:
         checks.append(lambda c=c: check_external_egress_blocked(c))
-        checks.append(lambda c=c: check_required_path_open(c, "event_collector", 8010))
+        # 감사 3.2: 트윈은 event_collector에 '직접' 도달 불가(채점망 분리), ingest_proxy 경유만 허용.
+        checks.append(lambda c=c: check_twin_to_twin_blocked(c, "event_collector", 8010))
+        checks.append(lambda c=c: check_required_path_open(c, "ingest_proxy", 8010))
     # 트윈 간 직접 통신 차단(예: gs_twin -> pp_twin)
     checks.append(lambda: check_twin_to_twin_blocked("gs_twin", "pp_twin", 8002))
     checks.append(lambda: check_twin_to_twin_blocked("pp_twin", "dn_twin", 8003))

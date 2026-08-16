@@ -30,6 +30,7 @@ from pydantic import BaseModel
 
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 from shared.rbac import require_role, require_read  # noqa: E402
+from shared.service_auth import service_headers  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import model  # noqa: E402
 
@@ -76,7 +77,11 @@ app.add_middleware(
 
 
 def _db():
-    c = sqlite3.connect(DB_PATH); c.row_factory = sqlite3.Row; return c
+    c = sqlite3.connect(DB_PATH, timeout=5.0); c.row_factory = sqlite3.Row
+    c.execute("PRAGMA journal_mode=WAL")      # 감사 3.7: 동시성/내구성
+    c.execute("PRAGMA synchronous=NORMAL")
+    c.execute("PRAGMA busy_timeout=5000")
+    return c
 
 
 def _init():
@@ -238,7 +243,7 @@ async def _emit(team_id: str, subject: str, score_: int, max_: int):
                        "stage": "inject_response", "max": max_}}
     try:
         async with httpx.AsyncClient(timeout=2.0) as cl:
-            await cl.post(f"{EVENT_COLLECTOR_URL}/events", json=ev)
+            await cl.post(f"{EVENT_COLLECTOR_URL}/events", json=ev, headers=service_headers())
     except httpx.HTTPError:
         pass
 

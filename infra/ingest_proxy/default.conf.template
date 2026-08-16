@@ -1,0 +1,28 @@
+# 감사 3.2: 채점망(event_collector) ↔ 트윈망 분리용 ingest 프록시.
+# 트윈은 이 프록시(트윈망에 있음)로만 이벤트를 보내고, 프록시가 range_control의
+# event_collector로 포워딩한다. event_collector 자체는 트윈망에서 제거되어 트윈이
+# 직접 도달할 수 없다(isolation_test로 검증). 프록시가 S2S 토큰을 주입하므로 트윈은
+# SERVICE_TOKEN 을 보유하지 않는다(팝된 트윈이 토큰을 유출할 수 없음).
+# ${SERVICE_TOKEN} 은 nginx 이미지의 envsubst 가 기동 시 치환한다($remote_addr 등 nginx
+# 변수는 env에 없으므로 보존됨).
+server {
+    listen 8010;
+
+    location = /health {
+        add_header Content-Type text/plain;
+        return 200 "ingest_proxy ok\n";
+    }
+
+    # 트윈은 /events(POST) 만 사용. 프록시가 인증 헤더를 주입.
+    location = /events {
+        proxy_pass http://event_collector:8010/events;
+        proxy_set_header Authorization "Bearer ${SERVICE_TOKEN}";
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header Host $host;
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 3s;
+    }
+
+    # 그 외 경로는 차단(트윈이 event_collector의 조회/스트림/관리 API에 접근 못 하게).
+    location / { return 403; }
+}

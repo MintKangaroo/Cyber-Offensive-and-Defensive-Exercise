@@ -67,7 +67,7 @@ async def _emit_event_async(**kwargs) -> None:
     }
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
-            await client.post(f"{EVENT_COLLECTOR_URL}/events", json=payload)
+            await client.post(f"{EVENT_COLLECTOR_URL}/events", json=payload, headers=service_headers())
     except httpx.HTTPError:
         pass
 
@@ -197,6 +197,7 @@ def list_scenarios():
 # --- 저작 지원(P1-3): 검증(dry-run)·린트·페이즈 클록 ---------------------------
 import yaml  # noqa: E402
 from .authoring import dry_run, lint_scenario, phase_clock  # noqa: E402
+from shared.service_auth import service_headers
 
 
 class ValidateReq(BaseModel):

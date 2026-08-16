@@ -28,12 +28,12 @@ services:
 
   # --- prod 보안 기본값: 관전자 read 게이트 ON (read도 인증 요구) ---
   scoring_engine:
-    environment: [ "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
+    environment: [ "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}", "SERVICE_TOKEN=${SERVICE_TOKEN:?prod requires SERVICE_TOKEN}" ]
   edr_backend:
     environment: [ "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
 
   event_collector:
-    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET}" ]
+    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET}", "SERVICE_TOKEN=${SERVICE_TOKEN:?prod requires SERVICE_TOKEN — run ./scripts/gen_secrets.sh}" ]
   config_service:
     environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
   instructor_api:
@@ -63,6 +63,10 @@ services:
   ad_postgres:
     environment:
       POSTGRES_PASSWORD: ${AD_POSTGRES_PASSWORD:?prod requires AD_POSTGRES_PASSWORD — run ./scripts/gen_secrets.sh}
+
+  # 감사 3.2: ingest 프록시도 동일 S2S 토큰 주입(fail-fast).
+  ingest_proxy:
+    environment: [ "SERVICE_TOKEN=${SERVICE_TOKEN:?prod requires SERVICE_TOKEN — run ./scripts/gen_secrets.sh}" ]
 
 volumes:
   gateway_certs: {}

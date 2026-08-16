@@ -33,6 +33,7 @@ app.add_middleware(
 
 
 from shared.rbac import require_role  # noqa: E402
+from shared.service_auth import service_headers  # noqa: E402
 
 
 def _require_instructor(authorization: str) -> str:
@@ -129,7 +130,7 @@ async def event_inject(req: EventInjectRequest, authorization: str = Header(defa
 
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            r = await client.post(f"{EVENT_COLLECTOR_URL}/events", json=payload)
+            r = await client.post(f"{EVENT_COLLECTOR_URL}/events", json=payload, headers=service_headers())
             r.raise_for_status()
     except httpx.HTTPError as e:
         raise HTTPException(502, f"event_collector call failed: {e}")

@@ -40,6 +40,7 @@ EVENT_COLLECTOR_URL = os.environ.get("EVENT_COLLECTOR_URL", "http://event_collec
 import sqlite3  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import anticheat  # noqa: E402
+from shared.service_auth import service_headers
 
 _AC_STATE = anticheat.AntiCheatState()
 _AC_CFG = anticheat.Config.from_env()
@@ -360,7 +361,7 @@ async def _emit_collusion(team_id: str, cid: str, shared_with: list[str]) -> Non
     }
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
-            await client.post(f"{EVENT_COLLECTOR_URL}/events", json=ev)
+            await client.post(f"{EVENT_COLLECTOR_URL}/events", json=ev, headers=service_headers())
     except httpx.HTTPError:
         pass
 
@@ -413,7 +414,7 @@ async def _emit_solve(team_id: str, e: dict) -> None:
     }
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
-            await client.post(f"{EVENT_COLLECTOR_URL}/events", json=ev)
+            await client.post(f"{EVENT_COLLECTOR_URL}/events", json=ev, headers=service_headers())
     except httpx.HTTPError:
         pass  # 이벤트 유실이 채점을 막지 않게(포털 solve는 이미 기록됨)
 
@@ -652,7 +653,7 @@ async def _emit_blue_solve(team_id: str, e: dict) -> None:
     }
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
-            await client.post(f"{EVENT_COLLECTOR_URL}/events", json=ev)
+            await client.post(f"{EVENT_COLLECTOR_URL}/events", json=ev, headers=service_headers())
     except httpx.HTTPError:
         pass
 

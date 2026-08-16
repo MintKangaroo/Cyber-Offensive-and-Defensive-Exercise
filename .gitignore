@@ -26,3 +26,4 @@ challenges/*/*/deploy/*.txt
 challenges/*/*/deploy/*.bin
 challenges/*/*/deploy/*.csv
 challenges/*/*/deploy/*.zip
+.coverage

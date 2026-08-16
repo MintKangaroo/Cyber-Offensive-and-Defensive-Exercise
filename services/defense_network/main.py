@@ -39,6 +39,8 @@ DN_ROUTE_VULN_MAP = {
 }
 
 ASSET_NAME = "defense_network"
+# 감사 3.3: 팀 귀속은 배포 env(TEAM_ID)로 서버측 결정. 공격자 제어 헤더(X-Team-Id) 미신뢰.
+TEAM_ID = os.environ.get("TEAM_ID", "default")
 
 _config = ConfigClient(asset=ASSET_NAME)
 
@@ -169,16 +171,16 @@ def health():
 # DN-001: SMB Anonymous Share Access
 # ---------------------------------------------------------------------------
 @app.get("/api/smb/shares")
-def smb_shares(authorization: str = Header(default=""), x_team_id: str = Header(default="default")):
+def smb_shares(authorization: str = Header(default="")):
     if patched("PATCH_DN_001"):
         if authorization != "Bearer valid-domain-user-token":
             raise HTTPException(401, "authentication required (Guest account disabled)")
     else:
         emit_event(
-            event_id=Event.make_id(x_team_id, ASSET_NAME, "DN-001", str(time.time())),
+            event_id=Event.make_id(TEAM_ID, ASSET_NAME, "DN-001", str(time.time())),
             event_type=EventType.red_attack_started, actor="red", target_asset=ASSET_NAME,
-            vuln_id="DN-001", phase=RedPhase.initial_access, team_id=x_team_id,
-            trace_id=Event.session_trace_id(x_team_id, ASSET_NAME),
+            vuln_id="DN-001", phase=RedPhase.initial_access, team_id=TEAM_ID,
+            trace_id=Event.session_trace_id(TEAM_ID, ASSET_NAME),
             metadata={},
         )
     return {"patched": patched("PATCH_DN_001"), "shares": SHARES}
@@ -188,17 +190,17 @@ def smb_shares(authorization: str = Header(default=""), x_team_id: str = Header(
 # DN-002: Kerberoastable Service Account
 # ---------------------------------------------------------------------------
 @app.get("/api/ad/service-accounts")
-def service_accounts(authorization: str = Header(default=""), x_team_id: str = Header(default="default")):
+def service_accounts(authorization: str = Header(default="")):
     if patched("PATCH_DN_002"):
         # 패치 후: gMSA 전환 가정 -> 평문 강도 정보 노출하지 않고 인증 필요
         if authorization != "Bearer valid-domain-user-token":
             raise HTTPException(401, "authentication required")
         return {"patched": True, "accounts": [{"name": a["name"], "spn": a["spn"], "password_strength": "gMSA(240-char random)"} for a in SERVICE_ACCOUNTS]}
     emit_event(
-        event_id=Event.make_id(x_team_id, ASSET_NAME, "DN-002", str(time.time())),
+        event_id=Event.make_id(TEAM_ID, ASSET_NAME, "DN-002", str(time.time())),
         event_type=EventType.red_attack_started, actor="red", target_asset=ASSET_NAME,
-        vuln_id="DN-002", phase=RedPhase.privilege_escalation, team_id=x_team_id,
-            trace_id=Event.session_trace_id(x_team_id, ASSET_NAME),
+        vuln_id="DN-002", phase=RedPhase.privilege_escalation, team_id=TEAM_ID,
+            trace_id=Event.session_trace_id(TEAM_ID, ASSET_NAME),
         metadata={"accounts": [a["name"] for a in SERVICE_ACCOUNTS]},
     )
     return {"patched": False, "accounts": SERVICE_ACCOUNTS, "note": "TGS 요청만으로 오프라인 크래킹 대상 해시 획득 가능(시뮬레이션)"}
@@ -208,14 +210,14 @@ def service_accounts(authorization: str = Header(default=""), x_team_id: str = H
 # DN-003: Exposed Backup Config with Plaintext Credentials
 # ---------------------------------------------------------------------------
 @app.get("/api/fileserver/backup-config")
-def backup_config(authorization: str = Header(default=""), x_team_id: str = Header(default="default")):
+def backup_config(authorization: str = Header(default="")):
     if patched("PATCH_DN_003"):
         raise HTTPException(404, "not found")  # 패치 후: Vault로 이관, 엔드포인트 제거된 것으로 처리
     emit_event(
-        event_id=Event.make_id(x_team_id, ASSET_NAME, "DN-003", str(time.time())),
+        event_id=Event.make_id(TEAM_ID, ASSET_NAME, "DN-003", str(time.time())),
         event_type=EventType.flag_exfiltrated, actor="red", target_asset=ASSET_NAME,
-        vuln_id="DN-003", phase=RedPhase.data_exfiltration, team_id=x_team_id,
-            trace_id=Event.session_trace_id(x_team_id, ASSET_NAME),
+        vuln_id="DN-003", phase=RedPhase.data_exfiltration, team_id=TEAM_ID,
+            trace_id=Event.session_trace_id(TEAM_ID, ASSET_NAME),
         metadata={"leaked_account": BACKUP_CONFIG["service_account"]},
     )
     return {"patched": False, "config": BACKUP_CONFIG}
@@ -225,7 +227,7 @@ def backup_config(authorization: str = Header(default=""), x_team_id: str = Head
 # DN-004: Open Mail Relay
 # ---------------------------------------------------------------------------
 @app.post("/api/mail/relay")
-def mail_relay(req: MailRelayRequest, x_team_id: str = Header(default="default")):
+def mail_relay(req: MailRelayRequest):
     if patched("PATCH_DN_004"):
         if not req.authenticated:
             raise HTTPException(401, "SMTP AUTH required")
@@ -233,10 +235,10 @@ def mail_relay(req: MailRelayRequest, x_team_id: str = Header(default="default")
             raise HTTPException(403, "sender domain not permitted (SPF/DKIM mismatch)")
     elif not req.authenticated:
         emit_event(
-            event_id=Event.make_id(x_team_id, ASSET_NAME, "DN-004", str(time.time())),
+            event_id=Event.make_id(TEAM_ID, ASSET_NAME, "DN-004", str(time.time())),
             event_type=EventType.red_objective_success, actor="red", target_asset=ASSET_NAME,
-            vuln_id="DN-004", phase=RedPhase.objective, team_id=x_team_id,
-            trace_id=Event.session_trace_id(x_team_id, ASSET_NAME),
+            vuln_id="DN-004", phase=RedPhase.objective, team_id=TEAM_ID,
+            trace_id=Event.session_trace_id(TEAM_ID, ASSET_NAME),
             metadata={"mail_from": req.mail_from, "mail_to": req.mail_to},
         )
     return {
@@ -261,7 +263,7 @@ _LDAP_META = ["*", "(", ")", "|", "&", "\\", "\x00"]
 
 
 @app.get("/api/directory/search")
-def directory_search(q: str, x_team_id: str = Header(default="default")):
+def directory_search(q: str):
     injection = any(m in q for m in _LDAP_META)
     if patched("PATCH_DN_005"):
         # 패치 후: LDAP 메타문자 이스케이프/거부 -> 인젝션 불가
@@ -273,10 +275,10 @@ def directory_search(q: str, x_team_id: str = Header(default="default")):
     # 취약 지점: q를 LDAP 필터 문자열에 그대로 결합 -> '*' / ')(' 로 전체·관리자 레코드 덤프
     if injection:
         emit_event(
-            event_id=Event.make_id(x_team_id, ASSET_NAME, "DN-005", q, str(time.time())),
+            event_id=Event.make_id(TEAM_ID, ASSET_NAME, "DN-005", q, str(time.time())),
             event_type=EventType.flag_exfiltrated, actor="red", target_asset=ASSET_NAME,
-            vuln_id="DN-005", phase=RedPhase.data_exfiltration, team_id=x_team_id,
-            trace_id=Event.session_trace_id(x_team_id, ASSET_NAME),
+            vuln_id="DN-005", phase=RedPhase.data_exfiltration, team_id=TEAM_ID,
+            trace_id=Event.session_trace_id(TEAM_ID, ASSET_NAME),
             metadata={"query": q, "note": "LDAP filter injection dumped full directory"},
         )
         return {"patched": False, "filter": f"(|(uid={q})(cn={q}))", "results": DIRECTORY}
@@ -303,7 +305,7 @@ def _is_internal_target(url: str) -> bool:
 
 
 @app.post("/api/webhook/preview")
-def webhook_preview(req: PreviewRequest, x_team_id: str = Header(default="default")):
+def webhook_preview(req: PreviewRequest):
     internal = _is_internal_target(req.url)
     if patched("PATCH_DN_006"):
         # 패치 후: 내부/사설/파일 스킴 차단(SSRF 방지), 외부 http(s)만 미리보기
@@ -313,10 +315,10 @@ def webhook_preview(req: PreviewRequest, x_team_id: str = Header(default="defaul
     # 취약 지점: 사용자 URL을 서버가 그대로 요청 -> 내부 자원/메타데이터 미리보기(SSRF)
     if internal:
         emit_event(
-            event_id=Event.make_id(x_team_id, ASSET_NAME, "DN-006", req.url, str(time.time())),
+            event_id=Event.make_id(TEAM_ID, ASSET_NAME, "DN-006", req.url, str(time.time())),
             event_type=EventType.red_attack_started, actor="red", target_asset=ASSET_NAME,
-            vuln_id="DN-006", phase=RedPhase.lateral_movement, team_id=x_team_id,
-            trace_id=Event.session_trace_id(x_team_id, ASSET_NAME),
+            vuln_id="DN-006", phase=RedPhase.lateral_movement, team_id=TEAM_ID,
+            trace_id=Event.session_trace_id(TEAM_ID, ASSET_NAME),
             metadata={"requested_url": req.url},
         )
         return {"patched": False, "url": req.url,

@@ -30,6 +30,7 @@ SCORING_ENGINE_URL = os.environ.get("SCORING_ENGINE_URL", "http://scoring_engine
 OBSERVER_DELAY_SEC = float(os.environ.get("OBSERVER_DELAY_SEC", "30"))
 
 from shared.rbac import require_role  # noqa: E402
+from shared.service_auth import require_service_token, service_headers  # noqa: E402
 from shared.sse_bus import SSEBus, visible_to, LIVE_TOPICS  # noqa: E402
 
 # 단일 상황판 허브(P0-4). 모든 토픽을 이 버스로 흘려 EventSource 하나로 구독한다.
@@ -73,8 +74,12 @@ _ws_clients: set[WebSocket] = set()
 
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=5.0)
     conn.row_factory = sqlite3.Row
+    # 동시성/내구성(감사 3.7): WAL로 read-while-write 허용, busy_timeout으로 락 경합 대기.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 
@@ -108,8 +113,33 @@ def init_db():
         except sqlite3.OperationalError:
             pass  # 컬럼이 이미 존재
     conn.execute("CREATE INDEX IF NOT EXISTS idx_events_trace_id ON events(trace_id)")
+    # 감사 3.5: scoring 전달 실패용 로컬 스풀(DLQ). scoring_engine이 죽어도 이벤트를 잃지 않고
+    # 복구되면 재전달한다.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS scoring_dlq (
+            event_id TEXT PRIMARY KEY,
+            payload TEXT,
+            attempts INTEGER DEFAULT 0,
+            last_error TEXT,
+            created_at REAL DEFAULT (strftime('%s','now'))
+        )
+        """
+    )
     conn.commit()
     conn.close()
+
+
+# 감사 3.5: 전달 신뢰성 메트릭(예외 삼킴 대신 계측). /metrics로 노출.
+_METRICS = {
+    "forwarded_ok": 0,       # scoring 즉시 전달 성공
+    "forward_retries": 0,    # 즉시 전달 재시도 횟수
+    "dlq_spooled": 0,        # 즉시 전달 최종 실패 → DLQ 적재
+    "dlq_redelivered": 0,    # DLQ에서 재전달 성공
+    "dlq_drop": 0,           # (예약) 영구 실패로 폐기
+}
+_FORWARD_ATTEMPTS = int(os.environ.get("SCORING_FORWARD_ATTEMPTS", "3"))
+_DLQ_DRAIN_INTERVAL = float(os.environ.get("SCORING_DLQ_DRAIN_SEC", "10"))
 
 
 init_db()
@@ -117,7 +147,20 @@ init_db()
 
 @app.on_event("startup")
 async def startup():
-    pass
+    # 감사 3.5: DLQ 드레인 루프 기동(scoring 복구 시 스풀 이벤트 재전달).
+    asyncio.create_task(_dlq_drain_loop())
+
+
+@app.get("/metrics")
+def metrics():
+    """감사 3.5: 이벤트 전달 신뢰성 지표. 드롭/스풀/재전달 카운터 + DLQ 잔량."""
+    conn = get_db()
+    try:
+        pending = conn.execute("SELECT COUNT(*) FROM scoring_dlq").fetchone()[0]
+    except Exception:
+        pending = None
+    conn.close()
+    return {"service": "event_collector", **_METRICS, "dlq_pending": pending}
 
 
 @app.get("/health")
@@ -126,7 +169,9 @@ def health():
 
 
 @app.post("/events")
-async def ingest_event(event: Event):
+async def ingest_event(event: Event, authorization: str = Header(default="")):
+    # 감사 3.1: 내부 S2S(트윈·서비스) 전용. 무토큰 주입 차단(참가자망서 이벤트 위조 방지).
+    require_service_token(authorization)
     conn = get_db()
     cur = conn.execute("SELECT 1 FROM events WHERE event_id = ?", (event.event_id,))
     is_duplicate = cur.fetchone() is not None
@@ -182,22 +227,78 @@ async def _forward_to_scoring_engine(event: Event):
         else:
             # 대응하는 공격 이벤트를 찾지 못함 -> 오탐/치팅 의심 신호(04번 1절 unmatched_detection)
             payload.setdefault("metadata", {})["_unmatched"] = True
+    # 감사 3.5: 재시도 후에도 실패하면 예외를 삼키지 않고 DLQ에 스풀한다(무손실).
+    ok, err = await _try_forward_once_with_retries(payload, event)
+    if not ok:
+        _spool_to_dlq(event.event_id, payload, err)
+
+
+async def _post_scoring(payload: dict) -> tuple[bool, Optional[str]]:
+    """scoring /score/ingest 1회 전송. (성공?, 오류문자열) 반환. 200이고 awarded면 scores push."""
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
-            r = await client.post(f"{SCORING_ENGINE_URL}/score/ingest", json=payload)
-            # 점수 적립이 발생하면 scores 토픽으로 실시간 push(상황판 리더보드 폴링 제거)
-            if r.status_code == 200:
-                res = r.json()
-                if res.get("awarded"):
-                    bus.publish("scores", {
-                        "team_id": event.team_id, "actor": event.actor,
-                        "category": res.get("category"), "points": res.get("points"),
-                        "scenario_id": event.scenario_id,
-                        "match_id": (event.metadata or {}).get("match_id", ""),
-                        "timestamp": time.time(),
-                    })
-    except httpx.HTTPError:
-        pass  # Scoring Engine이 다운이어도 Event Collector는 계속 동작
+            r = await client.post(f"{SCORING_ENGINE_URL}/score/ingest", json=payload,
+                                  headers=service_headers())  # 감사 3.1: S2S 토큰
+        if r.status_code == 200:
+            res = r.json()
+            if res.get("awarded"):
+                bus.publish("scores", {
+                    "team_id": payload.get("team_id"), "actor": payload.get("actor"),
+                    "category": res.get("category"), "points": res.get("points"),
+                    "scenario_id": payload.get("scenario_id"),
+                    "match_id": (payload.get("metadata") or {}).get("match_id", ""),
+                    "timestamp": time.time(),
+                })
+            return True, None
+        return False, f"HTTP {r.status_code}"
+    except httpx.HTTPError as e:
+        return False, type(e).__name__
+
+
+async def _try_forward_once_with_retries(payload: dict, event=None) -> tuple[bool, Optional[str]]:
+    last_err = None
+    for attempt in range(_FORWARD_ATTEMPTS):
+        ok, err = await _post_scoring(payload)
+        if ok:
+            _METRICS["forwarded_ok"] += 1
+            return True, None
+        last_err = err
+        _METRICS["forward_retries"] += 1
+        await asyncio.sleep(min(0.2 * (2 ** attempt), 1.0))  # 지수 백오프(상한 1s)
+    return False, last_err
+
+
+def _spool_to_dlq(event_id: str, payload: dict, err: Optional[str]) -> None:
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO scoring_dlq (event_id, payload, attempts, last_error) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(event_id) DO UPDATE SET attempts=attempts+1, last_error=excluded.last_error",
+        (event_id, json.dumps(payload), _FORWARD_ATTEMPTS, err or "unknown"),
+    )
+    conn.commit(); conn.close()
+    _METRICS["dlq_spooled"] += 1
+
+
+async def _dlq_drain_loop():
+    """감사 3.5: 주기적으로 DLQ를 재전달. scoring_engine 복구 시 스풀된 이벤트를 0건 유실로 흘려보낸다."""
+    while True:
+        await asyncio.sleep(_DLQ_DRAIN_INTERVAL)
+        try:
+            conn = get_db()
+            rows = conn.execute(
+                "SELECT event_id, payload FROM scoring_dlq ORDER BY created_at ASC LIMIT 100"
+            ).fetchall()
+            conn.close()
+            for row in rows:
+                ok, _ = await _post_scoring(json.loads(row["payload"]))
+                if ok:
+                    conn = get_db()
+                    conn.execute("DELETE FROM scoring_dlq WHERE event_id=?", (row["event_id"],))
+                    conn.commit(); conn.close()
+                    _METRICS["dlq_redelivered"] += 1
+        except Exception:
+            # 드레인 루프는 절대 죽지 않는다(다음 주기에 재시도).
+            pass
 
 
 async def _broadcast(event: Event):
