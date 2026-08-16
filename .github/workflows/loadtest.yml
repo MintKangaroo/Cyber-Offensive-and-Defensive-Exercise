@@ -1,0 +1,76 @@
+name: Load Test (nightly)
+
+# 감사 4.10: 부하 하네스(k6 3종)를 nightly로 실행해 회귀·수용 인원 기준선을 추적한다.
+on:
+  schedule:
+    - cron: "0 18 * * *"   # 매일 03:00 KST (UTC 18:00)
+  workflow_dispatch:
+
+permissions:
+  contents: write   # 결과를 loadtest/results/ 에 커밋
+
+jobs:
+  k6:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    # 부하 스크립트는 토큰 없이 ingest 하므로 dev 우회 + CHALLENGE_SECRET 더미.
+    env:
+      RBAC_ALLOW_INSECURE_DEV: "true"
+      CHALLENGE_SECRET: ci-loadtest-secret
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update && sudo apt-get install -y k6
+
+      - name: Start stack (ingest·scoring·twins·A/D)
+        run: |
+          docker compose up -d --build \
+            event_collector scoring_engine config_service ingest_proxy \
+            ground_station power_plant defense_network gs_gateway pp_gateway dn_gateway \
+            auth attack_defense ad_registry ad_team_01_notes ad_team_01_vault
+
+      - name: Wait for core health
+        run: |
+          for i in $(seq 1 40); do
+            curl -sf http://localhost:8010/health >/dev/null 2>&1 && curl -sf http://localhost:8020/health >/dev/null 2>&1 && exit 0
+            sleep 3
+          done
+          echo "stack not healthy"; exit 1
+
+      - name: Run k6 (3종, summary export)
+        run: |
+          mkdir -p loadtest/results
+          STAMP=$(date -u +%Y%m%d)
+          for s in event_collector_ingest twin_attack_load; do
+            k6 run --summary-export "loadtest/results/${s}.${STAMP}.json" "loadtest/k6/${s}.js" || echo "k6 $s finished with non-zero"
+          done
+          DURATION=90s SCOREBOARD_VUS=12 SUBMISSIONS_PER_SECOND=10 \
+            k6 run --summary-export "loadtest/results/attack_defense.${STAMP}.json" loadtest/k6/attack_defense.js || true
+          # 최신 결과를 latest 심볼릭 파일로도 저장(기준선 비교 편의)
+          for s in event_collector_ingest twin_attack_load attack_defense; do
+            cp "loadtest/results/${s}.${STAMP}.json" "loadtest/results/${s}.latest.json" 2>/dev/null || true
+          done
+
+      - name: Upload results (artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loadtest-results
+          path: loadtest/results/*.json
+
+      - name: Commit results to loadtest/results/
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add loadtest/results/*.json || true
+          git commit -m "chore(loadtest): nightly k6 결과 갱신 [skip ci]" || echo "no changes"
+          git push || echo "push skipped"
+
+      - name: Teardown
+        if: always()
+        run: docker compose down -v

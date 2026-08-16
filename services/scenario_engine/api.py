@@ -186,6 +186,29 @@ def scenario_progress(scenario_id: str, team_id: str = "default"):
     }
 
 
+class ObjectiveSubmitReq(BaseModel):
+    team_id: str = "default"
+    phase: str
+    objective: str          # objective의 name 또는 submit 키
+    value: str              # 참가자가 제출한 값
+
+
+@app.post("/scenario/{scenario_id}/objective/submit")
+async def submit_objective(scenario_id: str, req: ObjectiveSubmitReq):
+    """감사 4.9: 크로스오버(조사형) 목표 제출 API. 정답은 서버측 objective.answer에서 조회해
+    채점한다(정답을 클라이언트가 넘기지 않음). 크로스오버 트래커에만 존재."""
+    tracker = _active_trackers.get(scenario_id)
+    if tracker is None:
+        raise HTTPException(404, f"scenario '{scenario_id}' is not active")
+    if not hasattr(tracker, "submit_objective"):
+        raise HTTPException(400, "이 시나리오는 조사형 목표 제출을 지원하지 않습니다(크로스오버 전용).")
+    try:
+        ok = await tracker.submit_objective(req.team_id, req.phase, req.objective, req.value)
+    except KeyError:
+        raise HTTPException(404, f"phase '{req.phase}' 없음")
+    return {"scenario_id": scenario_id, "phase": req.phase, "objective": req.objective, "correct": ok}
+
+
 @app.get("/scenario/list")
 def list_scenarios():
     return {

@@ -500,6 +500,27 @@ def get_audit(limit: int = 200, authorization: str = Header(default="")):
     return {"entries": rows}
 
 
+@app.post("/admin/reset")
+def admin_reset(authorization: str = Header(default="")):
+    """훈련 초기화(감사 4.6) — EDR 텔레메트리/알림/격리/kill 상태를 비운다(instructor).
+    라운드 리셋 시 이전 라운드의 프로세스/알림/격리 상태가 남지 않게 range_control이 호출."""
+    require_role(authorization, {"instructor"})
+    conn = get_db()
+    cleared = {}
+    # sqlite_master 열거로 데이터 테이블 전수 비우기(스키마 메타 테이블 제외).
+    tables = [r["name"] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+    ).fetchall()]
+    for t in tables:
+        try:
+            cleared[t] = conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+            conn.execute(f"DELETE FROM {t}")
+        except Exception:
+            cleared[t] = "n/a"
+    conn.commit(); conn.close()
+    return {"service": "edr", "cleared": cleared}
+
+
 @app.websocket("/edr/ws")
 async def edr_stream(websocket: WebSocket):
     await websocket.accept()

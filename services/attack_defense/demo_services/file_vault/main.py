@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from ..common import attach_siem_access_log
 from ..common import (
     DATA_DIR,
     authenticated_user,
@@ -49,6 +50,9 @@ game_app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+# 감사 4.3: A/D 팀 서비스를 SIEM에 편입(요청을 access-log로 남김).
+attach_siem_access_log(game_app)
 
 
 class Credentials(BaseModel):

@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
-from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Header, Query, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 import sys
@@ -46,6 +46,7 @@ TWIN_ASSETS = [
     "refinery_plant", "smart_factory", "water_utility", "lng_terminal",
     "railway_signaling", "airport_ot", "datacenter_bms", "hospital_ot",
     "cloud_native",
+    "attack_defense",  # 감사 4.3: A/D 스택 SIEM 편입
 ]
 SYSLOG_UDP_PORT = int(os.environ.get("SYSLOG_UDP_PORT", "1514"))  # 514는 root 권한 필요, 기본은 비특권 포트
 EVENT_COLLECTOR_URL = os.environ.get("EVENT_COLLECTOR_URL", "http://event_collector:8010")
@@ -53,7 +54,9 @@ PUSH_TO_LIVEFIRE = os.environ.get("PUSH_TO_LIVEFIRE", "true").lower() == "true"
 # 고심각도 알림 → 인시던트 자동 승격(SOC 워크플로). severity>=임계면 incident 서비스로.
 INCIDENT_URL = os.environ.get("INCIDENT_URL", "http://incident:8095")
 INCIDENT_AUTO_PROMOTE = os.environ.get("INCIDENT_AUTO_PROMOTE", "true").lower() == "true"
-INCIDENT_MIN_SEVERITY = int(os.environ.get("INCIDENT_MIN_SEVERITY", "5"))
+# 감사 4.4: 임계값 5(critical만)는 승격 대상이 11룰뿐이라 SOC가 배울 사건이 없었다.
+# app_layer 실제 공격 룰을 sev4로 재조정하고 임계값을 4로 낮춰 승격 대상 ≥40룰로 정합.
+INCIDENT_MIN_SEVERITY = int(os.environ.get("INCIDENT_MIN_SEVERITY", "4"))
 INCIDENT_TOKEN = os.environ.get("INCIDENT_TOKEN", "")
 _SEV_MAP = {5: "critical", 4: "high", 3: "medium"}
 NOISE_ENABLED = os.environ.get("SIEM_NOISE_ENABLED", "false").lower() == "true"
@@ -311,6 +314,27 @@ async def stats():
     by_severity = alert_store.stats_by_severity()
     top_sigs = alert_store.top_signatures()
     return {"events_by_source": by_source, "alerts_by_severity": by_severity, "top_signatures": top_sigs}
+
+
+@app.post("/admin/reset")
+def admin_reset(authorization: str = Header(default="")):
+    """훈련 초기화(감사 4.6) — SIEM 이벤트/알림 상태를 비운다(instructor 인증).
+    라운드 리셋 시 이전 라운드의 로그/알림이 남지 않도록 range_control이 호출한다."""
+    from shared.rbac import require_role
+    require_role(authorization, {"instructor"})
+    cleared = {}
+    import sqlite3 as _sql
+    for label, path, table in (("events", backend.db_path, "events"),
+                               ("alerts", alert_store.db_path, "alerts")):
+        try:
+            c = _sql.connect(path)
+            cleared[label] = c.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            c.execute(f"DELETE FROM {table}"); c.commit(); c.close()
+        except Exception:
+            cleared[label] = "n/a"
+    _source_health.clear()
+    detection_engine.reset() if hasattr(detection_engine, "reset") else None
+    return {"service": "siem_api", "cleared": cleared}
 
 
 @app.get("/sources/health")

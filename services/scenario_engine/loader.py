@@ -37,6 +37,9 @@ class CrossoverObjective(BaseModel):
     name: str
     submit: str
     points: int
+    # 감사 4.9: 정답 키를 주석이 아니라 스키마 필드로 보관한다(서버측 채점 근거).
+    # None이면 자동 채점 불가(제출은 기록만; 교관 수동 채점 대상).
+    answer: Optional[str] = None
 
 
 class CrossoverBlueParallel(BaseModel):

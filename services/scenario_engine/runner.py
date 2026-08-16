@@ -193,25 +193,33 @@ class CrossoverScenarioTracker:
                 await self._on_phase_completed(team_id, phase_name, phase)
 
     async def submit_objective(self, team_id: str, phase_name: str, objective_name: str,
-                               submitted_value: str, expected_value: str) -> bool:
-        """조사형(포렌식 등) phase의 필드 제출 채점. 외부(API)에서 호출."""
+                               submitted_value: str) -> bool:
+        """조사형(포렌식 등) phase의 필드 제출 채점. 외부(API)에서 호출.
+
+        감사 4.9: 정답은 caller가 넘기지 않고 objective.answer(스키마 필드)에서 서버측으로
+        조회한다(정답 노출·조작 방지). objective_name은 objective의 name 또는 submit 키 둘 다 허용.
+        answer가 None인 목표는 자동 채점 불가(제출만 기록, 교관 수동 채점)."""
         cp = self._get(team_id)
         pp = cp.phases[phase_name]
         if not pp.unlocked:
             return False
-        ok = submitted_value.strip().lower() == expected_value.strip().lower()
-        pp.submitted_objectives[objective_name] = ok
         phase = self.scenario.phases[phase_name]
+        obj = next((o for o in phase.objectives
+                    if o.name == objective_name or o.submit == objective_name), None)
+        if obj is None:
+            return False
+        key = obj.name
+        ok = (obj.answer is not None
+              and submitted_value.strip().lower() == obj.answer.strip().lower())
+        pp.submitted_objectives[key] = ok
         if ok:
-            obj = next((o for o in phase.objectives if o.name == objective_name), None)
-            if obj:
-                await self.emit(
-                    event_id=Event.make_id(team_id, self.scenario.id, phase_name, objective_name),
-                    event_type=EventType.stage_completed,
-                    actor=phase.actor, target_asset=self.scenario.target_asset,
-                    team_id=team_id, scenario_id=self.scenario.id,
-                    metadata={"phase": phase_name, "objective": objective_name, "points": obj.points},
-                )
+            await self.emit(
+                event_id=Event.make_id(team_id, self.scenario.id, phase_name, key),
+                event_type=EventType.stage_completed,
+                actor=phase.actor, target_asset=self.scenario.target_asset,
+                team_id=team_id, scenario_id=self.scenario.id,
+                metadata={"phase": phase_name, "objective": key, "points": obj.points},
+            )
         # 모든 objective 제출 완료 시 phase 완료 처리
         if phase.objectives and len(pp.submitted_objectives) == len(phase.objectives):
             pp.completed = True

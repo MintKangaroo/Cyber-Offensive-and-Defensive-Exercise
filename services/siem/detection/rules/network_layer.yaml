@@ -44,7 +44,7 @@
 
 - id: NET-DNS-TUNNEL-001
   title: "DNS 터널링 의심 (짧은 시간 내 다수 DNS 쿼리)"
-  severity: 3
+  severity: 4
   mitre: [T1071.004]
   source_type: zeek
   kind: threshold

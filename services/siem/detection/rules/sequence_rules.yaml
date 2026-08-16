@@ -7,10 +7,14 @@
   kind: sequence
   sequence_group_by: "src.ip"
   sequence_within_sec: 300
+  # 감사 4.5: step3가 SIEM 정규화 이벤트에 없는 필드(event_type)라 절대 발화 못 했다.
+  # SIEM은 'flag_exfiltrated'(스코어링 이벤트)를 보지 못하고, 유출은 공격자가 트윈에
+  # 계속 접근하는 access 로그로 관측된다 → 관측 가능한 필드로 교정(network 정찰 → 트윈
+  # 앱공격 → 트윈 후속행위).
   sequence_steps:
     - category: "network"
     - source_type: "twin"
-    - event_type: "flag_exfiltrated"
+    - source_type: "twin"
 
 - id: SEQ-RECON-TO-EXPLOIT-001
   title: "정찰 후 즉시 익스플로잇"

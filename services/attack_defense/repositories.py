@@ -347,6 +347,21 @@ class AttackDefenseRepository:
             row = conn.execute("SELECT * FROM rounds WHERE id=?", (round_id,)).fetchone()
         return self._row(row)
 
+    def extend_round_end(self, round_id: str, add_seconds: float, now: float) -> dict | None:
+        """감사 4.7: 다운타임 보정 — active 라운드의 ends_at을 add_seconds만큼 뒤로 밀고
+        last_check_at을 now로 갱신한다(상태는 그대로). 크래시/재기동으로 tick이 멈춘 공백을
+        라운드 잔여시간에 되돌려준다."""
+        with self.db.transaction(immediate=True) as conn:
+            cur = conn.execute(
+                "UPDATE rounds SET ends_at=ends_at+?, last_check_at=? "
+                "WHERE id=? AND status='active' AND ends_at IS NOT NULL",
+                (add_seconds, now, round_id),
+            )
+            if cur.rowcount != 1:
+                return None
+            row = conn.execute("SELECT * FROM rounds WHERE id=?", (round_id,)).fetchone()
+        return self._row(row)
+
     def insert_ledger(
         self,
         conn: sqlite3.Connection,
