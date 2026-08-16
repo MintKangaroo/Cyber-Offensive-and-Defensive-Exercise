@@ -204,6 +204,8 @@ services:
     container_name: aar_report
     ports: ["8090:8090"]
     environment:
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-}          # 감사 1.8: AAR 열람 인증(정적토큰) 검증
+      - RBAC_ALLOW_INSECURE_DEV=${RBAC_ALLOW_INSECURE_DEV:-}
       - EVENT_COLLECTOR_URL=http://event_collector:8010
       - SCORING_ENGINE_URL=http://scoring_engine:8020
       - SIEM_API_URL=http://siem_api:8040
