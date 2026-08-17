@@ -26,6 +26,7 @@ COPY --from=build /b/blueportal/dist/  /usr/share/nginx/html/blue/
 COPY --from=build /b/siem/dist/        /usr/share/nginx/html/blue/siem/
 COPY --from=build /b/edrconsole/dist/  /usr/share/nginx/html/blue/edr/
 COPY dashboards/control-tower/index.html /usr/share/nginx/html/control/index.html
+COPY dashboards/start-here/index.html /usr/share/nginx/html/start/index.html  # 감사 U-9/E4
 COPY infra/gateway/landing.html /usr/share/nginx/html/landing.html
 COPY infra/gateway/login.html /usr/share/nginx/html/login.html
 COPY infra/gateway/nginx.conf   /etc/nginx/conf.d/default.conf
