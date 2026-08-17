@@ -103,7 +103,15 @@ attach_modbus_ics(app, ModbusIcsConfig(
 # 앱계층 태그 읽기를, 여기 실 OPC UA는 전송/보안채널 핸드셰이크(정찰·무단 접속)를 담당한다.
 from shared.ics.twin_opcua import attach_opcua  # noqa: E402
 attach_opcua(app, asset="refinery_plant", vuln_id="REF-001")
+# 실 HART-IP(§5 실 프로토콜 확장) — Tank Farm 스마트 트랜스미터(포트 5094, env HART_PORT).
+# REF-003 의 HTTP 모킹(/api/tankfarm/gauge)과 나란히, 진짜 HART-IP 로 동적변수를 노출한다.
+# PV=탱크레벨(%), SV=온도(°C), TV=압력(bar). 무인증 HART 세션 개시 후 열람 자체가 미인가 접근.
+from shared.ics.twin_hart import attach_hart  # noqa: E402
 
+attach_hart(app, asset="refinery_plant", vuln_id="REF-003",
+            device_vars={"pv": TAGS["ns=2;s=TankFarm.T101.LevelPct"], "pv_unit": 57,
+                         "sv": 25.0, "sv_unit": 32, "tv": 1.2, "tv_unit": 220,
+                         "loop_current": 12.0})
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8201)
