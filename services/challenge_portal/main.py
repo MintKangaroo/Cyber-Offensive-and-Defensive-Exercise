@@ -118,6 +118,12 @@ def list_teams(side: Optional[str] = None):
 # ---------------------------------------------------------------------------
 # 카탈로그 로딩
 # ---------------------------------------------------------------------------
+def _nice_roles(category, explicit):
+    """category/nice → NICE work role id 목록(파생). shared.nice_framework 재사용."""
+    from shared.nice_framework import roles_for_challenge
+    return roles_for_challenge(category, explicit)
+
+
 def _load_catalog() -> dict[str, dict]:
     """red_grader.py 가 있는 챌린지만 로드. 정답/그레이더는 카탈로그에 담지 않는다."""
     cat: dict[str, dict] = {}
@@ -147,6 +153,7 @@ def _load_catalog() -> dict[str, dict]:
             "title": data.get("title", cid),
             "points_red": int(pts.get("red", 0)),
             "mitre": data.get("mitre", []),
+            "nice": _nice_roles(data.get("category"), data.get("nice")),  # NICE work role 파생
             "goal": red_task.get("goal", ""),
             "submit_fields": red_task.get("submit_fields", []) or ["flag"],
             "description": (data.get("description", "") or "").strip(),
@@ -163,7 +170,7 @@ CATALOG = _load_catalog()
 def _public(entry: dict) -> dict:
     """클라이언트로 내보낼 안전 필드만(내부 경로 제외)."""
     return {k: entry[k] for k in (
-        "id", "category", "difficulty", "title", "points_red", "mitre",
+        "id", "category", "difficulty", "title", "points_red", "mitre", "nice",
         "goal", "submit_fields", "description", "artifacts", "has_artifact", "gate")}
 
 
@@ -196,6 +203,29 @@ class SubmitReq(BaseModel):
 @app.get("/health")
 def health():
     return {"service": "challenge_portal", "challenges": len(CATALOG)}
+
+
+@app.get("/portal/nice-coverage")
+def nice_coverage():
+    """NICE Framework work role 커버리지(§5 잔여: NICE 매핑). 전체 challenge.yaml의
+    category/nice를 집계해 '이 레인지가 어떤 직무 역량을 훈련·평가하는가'를 보고한다.
+    MITRE ATT&CK 커버리지(SIEM /detection/attack-coverage)와 평행한 역량 커버리지."""
+    from shared.nice_framework import catalog_coverage, WORK_ROLES
+    items = []
+    for cdir in sorted(CHALLENGES_ROOT.glob("*/*/")):
+        ymlp = cdir / "challenge.yaml"
+        if not ymlp.exists():
+            continue
+        try:
+            data = (yaml.safe_load(ymlp.read_text()) or {}).get("challenge", {}) or {}
+        except yaml.YAMLError:
+            continue
+        if data.get("id"):
+            items.append({"id": data["id"], "category": data.get("category"),
+                          "nice": data.get("nice") or []})
+    cov = catalog_coverage(items)
+    return {"framework": "NICE (NIST SP 800-181r1)", "total_challenges": len(items),
+            "work_roles": WORK_ROLES, **cov}
 
 
 @app.get("/portal/challenges")

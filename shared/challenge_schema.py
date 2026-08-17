@@ -71,6 +71,8 @@ class Challenge(BaseModel):
     points: Points
     asset: Optional[str] = None
     mitre: list[str] = Field(default_factory=list)
+    # NICE Framework(SP 800-181r1) work role id 목록. 비우면 category에서 파생(nice_framework).
+    nice: list[str] = Field(default_factory=list)
     description: str = ""
     red_task: Optional[RedTask] = None
     blue_task: Optional[BlueTask] = None
