@@ -96,6 +96,12 @@ attach_modbus_ics(app, ModbusIcsConfig(
                        crit_temp=1e9, damage_rpm_rate=2.0, damage_temp_rate=0.0, failure_threshold=100),
     impact="datacenter_thermal_runaway", defense_label="thermal_interlock_rearmed"))
 
+# 실 IEC 61850 MMS/TCP(§5 실 프로토콜 확장) — 데이터센터 전력공급 변전소 IED(전력계통 보호).
+# HTTP 목업(DCX-002 UPS 명령)은 앱계층을, 여기 실 MMS 는 COTP 연결+Initiate+Read(모선전압·
+# 선로전류·차단기상태) 정찰을 담당. 미인증 MMS Read/Initiate → DCX-002 이벤트 + SIEM 기록.
+from shared.ics.twin_iec61850 import attach_iec61850  # noqa: E402
+attach_iec61850(app, asset="datacenter_bms", vuln_id="DCX-002")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8207)
