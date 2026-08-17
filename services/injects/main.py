@@ -33,6 +33,7 @@ from shared.rbac import require_role, require_read  # noqa: E402
 from shared.service_auth import service_headers  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import model  # noqa: E402
+import engine  # noqa: E402
 
 DB_PATH = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent))) / "injects.db"
 EVENT_COLLECTOR_URL = os.environ.get("EVENT_COLLECTOR_URL", "http://event_collector:8010")
@@ -68,6 +69,22 @@ LIBRARY = [
 ]
 _LIB_BY_ID = {t["id"]: t for t in LIBRARY}
 
+# 내장 예시 캠페인 — 랜섬웨어 위기: 언론 문의(즉시) → 경영 브리핑(1분) → 규제 통보(경영 응답 후).
+# 경영 브리핑 마감을 놓치면 이사회 긴급 재촉이 자동 에스컬레이션된다.
+EXAMPLE_CAMPAIGN_SPECS = [
+    {"spec_id": "media", "template_id": "media-press-call", "at_sec": 0},
+    {"spec_id": "exec", "template_id": "exec-ciso-brief", "at_sec": 60},
+    {"spec_id": "regulator", "template_id": "regulator-notice",
+     "trigger": {"after": "exec", "on": "answered"}},
+    {"spec_id": "exec-escalation", "channel": "exec", "sender": "이사회 의장",
+     "subject": "[긴급] 경영진 브리핑 미제출 — 즉시 보고하라",
+     "body": "요청한 3줄 요약이 마감까지 오지 않았다. 이사회가 대기 중이다. 5분 내 현황을 보고하라.",
+     "deadline_min": 5,
+     "rubric": [{"criterion": "지연 사유 + 현황", "max": 10},
+                {"criterion": "복구 ETA 재확인", "max": 5}],
+     "trigger": {"after": "exec", "on": "deadline_missed"}},
+]
+
 app = FastAPI(title="Non-technical Injects")
 app.add_middleware(
     CORSMiddleware,
@@ -92,6 +109,9 @@ def _init():
         response_text TEXT, response_at REAL, score INTEGER, max_score INTEGER,
         rubric_scores TEXT, feedback TEXT, status TEXT)""")
     c.execute("CREATE INDEX IF NOT EXISTS idx_inj_team ON injects(team_id)")
+    c.execute("""CREATE TABLE IF NOT EXISTS campaigns(
+        id TEXT PRIMARY KEY, name TEXT, start_time REAL, team_ids TEXT,
+        specs TEXT, fired TEXT, status TEXT, created_at REAL)""")
     c.commit(); c.close()
 
 
@@ -107,6 +127,18 @@ def _row(r: sqlite3.Row) -> dict:
 
 def _state(inc: dict, now: float) -> str:
     return model.deadline_state(inc["deadline_at"], now, inc.get("response_at"))
+
+
+def _insert_inject(c, *, template_id, channel, sender, subject, body, team,
+                   now, deadline, rubric) -> str:
+    """인젝트 한 건을 인박스에 배달(INSERT)하고 id 반환. dispatch·tick 공용."""
+    iid = "INJ-" + uuid.uuid4().hex[:8]
+    c.execute("""INSERT INTO injects(id,template_id,channel,sender,subject,body,team_id,
+                 delivered_at,deadline_at,rubric,response_text,response_at,score,max_score,
+                 rubric_scores,feedback,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+              (iid, template_id, channel, sender, subject, body, team, now, deadline,
+               json.dumps(rubric), None, None, None, None, None, None, "delivered"))
+    return iid
 
 
 class DispatchReq(BaseModel):
@@ -130,6 +162,18 @@ class ScoreReq(BaseModel):
     scores: dict = {}
     feedback: str = ""
     late_penalty: float = 0.5   # 지각 시 배수
+
+
+class CampaignReq(BaseModel):
+    name: str = "ransomware-crisis"
+    team_ids: list[str] = []
+    specs: list[dict] = []        # 비우면 내장 예시 캠페인 사용
+    use_example: bool = False
+    start_time: float = 0.0       # 0 이면 로드 시각(now)
+
+
+class TickReq(BaseModel):
+    campaign_id: str = ""         # 비우면 모든 활성 캠페인 진행
 
 
 @app.get("/health")
@@ -164,12 +208,9 @@ async def dispatch(req: DispatchReq, authorization: str = Header(default="")):
     created = []
     c = _db()
     for team in req.team_ids:
-        iid = "INJ-" + uuid.uuid4().hex[:8]
-        c.execute("""INSERT INTO injects(id,template_id,channel,sender,subject,body,team_id,
-                     delivered_at,deadline_at,rubric,response_text,response_at,score,max_score,
-                     rubric_scores,feedback,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                  (iid, req.template_id, channel, sender, subject, body, team, now, deadline,
-                   json.dumps(rubric), None, None, None, None, None, None, "delivered"))
+        iid = _insert_inject(c, template_id=req.template_id, channel=channel, sender=sender,
+                             subject=subject, body=body, team=team, now=now, deadline=deadline,
+                             rubric=rubric)
         created.append({"id": iid, "team_id": team})
     c.commit(); c.close()
     return {"dispatched": len(created), "deadline_min": dl_min, "injects": created}
@@ -294,12 +335,131 @@ def scoreboard(authorization: str = Header(default="")):
     return {"scoreboard": board}
 
 
+def _camp_dict(r: sqlite3.Row) -> dict:
+    d = dict(r)
+    d["team_ids"] = json.loads(d.get("team_ids") or "[]")
+    d["specs"] = json.loads(d.get("specs") or "[]")
+    d["fired"] = json.loads(d.get("fired") or "{}")
+    return d
+
+
+def _tick_campaign(c, camp: dict, now: float) -> list[dict]:
+    """캠페인 하나를 진행: 발사 예정 스펙을 팀별로 계산해 인박스에 배달. 발사 목록 반환."""
+    elapsed = now - camp["start_time"]
+    specs = camp["specs"]
+    specs_by_id = {s["spec_id"]: s for s in specs}
+    fired = camp["fired"]
+    out = []
+    for team in camp["team_ids"]:
+        team_fired = fired.setdefault(team, {})
+        # 이 팀의 발사된 인젝트 상태 계산
+        states: dict = {}
+        for sid, inj_id in team_fired.items():
+            r = c.execute("SELECT deadline_at,response_at FROM injects WHERE id=?", (inj_id,)).fetchone()
+            if r:
+                states[sid] = engine.state_from_inject(r["deadline_at"], r["response_at"], now)
+            else:
+                states[sid] = engine.InjectState(fired=True)
+        for sid in engine.compute_due(specs, elapsed, states):
+            resolved = engine.resolve_spec(specs_by_id[sid], _LIB_BY_ID)
+            if resolved["channel"] not in model.CHANNELS:
+                resolved["channel"] = "internal"
+            deadline = now + resolved["deadline_min"] * 60
+            iid = _insert_inject(c, template_id=resolved["template_id"], channel=resolved["channel"],
+                                 sender=resolved["sender"], subject=resolved["subject"],
+                                 body=resolved["body"], team=team, now=now, deadline=deadline,
+                                 rubric=resolved["rubric"])
+            team_fired[sid] = iid
+            trig = specs_by_id[sid].get("trigger") or {}
+            out.append({"campaign_id": camp["id"], "team_id": team, "spec_id": sid,
+                        "inject_id": iid, "subject": resolved["subject"],
+                        "reason": trig.get("on", "scheduled")})
+    status = "complete" if engine.campaign_progress(specs, camp["team_ids"], fired)["fired"] >= \
+        len(specs) * max(1, len(camp["team_ids"])) else "running"
+    c.execute("UPDATE campaigns SET fired=?, status=? WHERE id=?",
+              (json.dumps(fired, ensure_ascii=False), status, camp["id"]))
+    return out
+
+
+@app.post("/injects/campaign")
+def load_campaign(req: CampaignReq, authorization: str = Header(default="")):
+    require_role(authorization, {"instructor"})
+    if not req.team_ids:
+        raise HTTPException(400, "team_ids 가 필요합니다.")
+    specs = EXAMPLE_CAMPAIGN_SPECS if (req.use_example or not req.specs) else req.specs
+    seen = set()
+    for s in specs:
+        if "spec_id" not in s:
+            raise HTTPException(400, "각 스펙에 spec_id 가 필요합니다.")
+        if s["spec_id"] in seen:
+            raise HTTPException(400, f"중복 spec_id: {s['spec_id']}")
+        seen.add(s["spec_id"])
+    for s in specs:  # 트리거 참조 무결성 검사
+        trig = s.get("trigger")
+        if trig:
+            if trig.get("after") not in seen:
+                raise HTTPException(400, f"트리거 after 미존재: {trig.get('after')}")
+            if trig.get("on") not in engine.TRIGGER_EVENTS:
+                raise HTTPException(400, f"트리거 on 은 {engine.TRIGGER_EVENTS} 중 하나")
+    now = time.time()
+    cid = "CMP-" + uuid.uuid4().hex[:8]
+    start = req.start_time or now
+    c = _db()
+    c.execute("""INSERT INTO campaigns(id,name,start_time,team_ids,specs,fired,status,created_at)
+                 VALUES(?,?,?,?,?,?,?,?)""",
+              (cid, req.name, start, json.dumps(req.team_ids, ensure_ascii=False),
+               json.dumps(specs, ensure_ascii=False), "{}", "running", now))
+    c.commit(); c.close()
+    return {"campaign_id": cid, "name": req.name, "team_ids": req.team_ids,
+            "specs": len(specs), "start_time": start, "status": "running"}
+
+
+@app.post("/injects/tick")
+def tick(req: TickReq, authorization: str = Header(default="")):
+    require_role(authorization, {"instructor"})
+    now = time.time()
+    c = _db()
+    if req.campaign_id:
+        rows = c.execute("SELECT * FROM campaigns WHERE id=?", (req.campaign_id,)).fetchall()
+        if not rows:
+            c.close(); raise HTTPException(404, "campaign not found")
+    else:
+        rows = c.execute("SELECT * FROM campaigns WHERE status='running'").fetchall()
+    fired = []
+    for r in rows:
+        fired.extend(_tick_campaign(c, _camp_dict(r), now))
+    c.commit(); c.close()
+    return {"ticked": len(rows), "fired": len(fired), "injects": fired}
+
+
+@app.get("/injects/campaign/status")
+def campaign_status(campaign_id: str = "", authorization: str = Header(default="")):
+    require_read(authorization)
+    now = time.time()
+    c = _db()
+    if campaign_id:
+        rows = c.execute("SELECT * FROM campaigns WHERE id=?", (campaign_id,)).fetchall()
+    else:
+        rows = c.execute("SELECT * FROM campaigns ORDER BY created_at DESC").fetchall()
+    out = []
+    for r in rows:
+        camp = _camp_dict(r)
+        prog = engine.campaign_progress(camp["specs"], camp["team_ids"], camp["fired"])
+        out.append({"campaign_id": camp["id"], "name": camp["name"], "status": camp["status"],
+                    "start_time": camp["start_time"], "elapsed_sec": round(now - camp["start_time"]),
+                    "team_ids": camp["team_ids"], "progress": prog,
+                    "fired": camp["fired"]})
+    c.close()
+    return {"count": len(out), "campaigns": out}
+
+
 @app.post("/admin/reset")
 def admin_reset(authorization: str = Header(default="")):
     require_role(authorization, {"instructor"})
     c = _db(); n = c.execute("SELECT COUNT(*) FROM injects").fetchone()[0]
-    c.execute("DELETE FROM injects"); c.commit(); c.close()
-    return {"service": "injects", "cleared": {"injects": n}}
+    m = c.execute("SELECT COUNT(*) FROM campaigns").fetchone()[0]
+    c.execute("DELETE FROM injects"); c.execute("DELETE FROM campaigns"); c.commit(); c.close()
+    return {"service": "injects", "cleared": {"injects": n, "campaigns": m}}
 
 
 if __name__ == "__main__":
