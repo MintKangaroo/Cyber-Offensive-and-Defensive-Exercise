@@ -31,6 +31,16 @@
   match:
     raw.protocol: "opcua"
 
+# §5 실 프로토콜 확장: 미인증 S7 Read Var(PLC 메모리 열람)은 Siemens PLC 정찰(Stuxnet 계열).
+- id: ICS-S7-READ-FAC
+  title: "ICS 미인증 S7 PLC 메모리 열람 - 스마트팩토리 정찰"
+  severity: 4
+  mitre: [T0888, T0861]        # Remote System Info Discovery, Point & Tag Identification
+  source_type: twin
+  kind: match
+  match:
+    raw.protocol: "s7comm"
+
 - id: ICS-MODBUS-WRITE-WU
   title: "ICS 미인가 Modbus 쓰기 - 수처리(공중보건)"
   severity: 5
