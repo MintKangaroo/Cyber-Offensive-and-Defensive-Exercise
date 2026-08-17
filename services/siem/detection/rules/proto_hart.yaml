@@ -1,0 +1,12 @@
+# HART-IP 계층 탐지 규칙(§5 실 프로토콜 확장) — 실제 HART-IP 정찰/접근을 Blue 가 탐지.
+# 트윈이 HART 명령 수신을 SIEM access 로그(raw.protocol=hart)로 흘리면 이 규칙이 매칭
+# → blue_detection_success → 점수. 정유 Tank Farm 필드 디바이스에 대한 미인가 HART 접근 포착.
+
+- id: ICS-HART-ACCESS-REF
+  title: "ICS 미인가 HART-IP 접근 - 정유 Tank Farm 트랜스미터"
+  severity: 4
+  mitre: [T0861, T0888]        # Point & Tag Identification, Remote System Information Discovery
+  source_type: twin
+  kind: match
+  match:
+    raw.protocol: "hart"
