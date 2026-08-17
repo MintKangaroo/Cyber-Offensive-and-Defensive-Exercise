@@ -27,7 +27,7 @@ from typing import Any, Optional
 
 import httpx
 import yaml
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -195,6 +195,21 @@ class SubmitReq(BaseModel):
     team_id: str
     fields: dict[str, Any] = {}
     match_id: Optional[str] = None    # 매치별 플래그 회전(P3)
+    subject: Optional[str] = None     # 개인 단위 평가(§5): 명시 개인 id(없으면 JWT sub 추출)
+
+
+def _submitter_subject(authorization: str, explicit: Optional[str]) -> str:
+    """제출자 개인 식별. 우선순위: 명시 subject > JWT sub > 'anonymous'."""
+    if explicit and explicit.strip():
+        return explicit.strip()
+    try:
+        from shared.rbac import _decode_jwt, _bearer  # noqa: PLC2701
+        ident = _decode_jwt(_bearer(authorization))
+        if ident and ident.actor:
+            return ident.actor
+    except Exception:
+        pass
+    return "anonymous"
 
 
 # ---------------------------------------------------------------------------
@@ -289,7 +304,7 @@ def get_artifact(cid: str, team_id: str = "default", match_id: Optional[str] = N
 
 
 @app.post("/portal/challenges/{cid}/submit")
-async def submit(cid: str, req: SubmitReq):
+async def submit(cid: str, req: SubmitReq, authorization: str = Header(default="")):
     e = CATALOG.get(cid)
     if not e:
         raise HTTPException(404, "challenge not found")
@@ -337,7 +352,10 @@ async def submit(cid: str, req: SubmitReq):
 
     already = cid in _SOLVES.get(eff_team, {})
     if passed and not already:
-        _SOLVES.setdefault(eff_team, {})[cid] = {"points": e["points_red"], "at": time.time()}
+        # 개인 단위 평가(§5): 이 solve를 개인(subject)에 귀속.
+        subject = _submitter_subject(authorization, req.subject)
+        _SOLVES.setdefault(eff_team, {})[cid] = {"points": e["points_red"], "at": time.time(),
+                                                 "by": subject}
         _persist_solves()
         await _emit_solve(req.team_id, e)
 
@@ -372,6 +390,21 @@ def scoreboard():
         })
     rows.sort(key=lambda r: (-r["points"], r["last_solve"]))
     return {"scoreboard": rows}
+
+
+@app.get("/portal/scoreboard/individuals")
+def individual_scoreboard():
+    """개인 단위 평가(§5): 팀 내부 '누가 무엇을 얼마나' 기여했는지 개인 리더보드."""
+    from shared.assessment import individual_leaderboard
+    return {"individuals": individual_leaderboard(_SOLVES)}
+
+
+@app.get("/portal/scoreboard/team/{team_id}/contribution")
+def team_contribution_view(team_id: str, match_id: Optional[str] = None):
+    """특정 팀의 개인별 기여도 분해(share_pct 포함) — 팀 내부 평가용."""
+    from shared.assessment import team_contribution
+    key = _effective_team(team_id, match_id)
+    return team_contribution(_SOLVES, key)
 
 
 async def _emit_collusion(team_id: str, cid: str, shared_with: list[str]) -> None:
