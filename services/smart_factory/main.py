@@ -99,6 +99,14 @@ attach_modbus_ics(app, ModbusIcsConfig(
 from shared.ics.twin_s7 import attach_s7  # noqa: E402
 attach_s7(app, asset="smart_factory", vuln_id="FAC-001",
           db_init=[60, 500, 1, 42, 0, 0, 0, 0])
+# 실 Profinet DCP(audit §5) — 팩토리 자동화 발견 계층. S7(102)/Modbus(502)와 별개 포트 34964.
+# DCP Identify/Get = 미인증 디바이스 발견(recon) → SIEM(protocol=profinet)+red 이벤트.
+from shared.ics.twin_profinet import attach_profinet  # noqa: E402
+from shared.ics.profinet import ProfinetDevice  # noqa: E402
+attach_profinet(app, asset="smart_factory", vuln_id="FAC-001",
+                device=ProfinetDevice(station_name="plc-line-a", vendor_id=0x002A,
+                                      device_id=0x0301, ip="10.20.0.11",
+                                      vendor_value="Siemens S7-1500 PN/IE"))
 
 if __name__ == "__main__":
     import uvicorn
