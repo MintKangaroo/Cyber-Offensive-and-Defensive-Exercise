@@ -15,6 +15,7 @@ os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="injects-engine-")
 for _k in ("RBAC_TOKENS", "INSTRUCTOR_TOKEN", "RED_TOKEN", "BLUE_TOKEN",
            "OBSERVER_TOKEN", "AUTH_JWT_SECRET", "OBSERVER_READ_ENFORCE"):
     os.environ.pop(_k, None)
+os.environ["RBAC_ALLOW_INSECURE_DEV"] = "true"  # fail-closed rbac(감사 1.6)에서 dev 무토큰 통과
 
 import pytest
 from fastapi.testclient import TestClient

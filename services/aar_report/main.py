@@ -71,9 +71,6 @@ def _require_viewer(authorization: str) -> None:
     인증된 아무 역할(instructor/observer/red/blue/...)이면 열람 허용, 무토큰은 401.
     (감사 1.8 DoD: aar_report 전 엔드포인트 require_role, 무토큰 401)"""
     require_role(authorization, set(ROLES))
-def _require_viewer(authorization: str):
-    """읽기 전용(관전자 이상) 게이트. OBSERVER_READ_ENFORCE off 면 공개(기존 동작)."""
-    return require_read(authorization)
 
 
 @app.get("/health")
