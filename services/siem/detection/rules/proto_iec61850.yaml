@@ -1,0 +1,11 @@
+# §5 실 프로토콜 확장: IEC 61850 MMS(전력 변전소) 탐지 규칙.
+# 트윈이 실제 TPKT/COTP/MMS(포트 102)로 Initiate/Read 를 받으면 raw.protocol=iec61850 로
+# SIEM access 로그를 흘린다. 미인증 MMS Read/Initiate = 변전소 IED 정찰(전력계통 첩보수집).
+- id: ICS-IEC61850-MMS
+  title: "ICS 미인증 IEC 61850 MMS 접근 - 변전소 IED 정찰"
+  severity: 4
+  mitre: [T0812, T0888]        # Default Credentials, Remote System Information Discovery
+  source_type: twin
+  kind: match
+  match:
+    raw.protocol: "iec61850"
