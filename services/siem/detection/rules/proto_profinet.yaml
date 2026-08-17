@@ -1,0 +1,12 @@
+# Profinet DCP 탐지 규칙(audit §5) — 실 Profinet DCP 디바이스 발견을 Blue 가 탐지.
+# 트윈이 DCP Identify/Get 요청을 SIEM access 로그(protocol=profinet)로 흘리면,
+# 이 규칙이 매칭 → blue_detection_success → 점수. (ics_layer.yaml 미수정: 별도 파일)
+
+- id: ICS-PROFINET-DCP
+  title: "ICS Profinet DCP 디바이스 발견 - 스마트팩토리"
+  severity: 3
+  mitre: [T0842, T0846]        # Network Sniffing, Remote System Discovery
+  source_type: twin
+  kind: match
+  match:
+    raw.protocol: "profinet"
