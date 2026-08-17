@@ -121,6 +121,44 @@ _modbus_bank.holding[1] = int(plc_registers["COOLANT_FLOW"])
 _modbus_bank.coils[0] = bool(plc_registers["SAFETY_INTERLOCK"])
 _modbus_server = None
 
+# ---------------------------------------------------------------------------
+# 실 DNP3 아웃스테이션(§5 실 프로토콜 확장) — 전력 SCADA의 표준 프로토콜.
+# analog_inputs = [RPM명령, 실제RPM, 냉각수온, 손상%] (읽기 텔레메트리),
+# binary_outputs[0] = SAFETY_INTERLOCK. DNP3 DIRECT_OPERATE로 인터록을 끄는 건 미인가 제어
+# (SIS 무력화)이므로 PP-006 이벤트를 발행하고 Modbus 코일과 동일 물리에 연동한다.
+# Modbus 와 마찬가지로 DNP3 도 insecure-by-design(무인증) 을 의도적으로 재현한다.
+from shared.ics.dnp3 import Dnp3Outstation, serve as _dnp3_serve  # noqa: E402
+_dnp3_server = None
+
+
+def _on_dnp3_operate(index: int, latch_on: bool) -> None:
+    """DNP3 바이너리 출력 조작 콜백. index 0 = 안전 인터록."""
+    if index == 0:
+        _modbus_bank.coils[0] = latch_on   # 공유 물리(SIS)에 반영
+        try:
+            anomaly = None
+            _siem_log.info(_json.dumps({
+                "ts": time.time(), "asset": ASSET_NAME, "protocol": "dnp3",
+                "endpoint": "/dnp3/direct_operate/interlock", "method": "DNP3",
+                "status": 200, "vuln_id": "PP-006",
+                "note": f"binary_output[0] latch={'ON' if latch_on else 'OFF'}"}))
+            emit_event(
+                event_id=Event.make_id("dnp3", ASSET_NAME, "PP-006", str(time.time())),
+                event_type=EventType.red_attack_started, actor="red", target_asset=ASSET_NAME,
+                vuln_id="PP-006", phase=RedPhase.initial_access, team_id="default",
+                trace_id=Event.session_trace_id("dnp3", ASSET_NAME),
+                metadata={"protocol": "dnp3", "control": "safety_interlock",
+                          "latch_on": latch_on, "fc": "direct_operate",
+                          "ics_technique": "T0855" if not latch_on else None,
+                          "severity": "high" if not latch_on else "info"})
+        except Exception:
+            pass
+
+
+_dnp3_os = Dnp3Outstation(analog_inputs=[0, 0, 0, 0, 0, 0, 0, 0],
+                          binary_outputs=[False] * 8, address=4,
+                          on_operate=_on_dnp3_operate)
+
 # 연속 물리 시뮬(P1-1 심화): HR2=ACTUAL_RPM, HR3=COOLANT_TEMP (읽기전용 텔레메트리).
 # 명령(HR0)·유량(HR1)에 따라 동역학적으로 반응 — 공격자는 즉시반영이 아닌 프로세스 응답을 읽어야.
 from shared.ics.process_sim import ProcessState, ProcessParams, step as _proc_step, has_failed as _has_failed, in_danger as _in_danger  # noqa: E402
@@ -145,6 +183,12 @@ async def _start_process_sim():
             _modbus_bank.holding[2] = int(_proc_state.actual_rpm)
             _modbus_bank.holding[3] = int(_proc_state.coolant_temp)
             _modbus_bank.holding[4] = int(_proc_state.damage)
+            # DNP3 아날로그 입력을 동일 텔레메트리로 동기화(실 SCADA 마스터가 읽는 값).
+            _dnp3_os.analog_inputs[0] = int(cmd)
+            _dnp3_os.analog_inputs[1] = int(_proc_state.actual_rpm)
+            _dnp3_os.analog_inputs[2] = int(_proc_state.coolant_temp)
+            _dnp3_os.analog_inputs[3] = int(_proc_state.damage)
+            _dnp3_os.binary_outputs[0] = interlock
             # 파국 에지(지속 과속+SIS 무력화 → 물리적 파괴). 1회만 발행.
             if _has_failed(_proc_state, _PROC_PARAMS) and not _proc_failed:
                 _proc_failed = True
@@ -278,6 +322,19 @@ async def _start_modbus():
         _modbus_server = await _modbus_serve(_modbus_bank, "0.0.0.0", port)
     except OSError:
         pass  # 502 바인딩 실패(권한/포트 점유) 시 HTTP 트윈은 계속 동작
+
+
+@app.on_event("startup")
+async def _start_dnp3():
+    """실 DNP3/TCP 아웃스테이션 기동(§5 실 프로토콜 확장). 기본 포트 20000."""
+    global _dnp3_server
+    if os.environ.get("DNP3_ENABLED", "1") != "1":
+        return
+    port = int(os.environ.get("DNP3_PORT", "20000"))
+    try:
+        _dnp3_server = await _dnp3_serve(_dnp3_os, "0.0.0.0", port)
+    except OSError:
+        pass  # 바인딩 실패 시 HTTP 트윈은 계속 동작
 
 HMI_ACCOUNTS = {"operator": "operator", "engineer": "Eng!neer_2024"}  # PP-002 기본계정
 

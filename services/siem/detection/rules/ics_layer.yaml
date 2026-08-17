@@ -10,6 +10,17 @@
   match:
     vuln_id: "PP-006"
 
+# §5 실 프로토콜 확장: DNP3 DIRECT_OPERATE(제어)는 정찰(READ)과 달리 미인가 제어 공격이다.
+# 트윈 access 로그의 raw.protocol=dnp3(=on_operate 시에만 기록)로 탐지 → SIS 무력화 포착.
+- id: ICS-DNP3-CONTROL-PP
+  title: "ICS 미인가 DNP3 제어 - 발전소 SIS 무력화"
+  severity: 5
+  mitre: [T0855, T0858]        # Unauthorized Command, Manipulation of Control
+  source_type: twin
+  kind: match
+  match:
+    raw.protocol: "dnp3"
+
 - id: ICS-MODBUS-WRITE-WU
   title: "ICS 미인가 Modbus 쓰기 - 수처리(공중보건)"
   severity: 5
