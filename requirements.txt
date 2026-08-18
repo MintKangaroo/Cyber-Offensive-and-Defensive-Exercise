@@ -1,5 +1,8 @@
 # 병합된 의존성 (cyber-range + cyber-range-contracts 합집합)
-fastapi==0.115.0
+fastapi==0.141.1
+# starlette 는 fastapi 전이 의존이지만, pip-audit 재현성 + CVE 픽스(≥1.3.1) 보장을 위해 명시 핀.
+# fastapi 0.141.1 은 starlette 1.6.x 와 호환(유닛 401 통과). 0.38.x 계열 PYSEC 전건 해소.
+starlette==1.6.0
 uvicorn[standard]==0.30.6
 pydantic==2.9.2
 pyjwt==2.13.0
