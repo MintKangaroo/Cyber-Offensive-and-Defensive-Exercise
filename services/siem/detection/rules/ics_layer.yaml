@@ -21,6 +21,16 @@
   match:
     raw.protocol: "dnp3"
 
+# §5 실 프로토콜 확장: 미인증 OPC UA 접속(security None SecureChannel 개설)은 DCS/SIS 정찰.
+- id: ICS-OPCUA-ANON-CONNECT
+  title: "ICS 미인증 OPC UA 접속 - DCS/SIS 정찰"
+  severity: 4
+  mitre: [T0846, T0888]        # Remote System Discovery, Remote System Information Discovery
+  source_type: twin
+  kind: match
+  match:
+    raw.protocol: "opcua"
+
 - id: ICS-MODBUS-WRITE-WU
   title: "ICS 미인가 Modbus 쓰기 - 수처리(공중보건)"
   severity: 5

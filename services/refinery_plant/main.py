@@ -99,6 +99,11 @@ attach_modbus_ics(app, ModbusIcsConfig(
                        failure_threshold=100),
     impact="overpressure_explosion"))
 
+# 실 OPC UA/TCP(§5 실 프로토콜 확장) — DCS/SIS OPC UA 서버(포트 4840). HTTP 목업(REF-001)은
+# 앱계층 태그 읽기를, 여기 실 OPC UA는 전송/보안채널 핸드셰이크(정찰·무단 접속)를 담당한다.
+from shared.ics.twin_opcua import attach_opcua  # noqa: E402
+attach_opcua(app, asset="refinery_plant", vuln_id="REF-001")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8201)
