@@ -18,14 +18,25 @@ from typing import Any, Literal, Optional
 from collections import deque
 
 
+# RFC1918 사설 + 루프백 + 링크로컬만 명시적으로 '내부'로 본다.
+# 주의: ipaddress.is_private 는 최신 CPython 에서 IETF 특수용도 범위(문서용
+# 192.0.2/24·198.51.100/24·203.0.113/24, 벤치마킹 등)까지 True 로 재분류했다.
+# 그 범위는 훈련 데이터셋에서 '외부' C2 목적지의 스탠드인으로 쓰이므로, is_private
+# 에 의존하면 정상적인 외부 비콘을 내부로 오분류해 탐지가 죽는다(DET-004/009 회귀).
+_INTERNAL_NETS = tuple(ipaddress.ip_network(c) for c in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",   # RFC1918 사설
+    "127.0.0.0/8", "169.254.0.0/16",                    # 루프백·링크로컬
+))
+
+
 def _is_private_or_local_ip(ip: str) -> bool:
-    """사설(RFC1918)·루프백·링크로컬 IP면 True(감사 4.5: 내부 목적지 비콘 오탐 방지).
+    """RFC1918 사설·루프백·링크로컬 IP면 True(감사 4.5: 내부 목적지 비콘 오탐 방지).
     호스트명 등 IP가 아니면(파싱 실패) True로 간주해 오탐을 피한다(외부 IP만 비콘 후보)."""
     try:
-        return ipaddress.ip_address(ip).is_private or ipaddress.ip_address(ip).is_loopback \
-            or ipaddress.ip_address(ip).is_link_local
+        addr = ipaddress.ip_address(ip)
     except ValueError:
         return True
+    return any(addr in net for net in _INTERNAL_NETS)
 
 
 def _get_path(obj: dict, path: str) -> Any:

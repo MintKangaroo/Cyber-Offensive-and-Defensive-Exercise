@@ -8,6 +8,11 @@
 server {
     listen 8010;
 
+    # Docker 내장 DNS. proxy_pass 에 변수를 쓰면 nginx 는 업스트림을 '기동 시'가 아니라
+    # '요청 시점'에 해석한다 → event_collector 가 아직 안 떠도 nginx 가 죽지 않는다.
+    # (리터럴 호스트면 기동 시 1회 해석해 host-not-found 로 emerg 종료하던 레이스 제거.)
+    resolver 127.0.0.11 valid=10s ipv6=off;
+
     location = /health {
         add_header Content-Type text/plain;
         return 200 "ingest_proxy ok\n";
@@ -15,7 +20,8 @@ server {
 
     # 트윈은 /events(POST) 만 사용. 프록시가 인증 헤더를 주입.
     location = /events {
-        proxy_pass http://event_collector:8010/events;
+        set $ingest_upstream event_collector;
+        proxy_pass http://$ingest_upstream:8010/events;
         proxy_set_header Authorization "Bearer ${SERVICE_TOKEN}";
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header Host $host;
