@@ -29,10 +29,27 @@ services:
       - ec_data:/data
     environment:
       - DATA_DIR=/data
+      - SERVICE_TOKEN=${SERVICE_TOKEN:-}          # 감사 3.1: ingest 토큰 게이트
+      - RBAC_ALLOW_INSECURE_DEV=${RBAC_ALLOW_INSECURE_DEV:-}
     ports: ["8010:8010"]
     # 격리된 트윈들이 이벤트를 보낼 수 있도록 각 twin_* internal 네트워크에도 연결.
-    networks: [range_control, twin_ground_station, twin_power_plant, twin_defense_network, twin_refinery_plant, twin_smart_factory, twin_water_utility, twin_lng_terminal, twin_railway_signaling, twin_airport_ot, twin_datacenter_bms, twin_hospital_ot]
+    networks: [range_control]
 
+
+  # 감사 3.2: 트윈망↔채점망 분리용 ingest 프록시. 트윈은 이 프록시로만 이벤트를 보내고,
+  # 프록시가 range_control의 event_collector로 포워딩 + S2S 토큰 주입. event_collector는
+  # 트윈망에서 제거되어 트윈이 직접 도달 불가(isolation_test 검증).
+  ingest_proxy:
+    image: nginx:1.29-alpine
+    container_name: ingest_proxy
+    mem_limit: 128m
+    cpus: "0.50"
+    environment:
+      - SERVICE_TOKEN=${SERVICE_TOKEN:-}
+    volumes:
+      - ./infra/ingest_proxy/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+    depends_on: [event_collector]
+    networks: [range_control, twin_ground_station, twin_power_plant, twin_defense_network, twin_refinery_plant, twin_smart_factory, twin_water_utility, twin_lng_terminal, twin_railway_signaling, twin_airport_ot, twin_datacenter_bms, twin_hospital_ot]
   scoring_engine:
     mem_limit: 512m
     cpus: "0.75"
@@ -42,6 +59,7 @@ services:
       - sc_data:/data
     ports: ["8020:8020"]
     environment:
+      - SERVICE_TOKEN=${SERVICE_TOKEN:-}
       # /score/adjust(수동 점수조정) RBAC용. 토큰 미설정 시 dev 모드로 열리므로 반드시 주입.
       - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-}
       - RBAC_ALLOW_INSECURE_DEV=${RBAC_ALLOW_INSECURE_DEV:-}
@@ -102,6 +120,7 @@ services:
       - "8040:8040"
       - "1514:1514/udp"   # syslog 수신(26번 문서 5절)
     environment:
+      - SERVICE_TOKEN=${SERVICE_TOKEN:-}
       - SIEM_LOG_DIR=/var/log/siem
       - SYSLOG_UDP_PORT=1514
       - EVENT_COLLECTOR_URL=http://event_collector:8010
@@ -127,6 +146,7 @@ services:
     container_name: scenario_engine
     ports: ["8045:8045"]
     environment:
+      - SERVICE_TOKEN=${SERVICE_TOKEN:-}
       - EVENT_COLLECTOR_URL=http://event_collector:8010
       - EVENT_COLLECTOR_WS_URL=ws://event_collector:8010/ws
       - CONFIG_SERVICE_URL=http://config_service:8030
@@ -144,6 +164,7 @@ services:
       - in_data:/data
     ports: ["8050:8050"]
     environment:
+      - SERVICE_TOKEN=${SERVICE_TOKEN:-}
       - SCENARIO_ENGINE_URL=http://scenario_engine:8045
       - SCORING_ENGINE_URL=http://scoring_engine:8020
       - EVENT_COLLECTOR_URL=http://event_collector:8010
@@ -225,6 +246,7 @@ services:
     container_name: incident
     ports: ["8095:8095"]
     environment:
+      - SERVICE_TOKEN=${SERVICE_TOKEN:-}
       - DATA_DIR=/data
       - EVENT_COLLECTOR_URL=http://event_collector:8010
     volumes: [ inc_case_data:/data ]
@@ -238,6 +260,7 @@ services:
     container_name: injects
     ports: ["8096:8096"]
     environment:
+      - SERVICE_TOKEN=${SERVICE_TOKEN:-}
       - DATA_DIR=/data
       - EVENT_COLLECTOR_URL=http://event_collector:8010
     volumes: [ injects_data:/data ]
@@ -548,6 +571,7 @@ services:
       - cp_data:/data
     ports: ["8060:8060"]
     environment:
+      - SERVICE_TOKEN=${SERVICE_TOKEN:-}
       - EVENT_COLLECTOR_URL=http://event_collector:8010
       - CONFIG_SERVICE_URL=http://config_service:8030
       - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-}
@@ -567,6 +591,7 @@ services:
       - noc_data:/data
     ports: ["8070:8070"]
     environment:
+      - SERVICE_TOKEN=${SERVICE_TOKEN:-}
       - CONFIG_SERVICE_URL=http://config_service:8030
       - EVENT_COLLECTOR_URL=http://event_collector:8010
       - EVENT_COLLECTOR_WS_URL=ws://event_collector:8010/ws
@@ -616,7 +641,7 @@ services:
     container_name: gs_twin
     # 호스트 포트 미노출 — twin_gateway를 통해서만 접근(격리 F ★★★).
     environment:
-      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - EVENT_COLLECTOR_URL=http://ingest_proxy:8010
       - CONFIG_SERVICE_URL=http://config_service:8030
       - EDR_BACKEND_URL=http://edr_backend:8080
       - SIEM_LOG_DIR=/var/log/siem/ground_station
@@ -639,7 +664,7 @@ services:
     container_name: pp_twin
     # 호스트 포트 미노출 — twin_gateway 경유(격리 F ★★★).
     environment:
-      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - EVENT_COLLECTOR_URL=http://ingest_proxy:8010
       - CONFIG_SERVICE_URL=http://config_service:8030
       - EDR_BACKEND_URL=http://edr_backend:8080
       - SIEM_LOG_DIR=/var/log/siem/power_plant
@@ -659,7 +684,7 @@ services:
     container_name: dn_twin
     # 호스트 포트 미노출 — twin_gateway 경유(격리 F ★★★).
     environment:
-      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - EVENT_COLLECTOR_URL=http://ingest_proxy:8010
       - CONFIG_SERVICE_URL=http://config_service:8030
       - EDR_BACKEND_URL=http://edr_backend:8080
       - SIEM_LOG_DIR=/var/log/siem/defense_network
@@ -762,7 +787,7 @@ services:
     build: { context: ., dockerfile: services/refinery_plant/Dockerfile }
     container_name: refinery_plant
     environment:
-      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - EVENT_COLLECTOR_URL=http://ingest_proxy:8010
       - CONFIG_SERVICE_URL=http://config_service:8030
       - EDR_BACKEND_URL=http://edr_backend:8080
       - SIEM_LOG_DIR=/var/log/siem/refinery_plant
@@ -781,7 +806,7 @@ services:
     build: { context: ., dockerfile: services/smart_factory/Dockerfile }
     container_name: smart_factory
     environment:
-      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - EVENT_COLLECTOR_URL=http://ingest_proxy:8010
       - CONFIG_SERVICE_URL=http://config_service:8030
       - EDR_BACKEND_URL=http://edr_backend:8080
       - SIEM_LOG_DIR=/var/log/siem/smart_factory
@@ -800,7 +825,7 @@ services:
     build: { context: ., dockerfile: services/water_utility/Dockerfile }
     container_name: water_utility
     environment:
-      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - EVENT_COLLECTOR_URL=http://ingest_proxy:8010
       - CONFIG_SERVICE_URL=http://config_service:8030
       - EDR_BACKEND_URL=http://edr_backend:8080
       - SIEM_LOG_DIR=/var/log/siem/water_utility
@@ -819,7 +844,7 @@ services:
     build: { context: ., dockerfile: services/lng_terminal/Dockerfile }
     container_name: lng_terminal
     environment:
-      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - EVENT_COLLECTOR_URL=http://ingest_proxy:8010
       - CONFIG_SERVICE_URL=http://config_service:8030
       - EDR_BACKEND_URL=http://edr_backend:8080
       - SIEM_LOG_DIR=/var/log/siem/lng_terminal
@@ -838,7 +863,7 @@ services:
     build: { context: ., dockerfile: services/railway_signaling/Dockerfile }
     container_name: railway_signaling
     environment:
-      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - EVENT_COLLECTOR_URL=http://ingest_proxy:8010
       - CONFIG_SERVICE_URL=http://config_service:8030
       - EDR_BACKEND_URL=http://edr_backend:8080
       - SIEM_LOG_DIR=/var/log/siem/railway_signaling
@@ -857,7 +882,7 @@ services:
     build: { context: ., dockerfile: services/airport_ot/Dockerfile }
     container_name: airport_ot
     environment:
-      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - EVENT_COLLECTOR_URL=http://ingest_proxy:8010
       - CONFIG_SERVICE_URL=http://config_service:8030
       - EDR_BACKEND_URL=http://edr_backend:8080
       - SIEM_LOG_DIR=/var/log/siem/airport_ot
@@ -876,7 +901,7 @@ services:
     build: { context: ., dockerfile: services/datacenter_bms/Dockerfile }
     container_name: datacenter_bms
     environment:
-      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - EVENT_COLLECTOR_URL=http://ingest_proxy:8010
       - CONFIG_SERVICE_URL=http://config_service:8030
       - EDR_BACKEND_URL=http://edr_backend:8080
       - SIEM_LOG_DIR=/var/log/siem/datacenter_bms
@@ -895,7 +920,7 @@ services:
     build: { context: ., dockerfile: services/hospital_ot/Dockerfile }
     container_name: hospital_ot
     environment:
-      - EVENT_COLLECTOR_URL=http://event_collector:8010
+      - EVENT_COLLECTOR_URL=http://ingest_proxy:8010
       - CONFIG_SERVICE_URL=http://config_service:8030
       - EDR_BACKEND_URL=http://edr_backend:8080
       - SIEM_LOG_DIR=/var/log/siem/hospital_ot

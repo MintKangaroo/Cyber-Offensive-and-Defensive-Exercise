@@ -19,6 +19,7 @@ import httpx
 import sys
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from shared.event_schema import Event, EventType  # noqa: E402
+from shared.service_auth import service_headers  # noqa: E402
 
 CONFIG_SERVICE_URL = "http://config_service:8030"
 EVENT_COLLECTOR_URL = "http://event_collector:8010"
@@ -86,6 +87,6 @@ class RecoveryWatcher:
         }
         try:
             async with httpx.AsyncClient(timeout=2.0) as client:
-                await client.post(f"{EVENT_COLLECTOR_URL}/events", json=event)
+                await client.post(f"{EVENT_COLLECTOR_URL}/events", json=event, headers=service_headers())
         except httpx.HTTPError:
             pass  # Event Collector 다운 시 유실 방지를 위해 재시도 큐 도입 권장(운영 확장 시)

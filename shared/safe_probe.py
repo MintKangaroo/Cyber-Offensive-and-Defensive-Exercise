@@ -56,7 +56,9 @@ def report_patch_verified(vuln_id: str, target_asset: str):
         "metadata": {"verified_by": "safe_probe"},
     }
     try:
-        requests.post(f"{EVENT_COLLECTOR}/events", json=payload, timeout=2.0)
+        from shared.service_auth import service_headers  # 감사 3.1: S2S 토큰
+        requests.post(f"{EVENT_COLLECTOR}/events", json=payload,
+                      headers=service_headers(), timeout=2.0)
     except requests.exceptions.RequestException:
         pass  # Event Collector 다운이어도 probe 결과 자체는 출력
 

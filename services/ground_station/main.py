@@ -48,6 +48,8 @@ GS_ROUTE_VULN_MAP = {
 }
 
 ASSET_NAME = "ground_station"
+# 감사 3.3: 팀 귀속은 배포 env(TEAM_ID)로 서버측 결정. 공격자 제어 헤더(X-Team-Id) 미신뢰.
+TEAM_ID = os.environ.get("TEAM_ID", "default")
 
 APP_DIR = Path(__file__).parent
 DB_PATH = APP_DIR / "ground_station.db"
@@ -170,7 +172,7 @@ def health():
 # GS-001: SQL Injection
 # ---------------------------------------------------------------------------
 @app.get("/api/telemetry")
-def get_telemetry(sensor_id: str = Query(...), x_team_id: str = Header(default="default")):
+def get_telemetry(sensor_id: str = Query(...)):
     conn = get_db()
     if patched("PATCH_GS_001"):
         cur = conn.execute(
@@ -187,10 +189,10 @@ def get_telemetry(sensor_id: str = Query(...), x_team_id: str = Header(default="
             raise HTTPException(400, f"query error: {e}")
         if "'" in sensor_id or "union" in sensor_id.lower():
             emit_event(
-                event_id=Event.make_id(x_team_id, ASSET_NAME, "GS-001", str(time.time())),
+                event_id=Event.make_id(TEAM_ID, ASSET_NAME, "GS-001", str(time.time())),
                 event_type=EventType.red_attack_started, actor="red", target_asset=ASSET_NAME,
-                vuln_id="GS-001", phase=RedPhase.initial_access, team_id=x_team_id,
-                trace_id=Event.session_trace_id(x_team_id, ASSET_NAME),
+                vuln_id="GS-001", phase=RedPhase.initial_access, team_id=TEAM_ID,
+                trace_id=Event.session_trace_id(TEAM_ID, ASSET_NAME),
                 metadata={"sensor_id_input": sensor_id},
             )
     rows = [dict(r) for r in cur.fetchall()]
@@ -202,7 +204,7 @@ def get_telemetry(sensor_id: str = Query(...), x_team_id: str = Header(default="
 # GS-002: Hardcoded Credentials / Weak JWT
 # ---------------------------------------------------------------------------
 @app.post("/api/login")
-def login(req: LoginRequest, x_team_id: str = Header(default="default")):
+def login(req: LoginRequest):
     conn = get_db()
     if patched("PATCH_GS_002"):
         # 패치 후: 기본 계정 제거 + 강한 랜덤 시크릿 사용 가정
@@ -221,10 +223,10 @@ def login(req: LoginRequest, x_team_id: str = Header(default="default")):
         raise HTTPException(401, "invalid credentials")
     if not patched("PATCH_GS_002") and req.username == "admin":
         emit_event(
-            event_id=Event.make_id(x_team_id, ASSET_NAME, "GS-002", str(time.time())),
+            event_id=Event.make_id(TEAM_ID, ASSET_NAME, "GS-002", str(time.time())),
             event_type=EventType.red_attack_started, actor="red", target_asset=ASSET_NAME,
-            vuln_id="GS-002", phase=RedPhase.initial_access, team_id=x_team_id,
-            trace_id=Event.session_trace_id(x_team_id, ASSET_NAME),
+            vuln_id="GS-002", phase=RedPhase.initial_access, team_id=TEAM_ID,
+            trace_id=Event.session_trace_id(TEAM_ID, ASSET_NAME),
             challenge_id="WEB-002",   # crossover 시나리오/레퍼런스 문제 연동
             metadata={"username": req.username},
         )
@@ -237,7 +239,7 @@ def login(req: LoginRequest, x_team_id: str = Header(default="default")):
 # GS-003: IDOR
 # ---------------------------------------------------------------------------
 @app.get("/api/mission-plan/{plan_id}")
-def get_mission_plan(plan_id: int, authorization: str = Header(default=""), x_team_id: str = Header(default="default")):
+def get_mission_plan(plan_id: int, authorization: str = Header(default="")):
     conn = get_db()
     cur = conn.execute("SELECT * FROM mission_plans WHERE id=?", (plan_id,))
     plan = cur.fetchone()
@@ -257,10 +259,10 @@ def get_mission_plan(plan_id: int, authorization: str = Header(default=""), x_te
     else:
         # IDOR: 소유권 검증 없이 통과 -> 기밀 임무계획(flag) 획득으로 간주
         emit_event(
-            event_id=Event.make_id(x_team_id, ASSET_NAME, "GS-003", str(plan_id)),
+            event_id=Event.make_id(TEAM_ID, ASSET_NAME, "GS-003", str(plan_id)),
             event_type=EventType.flag_exfiltrated, actor="red", target_asset=ASSET_NAME,
-            vuln_id="GS-003", phase=RedPhase.data_exfiltration, team_id=x_team_id,
-            trace_id=Event.session_trace_id(x_team_id, ASSET_NAME),
+            vuln_id="GS-003", phase=RedPhase.data_exfiltration, team_id=TEAM_ID,
+            trace_id=Event.session_trace_id(TEAM_ID, ASSET_NAME),
             metadata={"plan_id": plan_id, "flag": plan["classified_flag"]},
         )
 
@@ -271,7 +273,7 @@ def get_mission_plan(plan_id: int, authorization: str = Header(default=""), x_te
 # GS-004: Path Traversal
 # ---------------------------------------------------------------------------
 @app.get("/api/download")
-def download_file(file: str = Query(...), x_team_id: str = Header(default="default")):
+def download_file(file: str = Query(...)):
     if patched("PATCH_GS_004"):
         # 패치 후: 파일명만 허용, 경로 구분자 차단 + base dir 고정
         safe_name = os.path.basename(file)
@@ -283,10 +285,10 @@ def download_file(file: str = Query(...), x_team_id: str = Header(default="defau
         target = (FILES_DIR / file).resolve()
         if ".." in file:
             emit_event(
-                event_id=Event.make_id(x_team_id, ASSET_NAME, "GS-004", file),
+                event_id=Event.make_id(TEAM_ID, ASSET_NAME, "GS-004", file),
                 event_type=EventType.flag_exfiltrated, actor="red", target_asset=ASSET_NAME,
-                vuln_id="GS-004", phase=RedPhase.data_exfiltration, team_id=x_team_id,
-                trace_id=Event.session_trace_id(x_team_id, ASSET_NAME),
+                vuln_id="GS-004", phase=RedPhase.data_exfiltration, team_id=TEAM_ID,
+                trace_id=Event.session_trace_id(TEAM_ID, ASSET_NAME),
                 metadata={"requested_path": file},
             )
 
@@ -299,14 +301,14 @@ def download_file(file: str = Query(...), x_team_id: str = Header(default="defau
 # GS-005: Debug Config Exposure
 # ---------------------------------------------------------------------------
 @app.get("/api/debug/config")
-def debug_config(x_team_id: str = Header(default="default")):
+def debug_config():
     if patched("PATCH_GS_005"):
         raise HTTPException(404, "not found")  # 패치 후: 라우트 자체가 비활성화된 것처럼 동작
     emit_event(
-        event_id=Event.make_id(x_team_id, ASSET_NAME, "GS-005", str(time.time())),
+        event_id=Event.make_id(TEAM_ID, ASSET_NAME, "GS-005", str(time.time())),
         event_type=EventType.red_attack_started, actor="red", target_asset=ASSET_NAME,
-        vuln_id="GS-005", phase=RedPhase.privilege_escalation, team_id=x_team_id,
-        trace_id=Event.session_trace_id(x_team_id, ASSET_NAME),
+        vuln_id="GS-005", phase=RedPhase.privilege_escalation, team_id=TEAM_ID,
+        trace_id=Event.session_trace_id(TEAM_ID, ASSET_NAME),
         metadata={"exposed": ["env", "jwt_secret"]},
     )
     return {
@@ -343,7 +345,7 @@ _INTERNAL_RESOURCES = {
 
 
 @app.post("/api/tle/import")
-def tle_import(req: TLEImport, x_team_id: str = Header(default="default")):
+def tle_import(req: TLEImport):
     internal = _is_internal_target(req.url)
     if patched("PATCH_GS_006"):
         # 패치 후: 외부 https 도메인 allowlist만 허용, 내부/사설/파일 스킴 차단(SSRF 방지)
@@ -353,10 +355,10 @@ def tle_import(req: TLEImport, x_team_id: str = Header(default="default")):
     # 취약 지점: 사용자가 준 URL로 서버가 그대로 요청 -> 내부 메타데이터/파일 접근(SSRF)
     if internal:
         emit_event(
-            event_id=Event.make_id(x_team_id, ASSET_NAME, "GS-006", req.url, str(time.time())),
+            event_id=Event.make_id(TEAM_ID, ASSET_NAME, "GS-006", req.url, str(time.time())),
             event_type=EventType.red_attack_started, actor="red", target_asset=ASSET_NAME,
-            vuln_id="GS-006", phase=RedPhase.lateral_movement, team_id=x_team_id,
-            trace_id=Event.session_trace_id(x_team_id, ASSET_NAME),
+            vuln_id="GS-006", phase=RedPhase.lateral_movement, team_id=TEAM_ID,
+            trace_id=Event.session_trace_id(TEAM_ID, ASSET_NAME),
             metadata={"requested_url": req.url},
         )
         leaked = _INTERNAL_RESOURCES["file"] if req.url.lower().startswith("file://") else \
@@ -374,7 +376,7 @@ class XMLImport(BaseModel):
 
 
 @app.post("/api/config/xml-import")
-def xml_import(req: XMLImport, x_team_id: str = Header(default="default")):
+def xml_import(req: XMLImport):
     body = req.xml
     if patched("PATCH_GS_007"):
         # 패치 후: DTD/외부 엔티티 선언 금지(XXE 방지)
@@ -384,10 +386,10 @@ def xml_import(req: XMLImport, x_team_id: str = Header(default="default")):
     # 취약 지점: 외부 엔티티(SYSTEM file://)를 확장 -> 서버 파일 유출(시뮬레이션)
     if "<!DOCTYPE" in body and "SYSTEM" in body and "file://" in body:
         emit_event(
-            event_id=Event.make_id(x_team_id, ASSET_NAME, "GS-007", str(time.time())),
+            event_id=Event.make_id(TEAM_ID, ASSET_NAME, "GS-007", str(time.time())),
             event_type=EventType.flag_exfiltrated, actor="red", target_asset=ASSET_NAME,
-            vuln_id="GS-007", phase=RedPhase.data_exfiltration, team_id=x_team_id,
-            trace_id=Event.session_trace_id(x_team_id, ASSET_NAME),
+            vuln_id="GS-007", phase=RedPhase.data_exfiltration, team_id=TEAM_ID,
+            trace_id=Event.session_trace_id(TEAM_ID, ASSET_NAME),
             metadata={"note": "external entity expanded"},
         )
         return {"patched": False, "status": "config parsed",

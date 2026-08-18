@@ -92,7 +92,9 @@ def make_ics_twin(asset_name: str, title: str, vulns: list[Vuln]) -> FastAPI:
             )
 
         async def endpoint(request: Request):
-            team_id = request.headers.get("x-team-id", "default")
+            # 감사 3.3: per-team 배포는 TEAM_ID(서버측)를 권위값으로. 미설정(dev/공용)이면
+            # 요청 헤더 폴백. 헤더만 신뢰하면 공격자가 타 팀에 귀속을 조작할 수 있다.
+            team_id = os.environ.get("TEAM_ID", "").strip() or request.headers.get("x-team-id", "default")
             payload: dict = dict(request.query_params)
             if v.method.upper() == "POST":
                 try:
