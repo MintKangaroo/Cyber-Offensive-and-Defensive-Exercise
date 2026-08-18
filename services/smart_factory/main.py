@@ -93,6 +93,13 @@ attach_modbus_ics(app, ModbusIcsConfig(
                        crit_temp=1e9, damage_rpm_rate=0.5, damage_temp_rate=0.0, failure_threshold=100),
     impact="robot_collision_injury", defense_label="estop_rearmed"))
 
+# 실 S7comm/TCP(§5 실 프로토콜 확장) — Siemens S7 PLC. HTTP 목업(FAC-001 프로그램 다운로드)은
+# 앱계층을, 여기 실 S7은 COTP 연결+Read Var(DB 워드) 정찰을 담당. DB1: 컨베이어속도·생산카운트·
+# 로봇상태·라인온도 등(더미 PLC 메모리). 미인증 S7 Read → FAC-001 이벤트+SIEM.
+from shared.ics.twin_s7 import attach_s7  # noqa: E402
+attach_s7(app, asset="smart_factory", vuln_id="FAC-001",
+          db_init=[60, 500, 1, 42, 0, 0, 0, 0])
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8202)
