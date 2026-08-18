@@ -25,6 +25,22 @@ jobs:
         run: python -m pytest tests/ -v
 
   # ---------------------------------------------------------------------------
+  # 1b) clean install 검증(감사 1.1) — 런타임 requirements.txt 만으로 핵심 임포트가
+  #     되는지. python-dotenv 누락으로 clean 호스트 기동이 깨지던 회귀(S-6)를 막는다.
+  # ---------------------------------------------------------------------------
+  clean-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install runtime requirements only
+        run: pip install -r requirements.txt
+      - name: Import dotenv (must be present)
+        run: python -c "import dotenv; print('python-dotenv', dotenv.__version__)"
+
+  # ---------------------------------------------------------------------------
   # 2) 챌린지 QA(docker 불필요) — 전체 챌린지 schema + 아티팩트/탐지 게이트 실채점.
   #    아티팩트형은 생성→solve→grade, 탐지형은 진짜 SIEM 엔진 채점까지 CI에서 검증.
   #    서비스형(docker 배포)은 스키마만(실배포는 로컬/전용 잡).
@@ -71,6 +87,11 @@ jobs:
   integration:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # dev 스모크: 토큰 없이 컨트롤플레인을 쓰므로 명시적으로 dev 우회를 켠다(fail-closed 기본).
+    # CHALLENGE_SECRET 는 challenge_portal 가 fail-fast 로 요구하므로 CI 용 더미를 주입.
+    env:
+      CHALLENGE_SECRET: ci-challenge-secret-not-for-prod
+      RBAC_ALLOW_INSECURE_DEV: "true"
     steps:
       - uses: actions/checkout@v4
 
@@ -82,6 +103,15 @@ jobs:
             auth challenge_portal incident injects observability \
             ground_station power_plant water_utility defense_network \
             gs_gateway pp_gateway dn_gateway
+
+      - name: Assert challenge_portal image ships no exploit/solution (감사 1.7)
+        run: |
+          leaked=$(docker exec challenge_portal sh -c \
+            'find / \( -name exploit.py -o -name writeup.md \) 2>/dev/null | head' || true)
+          if [ -n "$leaked" ]; then
+            echo "FATAL: 이미지에 풀이/익스플로잇 잔존:"; echo "$leaked"; exit 1
+          fi
+          echo "challenge_portal image clean (no exploit.py/writeup.md)"
 
       - name: Wait for core health
         run: |

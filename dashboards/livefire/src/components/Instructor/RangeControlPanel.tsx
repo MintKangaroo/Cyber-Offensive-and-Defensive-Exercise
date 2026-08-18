@@ -40,17 +40,17 @@ export function RangeControlPanel({ token, reason }: { token: string; reason: st
       <div className="p-3 border-b border-[#1E2A3F] flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <span className="text-[10px] uppercase tracking-widest text-[#6B7A99]">Safety Status</span>
-          <span className={`font-mono text-[13px] font-bold ${s?.range_containment_score === "100%" ? "text-[#34D399]" : "text-[#F5A623]"}`}>
+          <span className={`font-mono text-[13px] font-bold ${s?.range_containment_score === "100%" ? "text-[#34D399]" : "text-[#F5A623]"}`}
+            title="격리는 compose 설계 의도이며 런타임 실측이 아니다 — isolation_test.py 로 검증 필요">
             {s?.range_containment_score ?? "…"}
           </span>
         </div>
         {s && (
           <div className="grid grid-cols-1 gap-0.5 font-mono text-[10px]">
-            <Row k="Internet egress" v={s.internet_egress} good={s.internet_egress === "BLOCKED"} />
-            <Row k="Cross-team traffic" v={s.cross_team_traffic} good={s.cross_team_traffic === "BLOCKED"} />
-            <Row k="Docker socket" v={s.docker_socket_exposure} good={s.docker_socket_exposure === "NONE"} />
+            <Row k="Internet egress" v={s.internet_egress} good={triState(s.internet_egress, "BLOCKED")} />
+            <Row k="Cross-team traffic" v={s.cross_team_traffic} good={triState(s.cross_team_traffic, "BLOCKED")} />
+            <Row k="Docker socket" v={s.docker_socket_exposure} good={triState(s.docker_socket_exposure, "NONE")} />
             <Row k="Emergency stop" v={estop ? "ACTIVE" : "off"} good={!estop} />
-            <Row k="Unauthorized dst" v={String(s.unauthorized_destination_attempts)} good={s.unauthorized_destination_attempts === 0} />
             {s.paused_teams.length > 0 && <Row k="Paused teams" v={s.paused_teams.join(",")} good={false} />}
           </div>
         )}
@@ -115,11 +115,19 @@ export function RangeControlPanel({ token, reason }: { token: string; reason: st
   );
 }
 
-function Row({ k, v, good }: { k: string; v: string; good: boolean }) {
+// UNKNOWN(미측정)이면 null(중립), 아니면 기대값과 일치 여부로 true/false.
+function triState(v: string, ok: string): boolean | null {
+  return v === "UNKNOWN" ? null : v === ok;
+}
+
+// good: true=녹색(양호) · false=적색(위험) · null/undefined=미측정(회색 중립).
+// UNKNOWN(실측 안 함)을 위험(적색)으로 오표시하지 않기 위한 tri-state.
+function Row({ k, v, good }: { k: string; v: string; good?: boolean | null }) {
+  const color = good == null ? "text-[#6B7A99]" : good ? "text-[#34D399]" : "text-[#FB7185]";
   return (
     <div className="flex items-center justify-between">
       <span className="text-[#6B7A99]">{k}</span>
-      <span className={good ? "text-[#34D399]" : "text-[#FB7185]"}>{v}</span>
+      <span className={color}>{v}</span>
     </div>
   );
 }

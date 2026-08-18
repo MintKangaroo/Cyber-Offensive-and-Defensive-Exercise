@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from shared import rbac
 
 TOKEN_ENVS = ["INSTRUCTOR_TOKEN", "RED_TOKEN", "BLUE_TOKEN", "OBSERVER_TOKEN", "RBAC_TOKENS",
-              "OBSERVER_READ_ENFORCE"]
+              "OBSERVER_READ_ENFORCE", "RBAC_ALLOW_INSECURE_DEV"]
 
 
 @pytest.fixture(autouse=True)
@@ -26,11 +26,23 @@ def _bearer(tok):
 
 # --- dev 모드(토큰 미설정) --------------------------------------------------
 
-def test_dev_mode_allows_everything():
+def test_authenticate_marks_dev_mode_when_unconfigured():
+    # authenticate()는 dev_mode 후보로만 '표시'한다(통과 허용은 require_role이 결정).
     ident = rbac.authenticate("")
     assert ident.dev_mode is True
     assert ident.role == "instructor"
-    # 역할 검사도 우회
+
+
+def test_dev_mode_fails_closed_without_explicit_optin():
+    # DoD 1.6: 시크릿 미설정 + opt-in 없음 → require_role이 401(fail-closed).
+    with pytest.raises(HTTPException) as ei:
+        rbac.require_role("", {"blue"})
+    assert ei.value.status_code == 401
+
+
+def test_dev_mode_bypass_only_with_explicit_optin(monkeypatch):
+    # RBAC_ALLOW_INSECURE_DEV=true 를 명시했을 때만 dev 우회 허용(로컬 개발용).
+    monkeypatch.setenv("RBAC_ALLOW_INSECURE_DEV", "true")
     assert rbac.require_role("", {"blue"}).dev_mode is True
 
 
@@ -128,8 +140,17 @@ def test_read_gate_on_requires_any_valid_token(monkeypatch):
     assert rbac.require_read(_bearer("red")).role == "red"
 
 
-def test_read_gate_on_but_no_tokens_is_dev_mode(monkeypatch):
-    """플래그 on이어도 토큰 자체가 미설정이면 dev 모드로 통과(로컬 편의 보존)."""
+def test_read_gate_on_but_no_tokens_fails_closed(monkeypatch):
+    """읽기 게이트 on + 토큰 미설정 + opt-in 없음 → fail-closed 401(과거엔 dev 통과였음)."""
     monkeypatch.setenv("OBSERVER_READ_ENFORCE", "true")
+    with pytest.raises(HTTPException) as ei:
+        rbac.require_read("")
+    assert ei.value.status_code == 401
+
+
+def test_read_gate_dev_pass_with_explicit_optin(monkeypatch):
+    """읽기 게이트 on + RBAC_ALLOW_INSECURE_DEV 명시 → 로컬 편의로 dev 통과."""
+    monkeypatch.setenv("OBSERVER_READ_ENFORCE", "true")
+    monkeypatch.setenv("RBAC_ALLOW_INSECURE_DEV", "true")
     ident = rbac.require_read("")
     assert ident is not None and ident.dev_mode is True

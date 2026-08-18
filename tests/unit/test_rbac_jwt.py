@@ -102,8 +102,19 @@ def test_static_token_backward_compat(monkeypatch):
     assert ident.role == "blue"
 
 
-def test_dev_mode_when_nothing_configured(monkeypatch):
-    # JWT 시크릿·정적 토큰 모두 없음 → dev 모드(무인증 instructor 통과)
+def test_unconfigured_fails_closed(monkeypatch):
+    # JWT 시크릿·정적 토큰 모두 없음 + opt-in 없음 → fail-closed 401(과거엔 dev 통과였음)
+    from fastapi import HTTPException
     monkeypatch.delenv("AUTH_JWT_SECRET", raising=False)
+    monkeypatch.delenv("RBAC_ALLOW_INSECURE_DEV", raising=False)
+    with pytest.raises(HTTPException) as ei:
+        rbac.require_role("", {"instructor"})
+    assert ei.value.status_code == 401
+
+
+def test_dev_mode_only_with_explicit_optin(monkeypatch):
+    # RBAC_ALLOW_INSECURE_DEV=true 를 명시했을 때만 무인증 instructor 통과(로컬 개발용)
+    monkeypatch.delenv("AUTH_JWT_SECRET", raising=False)
+    monkeypatch.setenv("RBAC_ALLOW_INSECURE_DEV", "true")
     ident = rbac.require_role("", {"instructor"})
     assert ident.dev_mode is True and ident.role == "instructor"

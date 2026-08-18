@@ -163,7 +163,9 @@ async def score_adjust(req: ScoreAdjustProxyRequest, authorization: str = Header
 
 
 @app.get("/instructor/audit")
-def get_audit(limit: int = 200):
+def get_audit(limit: int = 200, authorization: str = Header(default="")):
+    # 감사 로그(actor·액션·사유)는 교관 전용. 과거 무인증 노출이던 걸 닫는다(감사 1.8).
+    _require_instructor(authorization)
     return {"entries": audit_store.list_entries(limit)}
 
 

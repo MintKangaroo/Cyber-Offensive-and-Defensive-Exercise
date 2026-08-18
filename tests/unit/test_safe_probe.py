@@ -72,8 +72,8 @@ def test_sector_check_classifies_by_status(mock_requests):
     out = safe_probe.run(asset="refinery_plant", emit=False)
     s = out["summary"]
     assert s["total"] == 5
-    assert s["patched"] == 3 and s["vulnerable"] == 2
-    assert s["by_asset"]["refinery_plant"] == {"patched": 3, "total": 5}
+    assert s["patched"] == 3 and s["vulnerable"] == 2 and s["unreachable"] == 0
+    assert s["by_asset"]["refinery_plant"] == {"patched": 3, "total": 5, "unreachable": 0}
 
 
 def test_asset_filter_scopes_single_sector(mock_requests):
@@ -103,6 +103,37 @@ def test_full_run_covers_all_assets(mock_requests):
     out = safe_probe.run(emit=False)
     assert out["summary"]["total"] == 60
     assert set(out["summary"]["by_asset"]) == set(safe_probe.ASSET_ORDER)
+
+
+def test_unreachable_included_in_results(monkeypatch):
+    """연결 실패(서비스 다운)한 항목이 조용히 빠지지 않고 UNREACHABLE 결과로 편입되는지.
+    verify-baseline이 이걸 근거로 실패해야 하므로 summary.unreachable > 0 이 핵심."""
+    exc = safe_probe.requests.exceptions.ConnectionError
+
+    def boom(*a, **kw):
+        raise exc("connection refused")
+
+    monkeypatch.setattr(safe_probe.requests, "get", boom)
+    monkeypatch.setattr(safe_probe.requests, "post", boom)
+
+    out = safe_probe.run(asset="refinery_plant", emit=False)
+    s = out["summary"]
+    assert s["total"] == 5 and s["unreachable"] == 5
+    assert s["patched"] == 0 and s["vulnerable"] == 0  # 도달 못 했으므로 둘 다 아님
+    assert all(r["reachable"] is False and r["patched"] is None for r in out["results"])
+    assert s["by_asset"]["refinery_plant"]["unreachable"] == 5
+
+
+def test_core_check_unreachable_uses_meta(monkeypatch):
+    """핵심 3종(GS/PP/DN) 개별 함수도 meta로 UNREACHABLE 결과를 만들어내는지(vuln_id 보존)."""
+    exc = safe_probe.requests.exceptions.ConnectionError
+    monkeypatch.setattr(safe_probe.requests, "get", lambda *a, **k: (_ for _ in ()).throw(exc("x")))
+    monkeypatch.setattr(safe_probe.requests, "post", lambda *a, **k: (_ for _ in ()).throw(exc("x")))
+
+    out = safe_probe.run(asset="ground_station", emit=False)
+    ids = {r["vuln_id"] for r in out["results"]}
+    assert "GS-001" in ids and "GS-007" in ids  # 함수명이 아니라 실제 vuln_id로 기록
+    assert out["summary"]["unreachable"] == 7
 
 
 # --- watch(주기적 재검증 데몬) ---

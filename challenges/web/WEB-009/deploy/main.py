@@ -17,7 +17,11 @@ from fastapi import FastAPI, HTTPException
 
 app = FastAPI(title="WEB-009 Challenge Deploy (TRAINING ONLY)")
 
-CHALLENGE_SECRET = os.environ.get("CHALLENGE_SECRET", "web009-dev-secret")
+CHALLENGE_SECRET = os.environ.get("CHALLENGE_SECRET")
+if not CHALLENGE_SECRET:
+    raise RuntimeError(
+        "CHALLENGE_SECRET 미설정 — 동적 플래그 HMAC 키는 기본값 없이 fail-fast. "
+        "배포/채점 환경에 CHALLENGE_SECRET 을 주입하세요.")
 PATCHED = os.environ.get("PATCH_WEB_009", "false").lower() == "true"
 DB_PATH = os.environ.get("DB_PATH", "/app/chal.db")
 

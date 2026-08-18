@@ -11,6 +11,9 @@
 # ---------------------------------------------------------------------------
 set -u
 cd "$(dirname "$0")/.."
+# 그레이더/생성기는 CHALLENGE_SECRET 을 모듈 로드 시 요구(기본값 제거됨, 감사 1.4).
+# 검증 하버스 전체가 하나의 결정적 secret 을 공유하도록 여기서 주입(미설정 시에만).
+export CHALLENGE_SECRET="${CHALLENGE_SECRET:-qa-validate-challenge-secret}"
 ROOT="challenges"
 QA="infra/challenge_qa"
 fail=0; n=0; art=0; det=0; svc=0

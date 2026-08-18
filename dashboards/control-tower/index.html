@@ -334,10 +334,12 @@ async function pollSafety(){
     const s = (await r.json()).safety || {};
     const box = document.getElementById("safety");
     const row=(k,v,cls)=>`<div class="kv"><span class="k">${k}</span><span class="v ${cls||''}">${v}</span></div>`;
+    // 격리 항목은 UNKNOWN(실측 안 함)이면 위험(bad)이 아니라 중립(빈 클래스)으로 표기.
+    const iso=(v,ok)=>v==="UNKNOWN"?"":(v===ok?"ok":"bad");
     box.innerHTML =
-      row("containment", s.range_containment_score||"?", "ok") +
-      row("internet egress", s.internet_egress||"?", s.internet_egress==="BLOCKED"?"ok":"bad") +
-      row("cross-team", s.cross_team_traffic||"?", s.cross_team_traffic==="BLOCKED"?"ok":"bad") +
+      row("containment", s.range_containment_score||"?", s.range_containment_score==="UNKNOWN"?"":"ok") +
+      row("internet egress", s.internet_egress||"?", iso(s.internet_egress,"BLOCKED")) +
+      row("cross-team", s.cross_team_traffic||"?", iso(s.cross_team_traffic,"BLOCKED")) +
       row("emergency stop", s.active_emergency_stop?"ACTIVE":"off", s.active_emergency_stop?"warn":"ok") +
       row("paused teams", (s.paused_teams||[]).join(",")||"none");
   }catch(_){ document.getElementById("safety").innerHTML=`<div class="empty">range 서비스 응답 없음</div>`; }

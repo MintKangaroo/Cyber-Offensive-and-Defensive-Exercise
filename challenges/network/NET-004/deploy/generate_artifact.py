@@ -10,7 +10,11 @@ import json
 import os
 import sys
 
-CHALLENGE_SECRET = os.environ.get("CHALLENGE_SECRET", "net004-dev-secret")
+CHALLENGE_SECRET = os.environ.get("CHALLENGE_SECRET")
+if not CHALLENGE_SECRET:
+    raise RuntimeError(
+        "CHALLENGE_SECRET 미설정 — 동적 플래그 HMAC 키는 기본값 없이 fail-fast. "
+        "배포/채점 환경에 CHALLENGE_SECRET 을 주입하세요.")
 GATEWAY_IP = "10.0.0.1"
 GATEWAY_MAC = "aa:bb:cc:00:00:01"
 ATTACKER_IP = "10.0.0.66"
