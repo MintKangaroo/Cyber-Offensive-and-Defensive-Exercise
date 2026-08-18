@@ -38,7 +38,7 @@ jobs:
       - name: Install runtime requirements only
         run: pip install -r requirements.txt
       - name: Import dotenv (must be present)
-        run: python -c "import dotenv; print('python-dotenv', dotenv.__version__)"
+        run: python -c "import dotenv, importlib.metadata as m; dotenv.load_dotenv; print('python-dotenv', m.version('python-dotenv'))"
 
   # ---------------------------------------------------------------------------
   # 2) 챌린지 QA(docker 불필요) — 전체 챌린지 schema + 아티팩트/탐지 게이트 실채점.
