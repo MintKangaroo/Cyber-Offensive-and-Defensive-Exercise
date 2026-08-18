@@ -30,6 +30,7 @@ ALLOWLIST_MARKERS = [
     "dummy", "training-only", "training only", "더미", "TRAINING ONLY",
     "supersecret123",   # GS-002 의도된 취약 시크릿(문서화됨)
     "admin123", "operator", "B@ckup2019!",  # 트윈 더미 계정
+    "test-jwt-secret",  # tests/attack_defense/*의 유닛테스트용 JWT 더미(문서화된 상수)
 ]
 
 # 스캔 제외 경로

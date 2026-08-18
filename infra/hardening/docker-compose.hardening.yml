@@ -9,8 +9,6 @@
 #   - internal 네트워크로 실제 배포 시 외부 egress 차단(개발 편의를 위해 기본은 false,
 #     배포 전 체크리스트에서 true로 전환 확인)
 
-version: "3.8"
-
 services:
   ground_station:
     cpus: "0.5"
@@ -20,7 +18,8 @@ services:
       - /tmp
     cap_drop: ["ALL"]
     security_opt: ["no-new-privileges:true"]
-    user: "1000:1000"
+    # user:1000 미지정 — siem_logs 볼륨 서브디렉터리가 root 소유라 비root는 access 로그 쓰기 불가.
+    # read_only+cap_drop(ALL)+no-new-privileges로 여전히 강격리(root라도 capless/RO).
 
   power_plant:
     # 커맨드 인젝션(PP-003) + 역직렬화(PP-004) 보유 -> 가장 강한 격리
@@ -35,11 +34,14 @@ services:
       # seccomp 커스텀 프로파일은 infra/hardening/README.md의 절차대로 생성해
       # infra/hardening/seccomp-restrictive.json 으로 배치 후 아래 줄의 주석 해제:
       # - "seccomp=infra/hardening/seccomp-restrictive.json"
-    user: "1000:1000"
-    pids_limit: 64          # fork bomb류 완화(커맨드인젝션 대응)
+    # user:1000 미지정(위와 동일한 볼륨 소유권 이유). fork bomb류 완화는 cgroup pids_limit.
+    # fork bomb류 완화는 cgroup 기반 pids_limit로 한다(컨테이너별로 정확히 격리).
+    # ⚠️ ulimits.nproc 는 쓰지 않는다: nproc RLIMIT은 컨테이너가 아니라 '호스트 실 UID별'
+    # 한도라, user:1000 이 호스트 uid 1000과 겹치면 그 사용자의 기존 프로세스까지 합산돼
+    # 낮은 값에서 즉시 초과 → 'exec: resource temporarily unavailable'로 컨테이너가 죽는다.
+    pids_limit: 256
     ulimits:
-      nproc: 64
-      nofile: 256
+      nofile: 1024
 
   defense_network:
     cpus: "0.5"
@@ -49,7 +51,8 @@ services:
       - /tmp
     cap_drop: ["ALL"]
     security_opt: ["no-new-privileges:true"]
-    user: "1000:1000"
+    # user:1000 미지정 — siem_logs 볼륨 서브디렉터리가 root 소유라 비root는 access 로그 쓰기 불가.
+    # read_only+cap_drop(ALL)+no-new-privileges로 여전히 강격리(root라도 capless/RO).
 
   event_collector:
     cpus: "0.5"

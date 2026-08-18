@@ -31,6 +31,23 @@ class CheckResult:
     detail: str = ""
 
 
+def resolve_container(name_or_service: str) -> str:
+    """실제 docker 컨테이너 이름으로 해석한다.
+    - container_name 이 지정된 서비스(트윈 gs_twin 등)는 그대로 이름이 존재한다.
+    - container_name 이 없는 서비스(A/D 팀 서비스)는 compose 가 `<project>-<svc>-N` 로 이름을
+      붙이므로, compose 서비스 라벨로 실제 이름을 찾아 반환한다(없으면 원래 문자열 유지)."""
+    p = subprocess.run(["docker", "ps", "--filter", f"name=^{name_or_service}$",
+                        "--format", "{{.Names}}"], capture_output=True, text=True)
+    if p.returncode == 0 and p.stdout.strip():
+        return p.stdout.strip().splitlines()[0]
+    p = subprocess.run(["docker", "ps", "--filter",
+                        f"label=com.docker.compose.service={name_or_service}",
+                        "--format", "{{.Names}}"], capture_output=True, text=True)
+    if p.returncode == 0 and p.stdout.strip():
+        return p.stdout.strip().splitlines()[0]
+    return name_or_service
+
+
 def run(cmd: list[str], timeout: int = 8) -> tuple[int, str, str]:
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
@@ -41,40 +58,48 @@ def run(cmd: list[str], timeout: int = 8) -> tuple[int, str, str]:
         return -1, "", str(e)
 
 
+def _tcp_probe(container: str, host: str, port: int, timeout: int = 3) -> tuple[bool, str]:
+    """컨테이너 내부에서 host:port로 TCP 연결을 시도한다. (reachable, detail) 반환.
+    curl 미설치 이미지(A/D 팀 서비스 등)에서도 동작하도록 python3 소켓을 쓴다."""
+    code = (
+        "import socket\n"
+        "try:\n"
+        f"    s=socket.create_connection(({host!r},{port}),timeout={timeout}); s.close(); print('OPEN')\n"
+        "except Exception as e:\n"
+        "    print('BLOCKED:'+type(e).__name__)\n"
+    )
+    rc, out, err = run(["docker", "exec", container, "python3", "-c", code])
+    reachable = out.strip() == "OPEN"
+    return reachable, f"rc={rc} out={out.strip()!r} err={err.strip()!r}"
+
+
 def check_external_egress_blocked(container: str) -> CheckResult:
-    """컨테이너 안에서 외부(1.1.1.1) 핑/연결 시도 -> 실패해야 통과."""
-    rc, out, err = run(["docker", "exec", container, "curl", "-m", "3", "-s", "-o", "/dev/null",
-                       "-w", "%{http_code}", "https://1.1.1.1"])
-    # curl이 성공(rc=0, http_code=200대)하면 격리 실패
-    egress_succeeded = (rc == 0 and out.strip().startswith("2"))
+    """컨테이너 안에서 외부(1.1.1.1:443) 연결 시도 -> 실패해야 통과."""
+    reachable, detail = _tcp_probe(container, "1.1.1.1", 443)
     return CheckResult(
         name=f"external_egress_blocked[{container}]",
-        passed=not egress_succeeded,
-        detail=f"rc={rc} out={out!r} err={err!r}",
+        passed=not reachable,
+        detail=detail,
     )
 
 
 def check_twin_to_twin_blocked(src_container: str, dst_host: str, dst_port: int) -> CheckResult:
-    """트윈 A -> 트윈 B 직접 접속 시도 -> 실패해야 통과 (range_control 경유만 허용)."""
-    rc, out, err = run(["docker", "exec", src_container, "curl", "-m", "3", "-s", "-o", "/dev/null",
-                       "-w", "%{http_code}", f"http://{dst_host}:{dst_port}/health"])
-    succeeded = (rc == 0 and out.strip().startswith("2"))
+    """A -> B 직접 접속 시도 -> 실패해야 통과 (허용 경로만 열려야 함)."""
+    reachable, detail = _tcp_probe(src_container, dst_host, dst_port)
     return CheckResult(
         name=f"twin_to_twin_blocked[{src_container}->{dst_host}:{dst_port}]",
-        passed=not succeeded,
-        detail=f"rc={rc} out={out!r}",
+        passed=not reachable,
+        detail=detail,
     )
 
 
 def check_required_path_open(src_container: str, dst_host: str, dst_port: int) -> CheckResult:
     """트윈 -> event_collector는 반드시 열려있어야 함(필요 경로 과차단 방지)."""
-    rc, out, err = run(["docker", "exec", src_container, "curl", "-m", "3", "-s", "-o", "/dev/null",
-                       "-w", "%{http_code}", f"http://{dst_host}:{dst_port}/health"])
-    succeeded = (rc == 0 and out.strip().startswith("2"))
+    reachable, detail = _tcp_probe(src_container, dst_host, dst_port)
     return CheckResult(
         name=f"required_path_open[{src_container}->{dst_host}:{dst_port}]",
-        passed=succeeded,
-        detail=f"rc={rc} out={out!r}",
+        passed=reachable,
+        detail=detail,
     )
 
 
@@ -126,6 +151,16 @@ def default_checks() -> list:
     # 강격리 대상(커맨드인젝션/역직렬화 트윈)
     checks.append(lambda: check_readonly_fs("pp_twin"))
     checks.append(lambda: check_resource_limits("pp_twin", expected_mem_mb=512, expected_cpus=0.5))
+
+    # ---- Attack/Defense 격리(감사 2.3/2.4) ----
+    # 팀 컨테이너는 ad_team_access(internal:true)에만 붙어 외부 egress 불가여야 하고,
+    # ad_management(엔진↔postgres/registry 평면)에서 분리돼 ad_postgres·ad_registry 도달 불가여야 한다.
+    # A/D 팀 서비스는 container_name 이 없어 실제 이름을 라벨로 해석한다.
+    ad_teams = [resolve_container("ad_team_01_notes"), resolve_container("ad_team_01_vault")]
+    for c in ad_teams:
+        checks.append(lambda c=c: check_external_egress_blocked(c))                    # 2.3 egress 차단
+        checks.append(lambda c=c: check_twin_to_twin_blocked(c, "ad_postgres", 5432))  # 2.4 DB 도달 불가
+        checks.append(lambda c=c: check_twin_to_twin_blocked(c, "ad_registry", 5000))  # 2.4 registry 도달 불가
     return checks
 
 

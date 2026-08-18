@@ -230,8 +230,10 @@ async def _noise_loop() -> None:
 
 @app.on_event("startup")
 async def startup():
-    # M5.1: 트윈 구조화 로그
-    twin_paths = [str(LOG_DIR / f"{a}_access.log") for a in TWIN_ASSETS]
+    # M5.1: 트윈 구조화 로그. 섹터 격리(감사 2.5)로 트윈 access 로그가 자기 섹터 하위
+    # (/var/log/siem/{asset}/{asset}_access.log)로 이동했다. siem_api는 볼륨 전체를 :ro로
+    # 마운트하므로 전 섹터를 읽는다.
+    twin_paths = [str(LOG_DIR / a / f"{a}_access.log") for a in TWIN_ASSETS]
     asyncio.create_task(tail_multiple(twin_paths, _on_twin_log_line))
 
     # M5.2: pfsense syslog(UDP)

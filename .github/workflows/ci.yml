@@ -95,14 +95,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 감사 2.1: 하드닝 오버레이(리소스/rootfs)를 CI 기동 경로에도 결합.
       - name: Build & start stack
         run: |
-          docker compose up -d --build \
+          docker compose -f docker-compose.yml -f infra/hardening/docker-compose.hardening.yml \
+            up -d --build \
             event_collector scoring_engine config_service edr_backend siem_api \
             scenario_engine instructor_api aar_report noc_monitor range_control \
             auth challenge_portal incident injects observability \
             ground_station power_plant water_utility defense_network \
-            gs_gateway pp_gateway dn_gateway
+            gs_gateway pp_gateway dn_gateway \
+            attack_defense ad_registry ad_postgres ad_team_01_notes ad_team_01_vault
 
       - name: Assert challenge_portal image ships no exploit/solution (감사 1.7)
         run: |
@@ -123,6 +126,10 @@ jobs:
             sleep 3
           done
           echo "services did not become healthy in time"; exit 1
+
+      # 감사 2.6: 격리 회귀 테스트 — 트윈/팀 egress 차단·관리평면 분리·read-only·리소스 상한.
+      - name: Isolation regression test (감사 2.3/2.4/2.6)
+        run: python3 infra/ci/isolation_test.py
 
       - name: New services health (auth·incident·injects·observability·portal·range)
         run: |
@@ -156,3 +163,72 @@ jobs:
       - name: Teardown
         if: always()
         run: docker compose down -v
+
+  # ---------------------------------------------------------------------------
+  # 5) 시크릿 스캔(감사 2.6) — 리포지토리에 실제 시크릿 유입 차단. docker 불필요.
+  #    의도적 취약 챌린지/훈련 더미는 secret_scan.py의 ALLOWLIST_MARKERS로 분리.
+  # ---------------------------------------------------------------------------
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Scan for real secrets
+        run: python3 infra/ci/secret_scan.py --path .
+
+  # ---------------------------------------------------------------------------
+  # 6) 공급망 스캔(감사 2.7) — 의존성/코드/이미지의 알려진 취약점. High↑ 발견 시 실패.
+  #    기존 이슈는 baseline/ignore 파일(infra/ci/*)로 억제한다.
+  #    의도적 취약 코드(challenges/, attack_defense/demo_services)는 스캔 대상에서 제외.
+  # ---------------------------------------------------------------------------
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: pip-audit (런타임 의존성 CVE)
+        run: |
+          pip install pip-audit
+          # requirements.txt 의 알려진 취약점 검사. 억제는 infra/ci/pip-audit-ignore.txt 의 GHSA/CVE id.
+          IGN=""
+          if [ -s infra/ci/pip-audit-ignore.txt ]; then
+            while read -r v; do [ -n "$v" ] && case "$v" in \#*) ;; *) IGN="$IGN --ignore-vuln $v";; esac; done < infra/ci/pip-audit-ignore.txt
+          fi
+          pip-audit -r requirements.txt $IGN
+
+      - name: bandit (자체 코드 정적 보안 분석, High만 차단)
+        run: |
+          pip install bandit
+          # 의도적 취약 코드는 제외. High severity+High confidence 만 실패.
+          # 기존 이슈를 억제하려면 baseline 을 생성해 커밋:
+          #   bandit -r services shared scripts -x <excludes> -f json -o infra/ci/bandit-baseline.json
+          BASE=""
+          [ -f infra/ci/bandit-baseline.json ] && BASE="-b infra/ci/bandit-baseline.json"
+          bandit -q -r services shared scripts \
+            -x services/attack_defense/demo_services,services/attack_defense/kubernetes \
+            --severity-level high --confidence-level high $BASE
+
+      - name: npm audit (대시보드 프런트, High↑)
+        continue-on-error: true   # 전이 dev 의존성 노이즈가 많아 초기엔 경고로 운용(baseline 정착 후 차단 전환)
+        run: |
+          for d in dashboards/livefire dashboards/redportal dashboards/blueportal dashboards/siem services/edr/console; do
+            [ -f "$d/package.json" ] || continue
+            echo "== npm audit: $d =="
+            (cd "$d" && npm audit --audit-level=high || true)
+          done
+
+      - name: Trivy 파일시스템 스캔 (HIGH·CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          trivyignores: infra/ci/.trivyignore
+          skip-dirs: challenges,services/attack_defense/demo_services,node_modules
