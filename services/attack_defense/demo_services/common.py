@@ -14,6 +14,45 @@ from fastapi import Header, HTTPException, Request
 
 DATA_DIR = Path(os.environ.get("SERVICE_DATA_DIR", "/tmp/attack-defense-demo-service"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def attach_siem_access_log(app, asset_name: str | None = None) -> None:
+    """감사 4.3: A/D 팀 서비스를 SIEM에 편입. 각 HTTP 요청을 트윈과 동일한 access-log JSON
+    라인으로 siem_logs 볼륨에 남겨, SIEM이 A/D 공격도 탐지/기록하게 한다.
+    shared/에 의존하지 않도록(데모 이미지에 shared가 없어도 되게) 자체 완결형으로 구현.
+    로그 디렉터리가 없으면(로컬 dev) 조용히 미적용."""
+    import logging
+
+    asset = asset_name or os.environ.get("SIEM_ASSET", "attack_defense")
+    team_id = os.environ.get("TEAM_ID", "default")
+    log_dir = Path(os.environ.get("SIEM_LOG_DIR", "/var/log/siem"))
+    logger = logging.getLogger(f"siem.ad.{asset}")
+    if not logger.handlers:
+        try:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            h = logging.FileHandler(log_dir / f"{asset}_access.log")
+            h.setFormatter(logging.Formatter("%(message)s"))
+            logger.addHandler(h)
+            logger.setLevel(logging.INFO)
+        except OSError:
+            return  # siem_logs 미마운트(로컬 dev) → 미적용
+
+    @app.middleware("http")
+    async def _siem_mw(request: Request, call_next):
+        start = time.time()
+        response = await call_next(request)
+        xff = request.headers.get("x-forwarded-for", "")
+        src_ip = xff.split(",")[0].strip() if xff else (request.client.host if request.client else None)
+        try:
+            logger.info(json.dumps({
+                "ts": time.time(), "asset": asset, "endpoint": request.url.path,
+                "method": request.method, "status": response.status_code, "src_ip": src_ip,
+                "team_id": team_id, "ua": request.headers.get("user-agent"),
+                "latency_ms": round((time.time() - start) * 1000, 2),
+            }))
+        except Exception:
+            pass
+        return response
 MANAGEMENT_SECRET = os.environ.get(
     "ATTACK_DEFENSE_MANAGEMENT_TOKEN", "attack-defense-dev-management-token"
 ).encode()

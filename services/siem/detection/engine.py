@@ -11,10 +11,21 @@ Detection Engine (22번 문서 4절, M5.4/M5.5 + beacon_detection_note.md 확장
 pydantic 객체에 직접 결합하지 않아 테스트/재사용이 쉽다.
 """
 from __future__ import annotations
+import ipaddress
 import time
 from dataclasses import dataclass, field
 from typing import Any, Literal, Optional
 from collections import deque
+
+
+def _is_private_or_local_ip(ip: str) -> bool:
+    """사설(RFC1918)·루프백·링크로컬 IP면 True(감사 4.5: 내부 목적지 비콘 오탐 방지).
+    호스트명 등 IP가 아니면(파싱 실패) True로 간주해 오탐을 피한다(외부 IP만 비콘 후보)."""
+    try:
+        return ipaddress.ip_address(ip).is_private or ipaddress.ip_address(ip).is_loopback \
+            or ipaddress.ip_address(ip).is_link_local
+    except ValueError:
+        return True
 
 
 def _get_path(obj: dict, path: str) -> Any:
@@ -235,8 +246,13 @@ class DetectionEngine:
         dst = _get_path(event, rule.periodicity_group_by_dst)
         if src is None or dst is None:
             return []
-        if dst in rule.periodicity_allowlist_dst:
-            return []  # 정상 폴링 목적지(allowlist)는 비콘 후보에서 제외
+        # 감사 4.5: allowlist를 'IP 기준'으로. 이전 allowlist는 서비스명("event_collector"…)이라
+        # dst.ip(IP)와 절대 매칭되지 않아 무효였고, 내부 하트비트(트윈→코어)를 C2 비콘으로 오탐했다.
+        # C2 비콘은 '외부' 목적지로 향한다 → 사설/루프백 IP(RFC1918 등)는 후보에서 제외한다.
+        if _is_private_or_local_ip(str(dst)):
+            return []
+        if str(dst) in rule.periodicity_allowlist_dst:
+            return []  # 명시 allowlist(정상 폴링 목적지 IP)도 제외
 
         state = self._periodicity_states[rule.id]
         key = (str(src), str(dst))

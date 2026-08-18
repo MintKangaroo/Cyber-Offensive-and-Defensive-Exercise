@@ -140,6 +140,21 @@ _METRICS = {
 }
 _FORWARD_ATTEMPTS = int(os.environ.get("SCORING_FORWARD_ATTEMPTS", "3"))
 _DLQ_DRAIN_INTERVAL = float(os.environ.get("SCORING_DLQ_DRAIN_SEC", "10"))
+# 감사 4.8: events.db 보존 정책 — 오래된 이벤트를 주기적으로 정리(무한 증가 방지). 0이면 비활성.
+_EVENTS_RETENTION_DAYS = float(os.environ.get("EVENTS_RETENTION_DAYS", "0"))
+
+
+def _prune_old_events() -> int:
+    if _EVENTS_RETENTION_DAYS <= 0:
+        return 0
+    cutoff = time.time() - _EVENTS_RETENTION_DAYS * 86400
+    conn = get_db()
+    try:
+        cur = conn.execute("DELETE FROM events WHERE timestamp < ?", (cutoff,))
+        conn.commit()
+        return cur.rowcount or 0
+    finally:
+        conn.close()
 
 
 init_db()
@@ -284,6 +299,7 @@ async def _dlq_drain_loop():
     while True:
         await asyncio.sleep(_DLQ_DRAIN_INTERVAL)
         try:
+            _prune_old_events()  # 감사 4.8: events.db 보존 정책 적용
             conn = get_db()
             rows = conn.execute(
                 "SELECT event_id, payload FROM scoring_dlq ORDER BY created_at ASC LIMIT 100"

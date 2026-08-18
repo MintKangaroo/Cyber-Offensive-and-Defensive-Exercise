@@ -84,12 +84,25 @@
 (function(){
   "use strict";
   var HOST = location.hostname || "localhost";
-  var AUTH_API = "http://" + HOST + ":8051";
-  var AD_API = "http://" + HOST + ":8100";
-  var RED_PORTAL = "http://" + HOST + ":5176";
-  var DEFENSE_PORTAL = "http://" + HOST + ":5178/?mode=attack_defense";
-  var CONTROL_TOWER = "http://" + HOST + ":5180";
-  var LEGACY_BLUE = "http://" + HOST + ":5177";
+  // 감사 U-9/E4: 게이트웨이(prod, /start/ 경로) 뒤에서는 dev 포트가 노출되지 않으므로
+  // same-origin 게이트웨이 경로를 쓴다. dev(포트 5179 직접 서빙)에서는 기존 포트 방식.
+  var GW = location.pathname.indexOf("/start") === 0;
+  var AUTH_API, AD_API, RED_PORTAL, DEFENSE_PORTAL, CONTROL_TOWER, LEGACY_BLUE;
+  if (GW) {
+    AUTH_API = "";                  // 로그인은 게이트웨이 /auth/login
+    AD_API = "/api/ad";             // 게이트웨이 /api/ad/ -> attack_defense:8100
+    RED_PORTAL = "/red/";
+    DEFENSE_PORTAL = "/ops/?mode=attack_defense";
+    CONTROL_TOWER = "/control/";
+    LEGACY_BLUE = "/blue/";
+  } else {
+    AUTH_API = "http://" + HOST + ":8051";
+    AD_API = "http://" + HOST + ":8100";
+    RED_PORTAL = "http://" + HOST + ":5176";
+    DEFENSE_PORTAL = "http://" + HOST + ":5178/?mode=attack_defense";
+    CONTROL_TOWER = "http://" + HOST + ":5180";
+    LEGACY_BLUE = "http://" + HOST + ":5177";
+  }
   var SESSION_KEY = "starthere_session";
 
   var el = document.getElementById("app");

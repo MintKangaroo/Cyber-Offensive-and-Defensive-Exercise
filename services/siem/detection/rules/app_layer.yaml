@@ -3,7 +3,7 @@
 
 - id: TWIN-SQLI-001
   title: "SQLi 시도 - Telemetry"
-  severity: 3
+  severity: 4
   mitre: [T1190]
   source_type: twin
   kind: match
@@ -12,7 +12,7 @@
 
 - id: TWIN-TRAVERSAL-001
   title: "경로순회 시도 - Download"
-  severity: 3
+  severity: 4
   mitre: [T1005]
   source_type: twin
   kind: match
@@ -21,7 +21,7 @@
 
 - id: TWIN-DEFAULT-CRED-001
   title: "기본계정 로그인 성공"
-  severity: 3
+  severity: 4
   mitre: [T1078.001]
   source_type: twin
   kind: match
@@ -120,7 +120,7 @@
 
 - id: ICS-FAC-MES-SQLI-001
   title: "MES 작업지시 SQL 인젝션 - 스마트팩토리"
-  severity: 3
+  severity: 4
   mitre: [T1190]
   source_type: twin
   kind: match
@@ -176,7 +176,7 @@
 
 - id: ICS-AIR-BHS-SQLI-001
   title: "수하물 경로 SQL 인젝션 - 공항"
-  severity: 3
+  severity: 4
   mitre: [T1190]
   source_type: twin
   kind: match
@@ -184,7 +184,7 @@
 
 - id: ICS-DCX-UPS-001
   title: "UPS 무단 셧다운 명령 - 데이터센터"
-  severity: 3
+  severity: 4
   mitre: [T0816]
   source_type: twin
   kind: match
@@ -200,7 +200,7 @@
 
 - id: ICS-HSP-HIS-SQLI-001
   title: "HIS 환자정보 SQL 인젝션 - 병원"
-  severity: 3
+  severity: 4
   mitre: [T1190]
   source_type: twin
   kind: match

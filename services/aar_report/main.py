@@ -36,6 +36,30 @@ INJECTS_URL = os.environ.get("INJECTS_URL", "http://injects:8096")
 CHALLENGE_PORTAL_URL = os.environ.get("CHALLENGE_PORTAL_URL", "http://challenge_portal:8060")
 PDF_OUTPUT_DIR = Path(os.environ.get("AAR_PDF_DIR", "/tmp/aar_reports"))
 PDF_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+# 감사 4.8: 보존 정책 — 오래됐거나(일수) 개수 상한을 넘는 PDF를 자동 정리(용량 무한 증가 방지).
+AAR_RETENTION_DAYS = int(os.environ.get("AAR_RETENTION_DAYS", "14"))
+AAR_MAX_REPORTS = int(os.environ.get("AAR_MAX_REPORTS", "500"))
+
+
+def _prune_reports() -> dict:
+    """AAR_RETENTION_DAYS 초과 파일 삭제 + 개수 상한(AAR_MAX_REPORTS) 초과분(오래된 것부터) 삭제."""
+    pdfs = sorted(PDF_OUTPUT_DIR.glob("aar_*.pdf"), key=lambda p: p.stat().st_mtime)
+    removed = 0
+    if AAR_RETENTION_DAYS > 0:
+        cutoff = time.time() - AAR_RETENTION_DAYS * 86400
+        for p in list(pdfs):
+            if p.stat().st_mtime < cutoff:
+                try:
+                    p.unlink(); removed += 1; pdfs.remove(p)
+                except OSError:
+                    pass
+    if AAR_MAX_REPORTS > 0 and len(pdfs) > AAR_MAX_REPORTS:
+        for p in pdfs[: len(pdfs) - AAR_MAX_REPORTS]:
+            try:
+                p.unlink(); removed += 1
+            except OSError:
+                pass
+    return {"removed": removed, "remaining": len(list(PDF_OUTPUT_DIR.glob("aar_*.pdf")))}
 
 app = FastAPI(title="AAR Report API")
 
@@ -143,6 +167,7 @@ async def get_aar_report_pdf(scenario_id: str = "default", authorization: str = 
     report = await get_aar_report(scenario_id, authorization)
     output_path = PDF_OUTPUT_DIR / f"aar_{scenario_id}_{int(time.time())}.pdf"
     render_pdf(report, str(output_path))
+    _prune_reports()  # 감사 4.8: 생성 때마다 보존 정책 적용(용량 상한 유지)
     return FileResponse(str(output_path), media_type="application/pdf",
                         filename=f"aar_report_{scenario_id}.pdf")
 

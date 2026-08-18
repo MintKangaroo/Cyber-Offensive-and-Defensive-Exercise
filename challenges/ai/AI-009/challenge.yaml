@@ -4,7 +4,10 @@ challenge:
   category: "ai"
   difficulty: "insane"
   points: { red: 300, blue: 0 }
-  mitre: [T1027, T1551]
+  # 감사 U-10: T1551 은 유효한 ATT&CK Enterprise 기법 ID가 아니다(번호 공백) → 제거.
+  # 적대적 ML 회피의 정밀 매핑은 MITRE ATLAS AML.T0015(Evade ML Model)이나 이 플랫폼은
+  # ATT&CK T-code만 사용하므로, 크래프팅/난독 회피에 부합하는 T1027 만 남긴다.
+  mitre: [T1027]
   description: |
     evasion_incident.json은 피싱 URL 탐지기(로지스틱 회귀, 특징 6개)에 대한 적대적 회피
     인시던트 로그다. 모델 카드(weights/bias/threshold)와 알려진 악성 시드 벡터, 그리고

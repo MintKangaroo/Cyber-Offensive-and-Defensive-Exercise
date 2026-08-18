@@ -38,13 +38,20 @@ CONFIG = os.environ.get("CONFIG_SERVICE_URL", "http://localhost:8030")
 SIEM = os.environ.get("SIEM_API_URL", "http://localhost:8040")
 PORTAL = os.environ.get("CHALLENGE_PORTAL_URL", "http://localhost:8060")
 EDR = os.environ.get("EDR_BACKEND_URL", "http://localhost:18090")
+INCIDENT = os.environ.get("INCIDENT_URL", "http://localhost:8095")
+INJECTS = os.environ.get("INJECTS_URL", "http://localhost:8096")
 
-# 리셋 대상: (라벨, admin reset URL)
+# 리셋 대상: (라벨, admin reset URL). 감사 4.6: 이전엔 4개뿐이라 라운드 리셋 후 SIEM 알림·EDR
+# 격리·인시던트·인젝트가 남아 다음 라운드를 오염시켰다 → SOC/블루 계통까지 전면 편입.
 RESET_TARGETS = [
     ("event_collector", f"{EVENT}/admin/reset"),
     ("scoring_engine", f"{SCORING}/admin/reset"),
     ("config_service", f"{CONFIG}/admin/reset"),
     ("challenge_portal", f"{PORTAL}/portal/admin/reset"),
+    ("siem_api", f"{SIEM}/admin/reset"),        # 감사 4.6
+    ("edr", f"{EDR}/admin/reset"),              # 감사 4.6
+    ("incident", f"{INCIDENT}/admin/reset"),    # 감사 4.6
+    ("injects", f"{INJECTS}/admin/reset"),      # 감사 4.6
 ]
 HEALTH_TARGETS = {
     "event_collector": f"{EVENT}/health", "scoring_engine": f"{SCORING}/health",

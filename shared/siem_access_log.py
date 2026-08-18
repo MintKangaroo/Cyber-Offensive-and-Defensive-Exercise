@@ -60,6 +60,11 @@ def make_siem_access_middleware(
 
         team_id = request.headers.get("x-team-id", "default")
 
+        # 감사 4.1: 실 클라이언트 IP는 트윈 게이트웨이가 붙인 X-Forwarded-For를 우선 사용한다.
+        # (트윈은 게이트웨이 뒤에 있어 request.client.host가 전부 게이트웨이 IP로 뭉개졌다 = S-9)
+        xff = request.headers.get("x-forwarded-for", "")
+        src_ip = xff.split(",")[0].strip() if xff else (request.client.host if request.client else None)
+
         # trace_id는 event_schema의 결정론적 세션 id 생성 로직을 그대로 재사용
         # (지연 import: 순환 import 방지 + event_schema가 없는 환경에서도 로깅 자체는 죽지 않게)
         trace_id = None
@@ -75,7 +80,7 @@ def make_siem_access_middleware(
             "endpoint": path,
             "method": request.method,
             "status": response.status_code,
-            "src_ip": request.client.host if request.client else None,
+            "src_ip": src_ip,
             "vuln_id": vuln_id,
             "team_id": team_id,
             "trace_id": trace_id,

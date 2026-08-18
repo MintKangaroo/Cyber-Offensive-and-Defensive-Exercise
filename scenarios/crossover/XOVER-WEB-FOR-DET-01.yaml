@@ -61,17 +61,21 @@ crossover_scenario:
     evidence_source: "trace_id_from_phase_1"
     linked_challenge: "FOR-002"   # pcap 재구성 문제 형식 재사용
     objectives:
+      # 감사 4.9: 정답을 주석이 아니라 answer 필드로 보관(서버측 자동 채점).
       - name: "공격자 진입점 특정"
-        submit: "entry_vuln_id"       # 정답: GS-005
+        submit: "entry_vuln_id"
+        answer: "GS-005"
         points: 40
       - name: "권한상승 방법 특정"
-        submit: "privesc_method"      # 정답: JWT forgery(WEB-002)
+        submit: "privesc_method"
+        answer: "JWT forgery"
         points: 60
       - name: "유출된 데이터 특정"
-        submit: "exfiltrated_asset"   # 정답: mission_plan flag
+        submit: "exfiltrated_asset"
+        answer: "mission_plan"
         points: 50
       - name: "공격 타임라인 재구성"
-        submit: "timeline_json"        # 3단계 시각 순서
+        submit: "timeline_json"        # 3단계 시각 순서 — 정답 자유서술, 교관 수동 채점(answer 없음)
         points: 50
     scoring: "field_match(부분점수)"
     completion_unlocks: "phase_3_detection"

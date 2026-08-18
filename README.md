@@ -15,6 +15,24 @@
 Docker와 Docker Compose v2, Node.js 20+가 설치돼 있다면 아래 순서만 따라 하면
 됩니다. 첫 실행은 image build 때문에 시간이 조금 걸릴 수 있습니다.
 
+### ⚠️ 0단계 — 시크릿 준비 (필수, 한 번만)
+
+보안 하드닝 이후 플랫폼은 **시크릿이 없으면 뜨지 않습니다(fail-closed)**. 처음 한 번
+아래를 실행해 `.env`에 시크릿을 생성하세요. (이 파일은 `.gitignore` 대상 — 커밋 금지)
+
+```bash
+cd cyber-range-platform
+cp .env.example .env
+./scripts/gen_secrets.sh          # INSTRUCTOR_TOKEN·AUTH_JWT_SECRET·CHALLENGE_SECRET·SERVICE_TOKEN 등 자동 생성
+```
+
+- `CHALLENGE_SECRET`(동적 플래그 HMAC 키)·`SERVICE_TOKEN`(내부 ingest 인증)이 없으면
+  `challenge_portal`·`event_collector` 등이 기동을 거부합니다.
+- **토큰 없이 로컬에서 무인증으로 돌리고 싶다면** `.env`에 `RBAC_ALLOW_INSECURE_DEV=true`
+  를 명시하세요(기본은 fail-closed). **프로덕션/대회에서는 절대 켜지 마세요.**
+- 프로덕션 기동(`-f docker-compose.prod.yml`)은 모든 시크릿이 설정돼 있지 않으면
+  부팅을 즉시 실패시킵니다(`:?` fail-fast). 자세한 보안 모델은 아래 **보안 하드닝** 절 참고.
+
 ### 🟢 초보자용 빠른 시작 (Beginner Quickstart)
 
 > **처음이라면 포트 번호나 내부 구조를 몰라도 됩니다. 아래 두 줄만 실행한 뒤,
@@ -1649,6 +1667,38 @@ cyber-range-platform/
 ├── CONTRACTS.md         # 공통 계약(스키마/인터페이스) 단일 진실원
 └── docker-compose.yml
 ```
+
+---
+
+## 보안 하드닝 (감사 리메디에이션 2026-08)
+
+전면 보안 감사(`audit/`) 후 1~4주차에 걸쳐 아래 항목을 적용했습니다. 운영 시 반드시 숙지하세요.
+
+**인증·시크릿 (fail-closed)**
+- 컨트롤플레인은 시크릿/토큰이 없으면 **무인증 통과가 아니라 거부**(401)합니다.
+  로컬 편의로 열려면 `RBAC_ALLOW_INSECURE_DEV=true`를 명시(프로덕션 금지).
+- 챌린지 플래그 HMAC 키(`CHALLENGE_SECRET`)·JWT 시크릿(`AUTH_JWT_SECRET`)은 기본값이
+  없으며 미설정 시 기동 실패. `docker-compose.prod.yml`은 전 시크릿을 `:?`로 fail-fast.
+- 이미지 태그는 digest/버전 고정(`:latest` 미사용).
+
+**격리·자원**
+- 하드닝 오버레이(`infra/hardening/`)가 `make`·`training_environment`·CI 기동 경로에 결합돼
+  트윈에 `read_only`+`cap_drop:ALL`+`pids_limit`가 적용되고, 전 서비스에 `mem_limit`/`cpus` 상한.
+- A/D 팀 컨테이너는 인터넷 egress 차단(`internal`)이고 관리평면(postgres/registry)과 분리됩니다.
+
+**채점 무결성**
+- `event_collector`/`scoring_engine`의 ingest 엔드포인트는 **서비스 토큰(`SERVICE_TOKEN`)** 필요.
+- 트윈은 event_collector에 직접 도달할 수 없고 **`ingest_proxy`**만 경유하며, 프록시가 토큰을
+  주입합니다(트윈은 토큰 미보유). SIEM 로그도 섹터별로 격리됩니다.
+- 이벤트 전달은 재시도+DLQ로 무손실(`/metrics`로 드롭/스풀/재전달 관측). 점수 조정은 감사 로그·
+  스냅샷을 남깁니다.
+
+**관제·운영**
+- 트윈 게이트웨이가 `X-Forwarded-For`로 실 클라이언트 IP를 전달(SIEM src_ip 복원).
+- 라운드 리셋이 SIEM·EDR·incident·injects까지 초기화. AAR PDF는 영속 볼륨+보존 정책.
+- 부하 기준선은 nightly k6 워크플로(`.github/workflows/loadtest.yml`, `loadtest/results/`).
+
+**운영자 필수**: `cp .env.example .env && ./scripts/gen_secrets.sh` (0단계 참고). `.env`는 커밋 금지.
 
 ---
 

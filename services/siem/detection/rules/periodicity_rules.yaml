@@ -2,7 +2,7 @@
 
 - id: NET-C2-BEACON-001
   title: "C2 비콘 의심 - 주기적 연결 패턴"
-  severity: 3
+  severity: 4
   mitre: [T1071]
   source_type: [zeek, suricata]
   kind: periodicity
@@ -11,8 +11,7 @@
   periodicity_min_observations: 5
   periodicity_jitter_threshold: 0.1
   periodicity_window_sec: 3600
-  periodicity_allowlist_dst:
-    - "event_collector"
-    - "scoring_engine"
-    - "config_service"
-    - "edr_backend"
+  # 감사 4.5: allowlist는 IP 기준으로 동작한다. 내부 목적지(사설/루프백 IP)는 엔진이
+  # 자동 제외하므로 서비스명을 나열할 필요가 없다(과거 서비스명은 dst.ip와 매칭 안 돼 무효).
+  # 여기에는 '외부지만 정상'인 목적지 IP(예: 시간서버)만 예외로 추가한다.
+  periodicity_allowlist_dst: []

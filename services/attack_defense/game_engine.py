@@ -226,6 +226,22 @@ class GameEngine:
         if round_row["status"] == "active":
             with self.db.transaction() as conn:
                 now = self.db.server_time(conn)
+            # 감사 4.7: 다운타임 보정. tick이 오래 멈췄으면(엔진 크래시/재기동) 그 공백만큼
+            # ends_at을 뒤로 밀어 라운드 잔여시간을 보존한다. 정상 tick 간격의 여유(check_interval
+            # 의 2배 또는 30초)를 넘는 gap만 다운타임으로 간주해 한 번 보정한다.
+            last_check = float(round_row["last_check_at"] or 0)
+            downtime_threshold = max(self.settings.check_interval_seconds * 2, 30)
+            gap = now - last_check
+            if last_check > 0 and gap > downtime_threshold:
+                extended = self.repo.extend_round_end(round_row["id"], gap, now)
+                if extended is not None:
+                    round_row = extended
+                    self.evidence.record(AuditContext(
+                        actor="game_engine", event_type="round_downtime_compensated",
+                        result="success", match_id=match_id,
+                        metadata={"round_id": round_row["id"], "downtime_seconds": round(gap, 1)},
+                        event_id=stable_id("audit", "downtime", round_row["id"], int(now)),
+                    ))
             if now >= float(round_row["ends_at"]):
                 round_row = self.repo.transition_round(round_row["id"], "scoring")
                 self._audit_transition(round_row, "scoring")

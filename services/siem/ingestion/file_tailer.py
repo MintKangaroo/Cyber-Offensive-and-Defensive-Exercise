@@ -36,7 +36,19 @@ async def tail_file(
                     f.close()
                 f = open(file_path, "r")
                 if is_first_open:
-                    f.seek(0, os.SEEK_END)  # 최초 오픈만 끝에서 시작
+                    # 감사 4.2: Zeek 로그는 파일 맨 앞의 '#fields' 등 헤더로 컬럼 스키마를 정의한다.
+                    # 예전엔 최초 오픈 시 곧장 끝으로 seek해 헤더를 놓쳐, 재기동 직후 Zeek 라인을
+                    # 파싱하지 못했다(헤더 유실 레이스). 이제 선두의 '#' 헤더 구간을 먼저 파서에
+                    # 전달한 뒤 끝으로 seek한다(과거 데이터는 재처리하지 않되 헤더 문맥은 확보).
+                    while True:
+                        hline = f.readline()
+                        if not hline:
+                            break
+                        if hline.startswith("#"):
+                            await on_line(hline.rstrip("\n"))
+                        else:
+                            break  # 헤더 구간 끝(첫 데이터 라인은 버리고 끝에서 tail)
+                    f.seek(0, os.SEEK_END)  # 최초 오픈은 헤더 파싱 후 끝에서 tail
                     is_first_open = False
                 else:
                     f.seek(0)  # rotation으로 교체된 새 파일은 처음부터 읽어야 내용을 놓치지 않음
