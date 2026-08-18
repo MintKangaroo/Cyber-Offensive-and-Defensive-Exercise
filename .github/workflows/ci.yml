@@ -149,9 +149,11 @@ jobs:
           curl -sf "http://localhost:8010/stream?topics=events" --max-time 2 >/dev/null && echo "SSE ok" || true
           # 관측성 요약(전 서비스 스크레이프)
           curl -sf http://localhost:8097/observability/summary | python3 -c "import sys,json;d=json.load(sys.stdin);print('platform up',d['up'],'/',d['total']);exit(0 if d['up']>=6 else 1)"
-          # 컨테이너 내 실제 Modbus(pp_twin:502) — 트윈이 진짜 Modbus 를 말하는지
-          docker cp infra/ci/modbus_probe.py event_collector:/tmp/mb.py
-          docker exec event_collector python3 /tmp/mb.py
+          # 컨테이너 내 실제 Modbus(pp_twin:502) — 트윈이 진짜 Modbus 를 말하는지.
+          # 격리 설계상 event_collector 는 트윈망에서 제거돼 pp_twin 을 해석 못 한다.
+          # config_service 는 각 twin_* 네트워크에 붙어 있어(패치 폴링용) pp_twin 에 도달 가능.
+          docker cp infra/ci/modbus_probe.py config_service:/tmp/mb.py
+          docker exec config_service python3 /tmp/mb.py
 
       - name: Integration smoke test (with recovery)
         run: SMOKE_RECOVERY=1 SMOKE_CRASH_RECOVERY=1 bash scripts/smoke_test.sh
