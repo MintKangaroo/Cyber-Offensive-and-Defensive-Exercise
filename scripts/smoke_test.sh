@@ -242,12 +242,14 @@ try: s.connect(('8.8.8.8',53));print('OPEN')
 except Exception: print('BLOCKED')
 finally: s.close()" 2>/dev/null | tail -1)
   [ "$eg" = "BLOCKED" ] && ok "인터넷 egress 차단 (gs_twin ↛ 8.8.8.8:53)" || bad "egress 열림 ($eg) — 익스플로잇 유출 위험"
-  # (b) 트윈→코어 통신은 유지돼야 함(격리가 정상 기능을 깨지 않았는지)
+  # (b) 트윈→코어 통신은 유지돼야 함(격리가 정상 기능을 깨지 않았는지).
+  # 격리(감사 3.2): event_collector 는 트윈망에서 제거됐고, 트윈은 ingest_proxy 로만 코어에
+  # 도달한다(EVENT_COLLECTOR_URL=http://ingest_proxy:8010). 따라서 정상 경로는 ingest_proxy.
   core=$(docker exec gs_twin python3 -c "
 import urllib.request
-try: urllib.request.urlopen('http://event_collector:8010/health',timeout=4);print('OK')
+try: urllib.request.urlopen('http://ingest_proxy:8010/health',timeout=4);print('OK')
 except Exception: print('FAIL')" 2>/dev/null | tail -1)
-  [ "$core" = "OK" ] && ok "트윈 → 코어 통신 유지 (gs_twin → event_collector)" || bad "트윈→코어 통신 끊김 ($core)"
+  [ "$core" = "OK" ] && ok "트윈 → 코어 통신 유지 (gs_twin → ingest_proxy)" || bad "트윈→코어 통신 끊김 ($core)"
 else
   echo "  ℹ️  gs_twin 컨테이너 없음 — 격리 검증 스킵"
 fi

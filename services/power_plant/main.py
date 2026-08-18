@@ -444,7 +444,10 @@ def diagnostics_ping(req: DiagPing):
             )
         cmd = f"ping -c 1 {req.host}"
         try:
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=3)
+            # nosec B602 — PP-003 은 '의도된' 커맨드 인젝션 훈련 취약점이다(트윈). shell=True 는
+            # 교육 목적의 취약점 그 자체이며 실제 결함이 아니다. bandit baseline 은 라인 밀림에
+            # 취약해(DNP3 배선 추가로 재발) 라인과 함께 이동하는 nosec 로 명시 억제한다.
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=3)  # nosec B602
         except Exception as e:
             return {"patched": False, "error": str(e)}
         return {"patched": False, "output": result.stdout or result.stderr, "note": "command injection possible via ; | & $()"}
