@@ -52,8 +52,14 @@ ASSET_NAME = "ground_station"
 TEAM_ID = os.environ.get("TEAM_ID", "default")
 
 APP_DIR = Path(__file__).parent
-DB_PATH = APP_DIR / "ground_station.db"
-FILES_DIR = APP_DIR / "files"
+# 쓰기 경로(sqlite DB·시연 파일·더미 시크릿)는 DATA_DIR 로 분리한다. 하드닝 프로파일이
+# 루트 FS 를 read_only 로 잠그면 앱 코드 디렉터리(APP_DIR)에 sqlite 를 못 열어 트윈이
+# 죽는다(integration 회귀). DATA_DIR 기본값은 APP_DIR(로컬/테스트 하위호환), 컨테이너에선
+# tmpfs 로 쓰기 가능한 경로(예: /tmp/gs_data)를 주입한다. 훈련용 더미라 휘발성이어도 무방.
+DATA_DIR = Path(os.environ.get("DATA_DIR") or APP_DIR)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = DATA_DIR / "ground_station.db"
+FILES_DIR = DATA_DIR / "files"
 FILES_DIR.mkdir(exist_ok=True)
 
 # --- 패치 상태: Config Service 폴링(무중단 토글) + 환경변수 폴백(부팅 직후/Config Service 다운 시) ---
@@ -150,7 +156,7 @@ def init_db():
 
     # GS-004 path traversal 시연용 더미 파일
     (FILES_DIR / "telemetry_report.txt").write_text("2026-07-10 telemetry nominal\n")
-    secret_dir = APP_DIR / "secret"
+    secret_dir = DATA_DIR / "secret"
     secret_dir.mkdir(exist_ok=True)
     (secret_dir / "satellite_key_dummy.txt").write_text("DUMMY_PRIVATE_KEY_NOT_REAL_0xFA23...\n")
 

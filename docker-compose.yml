@@ -737,6 +737,8 @@ services:
     container_name: gs_twin
     # 호스트 포트 미노출 — twin_gateway를 통해서만 접근(격리 F ★★★).
     environment:
+      # 하드닝(read_only 루트FS)에서도 sqlite/시연파일을 쓸 수 있게 tmpfs 경로로 분리.
+      - DATA_DIR=/tmp/gs_data
       - EVENT_COLLECTOR_URL=http://ingest_proxy:8010
       - CONFIG_SERVICE_URL=http://config_service:8030
       - EDR_BACKEND_URL=http://edr_backend:8080

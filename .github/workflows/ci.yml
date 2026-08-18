@@ -100,7 +100,7 @@ jobs:
         run: |
           docker compose -f docker-compose.yml -f infra/hardening/docker-compose.hardening.yml \
             up -d --build \
-            event_collector scoring_engine config_service edr_backend siem_api \
+            event_collector ingest_proxy scoring_engine config_service edr_backend siem_api \
             scenario_engine instructor_api aar_report noc_monitor range_control \
             auth challenge_portal incident injects observability \
             ground_station power_plant water_utility defense_network \
@@ -223,7 +223,9 @@ jobs:
           done
 
       - name: Trivy 파일시스템 스캔 (HIGH·CRITICAL)
-        uses: aquasecurity/trivy-action@v0.28.0
+        # v0.28.0 은 내부적으로 삭제된 setup-trivy@v0.2.1 태그를 참조해 깨졌다.
+        # v0.36.0 은 setup-trivy 를 SHA(불변)로 핀하므로 재발 없음.
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
