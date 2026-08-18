@@ -17,6 +17,8 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from shared.rbac import require_role, ROLES  # noqa: E402
+from shared.rbac import require_read  # noqa: E402
+from shared.timeline import build_timeline  # noqa: E402
 from services.aar_report.metrics import (  # noqa: E402
     compute_mttd, compute_mttr, compute_detection_rate, compute_false_positive_rate, stealth_bonus_total,
 )
@@ -170,6 +172,32 @@ async def get_aar_report_pdf(scenario_id: str = "default", authorization: str = 
     _prune_reports()  # 감사 4.8: 생성 때마다 보존 정책 적용(용량 상한 유지)
     return FileResponse(str(output_path), media_type="application/pdf",
                         filename=f"aar_report_{scenario_id}.pdf")
+
+
+@app.get("/report/timeline")
+async def get_timeline(scenario_id: str = "default", authorization: str = Header(default="")):
+    """통합 타임라인 — 이벤트·SIEM 알림·인시던트·인젝트를 하나의 시간순 뷰로 합쳐 반환.
+    각 소스는 best-effort(없어도 됨)로 가져오고, 병합/정렬은 순수함수 build_timeline 에 위임."""
+    _require_viewer(authorization)
+
+    async def _get_json(url, key, default, params=None):
+        try:
+            r = await client.get(url, params=params); r.raise_for_status()
+            return r.json().get(key, default)
+        except (httpx.HTTPError, ValueError):
+            return default
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        events = await _get_json(f"{EVENT_COLLECTOR_URL}/replay/events", "events", [],
+                                 params={"scenario_id": scenario_id})
+        alerts = await _get_json(f"{SIEM_API_URL}/alerts", "alerts", [])
+        incidents = await _get_json(f"{INCIDENT_URL}/incidents", "incidents", [])
+        injects = await _get_json(f"{INJECTS_URL}/injects/scoreboard", "scoreboard", [])
+
+    timeline = build_timeline({
+        "events": events, "alerts": alerts, "incidents": incidents, "injects": injects,
+    })
+    return {"scenario_id": scenario_id, "count": len(timeline), "timeline": timeline}
 
 
 if __name__ == "__main__":

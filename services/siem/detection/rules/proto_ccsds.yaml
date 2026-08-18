@@ -1,0 +1,12 @@
+# 위성 우주 프로토콜(CCSDS) 탐지 규칙 — 실 TT&C red→blue.
+# ground_station 위성 링크가 인증 없는 CCSDS 텔레커맨드를 SIEM access 로그(protocol="ccsds")로
+# 흘리면, 이 규칙이 매칭 → blue_detection_success → 점수. (twin 파서가 원본 JSON 을 raw 로 보존)
+
+- id: SPACE-CCSDS-TC
+  title: "위성 미인가 텔레커맨드 - CCSDS Space Packet"
+  severity: 5
+  mitre: [T0855]               # Unauthorized Command Message (ICS/space TT&C)
+  source_type: twin
+  kind: match
+  match:
+    raw.protocol: "ccsds"

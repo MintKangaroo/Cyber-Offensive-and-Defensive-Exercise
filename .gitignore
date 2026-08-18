@@ -27,3 +27,6 @@ challenges/*/*/deploy/*.bin
 challenges/*/*/deploy/*.csv
 challenges/*/*/deploy/*.zip
 .coverage
+
+# Claude Code local state (worktrees, session)
+.claude/

@@ -397,6 +397,20 @@ def xml_import(req: XMLImport):
     return {"patched": False, "status": "config parsed (no external entity in payload)"}
 
 
+# ---------------------------------------------------------------------------
+# 실 위성 TT&C — CCSDS Space Packet Protocol (지상국 ↔ 위성 상하향 링크)
+# ---------------------------------------------------------------------------
+# HTTP 취약점과 별개로, 지상국 업링크는 인증 없는 CCSDS 텔레커맨드를 받아들인다(우주 링크
+# 미인증 취약점). 실 표준 Space Packet 이라 표준을 아는 도구가 그대로 붙으며, 미인가 텔레커맨드는
+# SIEM(protocol=ccsds) + red_attack_started 이벤트로 흘러 Blue 가 T0855 로 탐지한다.
+# GS-006(SSRF/uplink) 취약점 id 를 재사용한다(uplink 경로 계열).
+from shared.space.twin_ccsds import attach_ccsds  # noqa: E402
+from shared.space.ccsds import SpacecraftState  # noqa: E402
+
+_sat_state = SpacecraftState()   # 위성 버스 텔레메트리(더미) — TM 으로 노출됨
+attach_ccsds(app, asset=ASSET_NAME, vuln_id="GS-006", state=_sat_state)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)
