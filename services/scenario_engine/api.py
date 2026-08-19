@@ -20,6 +20,8 @@ import websockets
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from shared.lifespan import on_startup
+
 from .loader import load_all_scenarios, inject_initial_state, LoadedScenario
 from .runner import make_tracker, SingleScenarioTracker, CrossoverScenarioTracker
 
@@ -113,7 +115,7 @@ async def _event_stream_loop() -> None:
             backoff = min(backoff * 2, 15.0)
 
 
-@app.on_event("startup")
+@on_startup(app)
 async def startup():
     global _ws_task
     _all_scenarios.update(load_all_scenarios(SCENARIOS_DIR))

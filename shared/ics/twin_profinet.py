@@ -22,6 +22,7 @@ import time
 from dataclasses import dataclass
 
 from shared.event_client import emit_event
+from shared.lifespan import on_startup
 from shared.event_schema import Event, EventType, RedPhase
 from shared.siem_access_log import get_siem_logger
 from shared.ics.profinet import (ProfinetDevice, serve as _pn_serve,
@@ -91,7 +92,7 @@ def attach_profinet(app, asset: str, vuln_id: str, device: ProfinetDevice,
     twin = _ProfinetTwin(ProfinetIcsConfig(asset=asset, vuln_id=vuln_id, device=device,
                                             red_event=red_event, red_phase=red_phase))
 
-    @app.on_event("startup")
+    @on_startup(app)
     async def _startup():
         await twin._start()
 

@@ -23,6 +23,7 @@ from starlette.websockets import WebSocketState
 import sys
 sys.path.append(str(Path(__file__).parent.parent.parent))  # repo root (shared/ 위치)
 from shared.event_schema import Event  # noqa: E402
+from shared.lifespan import on_startup  # noqa: E402
 
 APP_DIR = Path(__file__).parent
 DB_PATH = Path(os.environ.get("DATA_DIR", str(APP_DIR))) / "events.db"  # 볼륨 마운트로 영속(P0-3)
@@ -160,7 +161,7 @@ def _prune_old_events() -> int:
 init_db()
 
 
-@app.on_event("startup")
+@on_startup(app)
 async def startup():
     # 감사 3.5: DLQ 드레인 루프 기동(scoring 복구 시 스풀 이벤트 재전달).
     asyncio.create_task(_dlq_drain_loop())

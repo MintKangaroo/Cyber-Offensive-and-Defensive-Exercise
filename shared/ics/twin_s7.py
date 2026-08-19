@@ -13,6 +13,7 @@ import os
 import time
 
 from shared.ics import s7comm
+from shared.lifespan import on_startup
 from shared.siem_access_log import get_siem_logger
 
 
@@ -47,7 +48,7 @@ def attach_s7(app, *, asset: str, vuln_id: str,
 
     outstation.on_read = _on_read
 
-    @app.on_event("startup")
+    @on_startup(app)
     async def _start_s7():
         if os.environ.get("S7_ENABLED", "1") != "1":
             return

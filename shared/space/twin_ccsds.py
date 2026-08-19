@@ -20,6 +20,7 @@ import time
 from typing import Optional
 
 from shared.event_client import emit_event
+from shared.lifespan import on_startup
 from shared.event_schema import Event, EventType, RedPhase
 from shared.siem_access_log import get_siem_logger
 from shared.space.ccsds import (
@@ -99,7 +100,7 @@ def attach_ccsds(app, asset: str, vuln_id: str, state: Optional[SpacecraftState]
     """FastAPI 앱에 실 CCSDS TT&C 배선을 붙인다. 반환된 트윈 객체로 state 접근 가능."""
     twin = _CcsdsTwin(app, asset, vuln_id, state=state, red_phase=red_phase)
 
-    @app.on_event("startup")
+    @on_startup(app)
     async def _startup():
         await twin._start()
 
