@@ -20,6 +20,8 @@ import websockets
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from shared.lifespan import on_startup
+
 from .loader import load_all_scenarios, inject_initial_state, LoadedScenario
 from .runner import make_tracker, SingleScenarioTracker, CrossoverScenarioTracker
 
@@ -221,7 +223,6 @@ def list_scenarios():
 import yaml  # noqa: E402
 from .authoring import dry_run, lint_scenario, phase_clock  # noqa: E402
 from shared.service_auth import service_headers
-from shared.lifespan import on_startup
 
 
 class ValidateReq(BaseModel):
