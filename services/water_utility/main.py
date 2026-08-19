@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from shared.ics_twin import make_ics_twin, Vuln, deny  # noqa: E402
+from shared.lifespan import on_startup  # noqa: E402
 
 HMI_ACCOUNTS = {"operator": "operator", "scada": "scada123"}
 
@@ -155,7 +156,7 @@ def _wu_on_write(kind: str, addr: int, vals: list) -> None:
 _wu_bank.on_write = _wu_on_write
 
 
-@app.on_event("startup")
+@on_startup(app)
 async def _start_wu_modbus():
     global _wu_server
     if _os.environ.get("MODBUS_ENABLED", "1") != "1":
@@ -185,7 +186,7 @@ _wu_failed = False
 _wu_bank.holding[2] = int(_wu_proc.actual_rpm)   # RESERVOIR_PPM
 
 
-@app.on_event("startup")
+@on_startup(app)
 async def _start_wu_sim():
     async def _loop():
         global _wu_proc, _wu_failed

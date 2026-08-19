@@ -24,6 +24,7 @@ from pydantic import BaseModel
 import sys
 sys.path.append(str(Path(__file__).parent.parent.parent))  # repo root (shared/ 위치)
 from shared.event_client import emit_event  # noqa: E402
+from shared.lifespan import on_startup  # noqa: E402
 from shared.event_schema import Event, EventType, RedPhase  # noqa: E402
 from shared.config_client import ConfigClient  # noqa: E402
 from shared.edr_agent import start_edr_agent  # noqa: E402
@@ -54,7 +55,7 @@ def _flag_key_to_vuln_id(flag_key: str) -> str:
 app = FastAPI(title="Defense Network Digital Twin (TRAINING ONLY)")
 
 
-@app.on_event("startup")
+@on_startup(app)
 async def _start_edr_agent():
     start_edr_agent(asset_name=ASSET_NAME)
 
@@ -125,7 +126,7 @@ def _smtp_factory() -> "_SmtpSession":
                         local_domains=_LOCAL_DOMAINS, on_message=_on_mail)
 
 
-@app.on_event("startup")
+@on_startup(app)
 async def _start_smtp():
     global _smtp_server
     if os.environ.get("SMTP_ENABLED", "1") != "1":

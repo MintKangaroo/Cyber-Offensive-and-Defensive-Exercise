@@ -15,6 +15,7 @@ import os
 import time
 
 from shared.event_client import emit_event
+from shared.lifespan import on_startup
 from shared.event_schema import Event, EventType, RedPhase
 from shared.siem_access_log import get_siem_logger
 from shared.ics.hart import HartField, serve as _hart_serve, HART_IP_DEFAULT_PORT
@@ -87,7 +88,7 @@ def attach_hart(app, asset: str, vuln_id: str, device_vars: dict,
     resolved_port = int(os.environ.get("HART_PORT", str(port or HART_IP_DEFAULT_PORT)))
     twin = _HartTwin(asset, vuln_id, dev, red_phase, host, resolved_port)
 
-    @app.on_event("startup")
+    @on_startup(app)
     async def _startup():
         await twin._start()
 

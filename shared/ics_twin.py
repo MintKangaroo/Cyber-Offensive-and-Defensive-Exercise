@@ -26,6 +26,7 @@ from fastapi.responses import JSONResponse
 
 sys.path.append(str(Path(__file__).parent.parent))  # repo root
 from shared.event_client import emit_event  # noqa: E402
+from shared.lifespan import on_startup  # noqa: E402
 from shared.event_schema import Event, EventType, RedPhase  # noqa: E402
 from shared.config_client import ConfigClient  # noqa: E402
 from shared.edr_agent import start_edr_agent  # noqa: E402
@@ -57,7 +58,7 @@ def make_ics_twin(asset_name: str, title: str, vulns: list[Vuln]) -> FastAPI:
     route_map = {v.path: v.id for v in vulns}
     app = FastAPI(title=f"{title} (TRAINING ONLY)")
 
-    @app.on_event("startup")
+    @on_startup(app)
     async def _edr():
         start_edr_agent(asset_name=asset_name)
 

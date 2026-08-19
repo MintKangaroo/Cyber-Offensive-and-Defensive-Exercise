@@ -14,6 +14,7 @@ import os
 import time
 
 from shared.ics import iec61850
+from shared.lifespan import on_startup
 from shared.siem_access_log import get_siem_logger
 
 
@@ -50,7 +51,7 @@ def attach_iec61850(app, *, asset: str, vuln_id: str,
     device.on_read = lambda n: _log_and_emit(
         "read", f"unauthenticated IEC 61850 MMS Read of {n} IED variable(s)")
 
-    @app.on_event("startup")
+    @on_startup(app)
     async def _start_iec61850():
         if os.environ.get("IEC61850_ENABLED", "1") != "1":
             return

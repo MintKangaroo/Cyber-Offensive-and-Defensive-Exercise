@@ -14,6 +14,7 @@ import os
 import time
 
 from shared.ics import opcua
+from shared.lifespan import on_startup
 from shared.siem_access_log import get_siem_logger
 
 
@@ -49,7 +50,7 @@ def attach_opcua(app, *, asset: str, vuln_id: str,
         except Exception:
             pass
 
-    @app.on_event("startup")
+    @on_startup(app)
     async def _start_opcua():
         if os.environ.get("OPCUA_ENABLED", "1") != "1":
             return

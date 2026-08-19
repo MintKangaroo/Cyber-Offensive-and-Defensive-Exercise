@@ -19,6 +19,7 @@ import sys
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 from services.noc_monitor.health_poller import HealthPoller  # noqa: E402
 from services.core.recovery_watcher import RecoveryWatcher  # noqa: E402
+from shared.lifespan import on_startup  # noqa: E402
 
 TWIN_HEALTH_URLS = {
     "ground_station": "http://ground_station:8001/health",
@@ -67,7 +68,7 @@ async def _subscribe_compromise_events() -> None:
             await asyncio.sleep(5)  # 재연결 백오프
 
 
-@app.on_event("startup")
+@on_startup(app)
 async def startup():
     asyncio.create_task(poller.poll_forever())
     asyncio.create_task(_subscribe_compromise_events())

@@ -113,7 +113,7 @@ async def _event_stream_loop() -> None:
             backoff = min(backoff * 2, 15.0)
 
 
-@app.on_event("startup")
+@on_startup(app)
 async def startup():
     global _ws_task
     _all_scenarios.update(load_all_scenarios(SCENARIOS_DIR))
@@ -221,6 +221,7 @@ def list_scenarios():
 import yaml  # noqa: E402
 from .authoring import dry_run, lint_scenario, phase_clock  # noqa: E402
 from shared.service_auth import service_headers
+from shared.lifespan import on_startup
 
 
 class ValidateReq(BaseModel):

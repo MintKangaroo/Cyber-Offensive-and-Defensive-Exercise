@@ -21,6 +21,7 @@ import time
 from dataclasses import dataclass, field
 
 from shared.event_client import emit_event
+from shared.lifespan import on_startup
 from shared.event_schema import Event, EventType, RedPhase
 from shared.siem_access_log import get_siem_logger
 from shared.ics.modbus import ModbusBank, serve as _modbus_serve
@@ -170,7 +171,7 @@ def attach_modbus_ics(app, cfg: ModbusIcsConfig) -> _ModbusIcsTwin:
     """FastAPI 앱에 실 Modbus ICS 배선을 붙인다. 반환된 트윈 객체로 bank/state 접근 가능."""
     twin = _ModbusIcsTwin(cfg)
 
-    @app.on_event("startup")
+    @on_startup(app)
     async def _startup():
         await twin._start()
 

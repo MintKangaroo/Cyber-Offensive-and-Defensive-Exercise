@@ -25,6 +25,7 @@ from starlette.websockets import WebSocketState
 import sys
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 from shared.storage_interface import SearchQuery  # noqa: E402
+from shared.lifespan import on_startup  # noqa: E402
 from shared.service_auth import service_headers  # noqa: E402
 from services.siem.storage.sqlite_backend import SqliteBackend  # noqa: E402
 from services.siem.storage.alert_store import AlertStore  # noqa: E402
@@ -232,7 +233,7 @@ async def _noise_loop() -> None:
     await gen.run_forever()
 
 
-@app.on_event("startup")
+@on_startup(app)
 async def startup():
     # M5.1: 트윈 구조화 로그. 섹터 격리(감사 2.5)로 트윈 access 로그가 자기 섹터 하위
     # (/var/log/siem/{asset}/{asset}_access.log)로 이동했다. siem_api는 볼륨 전체를 :ro로

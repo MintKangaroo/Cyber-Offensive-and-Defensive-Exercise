@@ -30,6 +30,7 @@ from pydantic import BaseModel
 import sys
 sys.path.append(str(Path(__file__).parent.parent.parent))  # repo root (shared/ 위치)
 from shared.event_client import emit_event  # noqa: E402
+from shared.lifespan import on_startup  # noqa: E402
 from shared.event_schema import Event, EventType, RedPhase  # noqa: E402
 from shared.config_client import ConfigClient  # noqa: E402
 from shared.edr_agent import start_edr_agent  # noqa: E402
@@ -61,7 +62,7 @@ def _flag_key_to_vuln_id(flag_key: str) -> str:
 app = FastAPI(title="Power Plant SCADA Digital Twin (TRAINING ONLY)")
 
 
-@app.on_event("startup")
+@on_startup(app)
 async def _start_edr_agent():
     start_edr_agent(asset_name=ASSET_NAME)
 
@@ -170,7 +171,7 @@ _modbus_bank.holding[3] = int(_proc_state.coolant_temp)  # COOLANT_TEMP
 _modbus_bank.holding[4] = 0                              # DAMAGE(%)
 
 
-@app.on_event("startup")
+@on_startup(app)
 async def _start_process_sim():
     async def _loop():
         global _proc_state, _proc_failed
@@ -312,7 +313,7 @@ def _on_modbus_write(kind: str, addr: int, vals: list) -> None:
 _modbus_bank.on_write = _on_modbus_write
 
 
-@app.on_event("startup")
+@on_startup(app)
 async def _start_modbus():
     global _modbus_server
     if os.environ.get("MODBUS_ENABLED", "1") != "1":
@@ -324,7 +325,7 @@ async def _start_modbus():
         pass  # 502 바인딩 실패(권한/포트 점유) 시 HTTP 트윈은 계속 동작
 
 
-@app.on_event("startup")
+@on_startup(app)
 async def _start_dnp3():
     """실 DNP3/TCP 아웃스테이션 기동(§5 실 프로토콜 확장). 기본 포트 20000."""
     global _dnp3_server

@@ -31,6 +31,7 @@ from pydantic import BaseModel
 
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))  # repo root
 from shared.rbac import require_role, require_read  # noqa: E402
+from shared.lifespan import on_startup  # noqa: E402
 from shared.service_auth import service_headers  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import model  # noqa: E402
@@ -302,7 +303,7 @@ async def _correlate_loop():
             pass
 
 
-@app.on_event("startup")
+@on_startup(app)
 async def _start_correlate():
     if CORRELATE_ENABLED:
         asyncio.create_task(_correlate_loop())
