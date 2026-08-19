@@ -1,0 +1,24 @@
+challenge:
+  id: "DET-013"
+  title: "위성 TT&C — 무단 자세제어 안전해제 텔레커맨드 탐지 (CCSDS)"
+  category: "detection"
+  difficulty: "medium"
+  points: { red: 0, blue: 85 }
+  mitre: [T0855, T0814]
+  description: |
+    지상국 업링크(CCSDS Space Packet TT&C) 로그에서 위성의 자세제어 안전장치(SIS)를 끄는
+    무단 텔레커맨드(DISABLE_ATTITUDE_SAFETY)를 탐지하는 규칙을 작성하라. 정상
+    트래픽(normal_log.jsonl)에는 (a) 프로토콜만 같은 정상 CCSDS 커맨드(PING·자세설정·안전재무장)
+    와 (b) 커맨드 이름만 같은 지상 감사 로그가 섞여 있어 — 단일 조건 규칙은 오탐한다.
+    프로토콜과 위험 커맨드를 AND 로 결합해야 한다. 우리 SIEM 엔진이 규칙을 실제로 태워 채점한다.
+  blue_task:
+    goal: "raw.protocol=ccsds AND raw.command=DISABLE_ATTITUDE_SAFETY 동시 매칭"
+    success_criteria: |
+      (1) attack_log.jsonl(무단 안전해제 업링크)에 알림 발생
+      (2) normal_log.jsonl(정상 CCSDS + 유사 감사 로그)에는 오탐 없음
+  scoring:
+    blue_verify: "alert_dataset_check"
+  artifacts: ["attack_log.jsonl", "normal_log.jsonl"]
+  safety:
+    profile: "standard"
+    notes: "합성 CCSDS TT&C 로그 데이터셋만 사용. 실제 위성/지상국 없음."
