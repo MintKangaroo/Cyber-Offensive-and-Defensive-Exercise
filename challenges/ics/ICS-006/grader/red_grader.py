@@ -24,7 +24,7 @@ def dynamic_flag(team): return f"flag{{iec61850_goose_spoof_{_hmac('ICS-006', te
 
 
 def attacker_mac(team):
-    h = _hmac("ICS-006-mac", team, 6)
+    h = _hmac("ICS-006-mac", team, 8)
     return "de:ad:" + ":".join(h[i:i+2] for i in range(0, 8, 2))
 
 

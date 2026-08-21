@@ -1,19 +1,14 @@
-# ICS-009 — Foundation Fieldbus 블록 MODE 조작 분석 라이트업
+# ICS-009 — Foundation Fieldbus MODE 조작 분석 (실 pcap 포렌식) 라이트업
+- 분야: ics / 난이도: hard / MITRE ATT&CK for ICS: T0836, T0855, T0831
 
-- 분야: ics / 난이도: hard / MITRE: T0836, T0855, T0831
+## 무엇이 달라졌나 (합성 JSON 로그 → 실 FF-H1 DLPDU pcap)
+`ff_h1_sabotage.pcap` — **실 FF-H1 DLPDU** 바이트. FF-H1 은 시리얼 필드버스라 IP 가 아니어서
+사설 EtherType(0x88FF)로 합성 캡슐화(DLPDU 구조는 실제). `shared/ics/ff_h1.py`.
+정직한 경계: Wireshark 네이티브 FF-H1 디섹션은 표준이 아니므로 커스텀 파서(exploit)로 분석.
 
 ## 의도된 해법
-1. `ff_h1_traffic.jsonl` 파싱 → block=FIC-201(안전 PID)이고 param=MODE_BLK, op=write, value=OOS이며
-   src_addr∉{0x10 LAS, 0x11 DCS}인 프레임 = 무단 호스트.
-2. 그 src_addr가 공격자 FF 링크주소. note(base64)를 공격자 주소로 XOR
-   → `flag{ff_mode_blk_oos_sabotage_<hmac12>}`.
-
-## 배경
-- MODE_BLK.TARGET=O/S(Out of Service)는 FF 함수블록을 정지시켜 PID 제어 루프를 사실상 무력화
-  (계측/제어 정지). 안전 관련 블록에 대한 원격 O/S 전환은 전형적 프로세스 사보타주(T0831 Manipulation).
-
-## 함정
-- 정상 DCS(0x11)도 SP를 write 하지만 param(MODE_BLK 아님)과 주소로 걸러진다.
+1. 안전 PID 블록(FIC-201)의 MODE_BLK 를 O/S(OOS)로 write 한 DLPDU 를 정상 노드(0x10/0x11)가
+아닌 출발지에서 찾는다 → 공격자 노드주소. 2. DLSDU 토큰을 공격자 주소로 반복 XOR → flag.
 
 ## 검증
-- C-QA `run_all.py --challenge ICS-009`(artifact_solve): 생성→solve→grade + 빈제출 거부. 팀별 유니크.
+`artifact_solve` 통과 + 빈제출 거부. 팀별 HMAC 유니크.

@@ -1,23 +1,24 @@
 challenge:
   id: "ICS-008"
-  title: "BACnet 무단 WriteProperty 분석 - Priority Override"
+  title: "BACnet 무단 WriteProperty 분석 - 실 pcap 포렌식"
   category: "ics"
   difficulty: "medium"
   points: { red: 120, blue: 0 }
   mitre: [T0855, T0836]
   description: |
-    bacnet_traffic.jsonl은 데이터센터 건물자동화망(BAS)의 합성 BACnet/IP 트래픽 로그다. 정상
-    BMS 워크스테이션(10.70.0.10)의 읽기(ReadProperty, service 12) 사이에, 무단 장치가 냉방
-    제어 객체(analog-output, CRAC 급기온도 setpoint)에 WriteProperty(service 15)를 priority 8
-    이상(수동 오버라이드 우선순위)으로 내려 냉방을 끄는 사보타주가 숨어 있다. 정상 BMS가 아닌
-    출발지에서 analog-output 객체에 대한 WriteProperty를 찾아 공격자 IP를 식별하고, note(base64)
-    토큰을 공격자 IP로 XOR 복호해 flag를 도출하라.
+    bacnet_sabotage.pcap 은 데이터센터 BMS 망의 **실 BACnet/IP 캡처**다(Wireshark 가 UDP 47808 을
+    BACnet 으로 디섹션). 정상 BMS(10.70.0.10)의 ReadProperty 폴링 사이에, 무단 장치가 냉방
+    setpoint 오브젝트(analog-output)에 WriteProperty(priority 8, 수동 오버라이드)를 내린 사보타주가
+    숨어 있다. WriteProperty 값(OctetString)에 토큰이 실려 있다. 냉방 오브젝트에 WriteProperty 를
+    내린 정상 아닌 출발지를 찾아 공격자 IP 를 식별하고, 값을 공격자 IP 로 XOR 복호해 flag 를 도출하라.
   red_task:
-    goal: "냉방 객체에 대한 무단 BACnet WriteProperty의 공격자 IP 식별 → note 토큰 XOR 복호 → flag"
+    goal: "냉방 오브젝트 무단 WriteProperty의 공격자 IP 식별 → 값 XOR 복호 → flag"
     submit_fields: ["attacker_ip", "flag"]
   scoring:
     red_verify: "flag_match"
-  artifacts: ["bacnet_traffic.jsonl"]
+  artifacts: ["bacnet_sabotage.pcap"]
   safety:
     profile: "standard"
-    notes: "합성 BACnet/IP 로그(실트래픽/실장비 무관). IP/토큰/플래그는 팀별 더미값."
+    notes: >
+      실 BACnet/IP 캡처(shared/ics/bacnet.py 실 인코더 + shared/net/pcap.py 프레이밍). 합성
+      트래픽·합성 호스트(실장비/실네트워크 무관). IP·토큰·플래그는 팀별 동적 HMAC.
