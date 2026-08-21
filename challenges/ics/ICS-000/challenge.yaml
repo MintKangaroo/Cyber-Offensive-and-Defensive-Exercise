@@ -1,28 +1,37 @@
 challenge:
   id: "ICS-000"
-  title: "안전 인터록 우회 - Modbus Safety Interlock"
+  title: "안전 인터록 우회 - 실 Modbus/TCP"
   category: "ics"
   difficulty: "medium"
   points: { red: 120, blue: 60 }
-  mitre: [T0836, T0858]
+  mitre: [T0836, T0858, T0878]
   description: |
-    발전 설비의 Modbus 홀딩 레지스터를 흉내낸 서비스가 배포돼 있다. 안전 인터록
-    (SAFETY_INTERLOCK, 40001)에 쓰려면 안전 키(SAFETY_KEY)가 필요하지만, 레지스터 덤프
-    엔드포인트가 이 키를 그대로 노출한다(정보 노출). 노출된 키로 인터록을 해제(0으로 쓰기)해
-    사보타주를 성공시키고 플래그를 획득하라.
+    발전 터빈 컨트롤러가 **진짜 Modbus/TCP**(포트 5020)를 말한다. 목업 JSON 이 아니라
+    실제 프로토콜이므로 pymodbus·mbpoll·metasploit modbusclient 가 그대로 붙는다.
+
+    Modbus 에는 인증이 없다 — 포트에 도달한 누구나 레지스터/코일을 읽고 쓸 수 있다.
+    안전 인터록(SIS)이 coil[0] 에 걸려 과속 명령을 레드라인으로 트립시킨다. 인터록을
+    FC5 로 해제한 뒤 RPM 명령을 레드라인(holding[2]) 위로 올려 과속 사보타주를 일으켜라.
+    사보타주가 실현되면 읽기전용 상태 채널(GET /status)이 팀 플래그를 발급한다.
+
+    레지스터 맵: coil[0]=SAFETY_INTERLOCK, holding[0]=RPM_SETPOINT,
+    holding[1]=RPM_ACTUAL, holding[2]=RPM_REDLINE(3600), holding[3]=STATUS.
   red_task:
-    goal: "노출된 SAFETY_KEY로 SAFETY_INTERLOCK(40001)=0 쓰기 → 서버 플래그 획득"
+    goal: "실 Modbus 로 SIS(coil0) 해제 후 RPM_SETPOINT>레드라인 과속 → /status 플래그 획득"
     flag_format: "flag{...}"
     flag_type: "dynamic"
     hints:
-      - { cost: 5, text: "GET /modbus/registers 응답에서 40100 레지스터를 살펴보라." }
+      - { cost: 5, text: "FC1 로 coil[0](인터록), FC3 로 holding[0..3] 을 먼저 정찰하라." }
+      - { cost: 10, text: "인터록이 걸린 채로 과속 명령을 쓰면 SIS 가 레드라인으로 클램프한다. 먼저 FC5 로 coil[0]=OFF." }
   blue_task:
-    goal: "안전 키 노출 제거 + 인터록 쓰기에 별도 인증/승인 강제"
-    success_criteria: "서술형 답변에 '정보 노출' 또는 '키 노출' 키워드 포함"
+    goal: "인터록/안전 임계 쓰기에 인증·화이트리스트·세그먼테이션 강제(Modbus 자체 무인증 보완)"
+    success_criteria: "서술형 답변에 '인증' 또는 '세그먼테이션' 또는 '쓰기 차단' 키워드 포함"
   scoring:
     red_verify: "flag_match"
     blue_verify: "manual_review"
   artifacts: []
   safety:
     profile: "hardened"
-    notes: "합성 Modbus 시뮬레이션(실장비 무관). 키/플래그는 팀별 더미값. 컨테이너 read_only+cap_drop."
+    notes: >
+      실 Modbus/TCP 서버(shared/ics/modbus.py 재사용, 실장비 무관 합성 물리). 플래그는
+      팀별 동적 HMAC. 컨테이너 read_only+cap_drop ALL+비특권 포트(5020).
