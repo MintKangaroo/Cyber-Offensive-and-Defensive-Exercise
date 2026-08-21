@@ -1,21 +1,24 @@
 challenge:
   id: "ICS-003"
-  title: "DNP3 무단 제어 명령 탐지 - Unsolicited Control"
+  title: "DNP3 무단 제어 분석 - 실 pcap 포렌식"
   category: "ics"
   difficulty: "medium"
   points: { red: 120, blue: 0 }
   mitre: [T0855]
   description: |
-    dnp3_log.jsonl은 변전소 제어망의 합성 DNP3 트래픽 로그다. 정상 마스터의 Class 0 폴링(READ)
-    사이에, 무단 마스터가 보호 제어점(차단기 CB, point 7)에 DIRECT_OPERATE(func 5, LATCH_ON) 제어를
-    내린 사보타주가 숨어 있다. 보호 제어점에 대한 OPERATE를 정상 마스터가 아닌 출발지에서 찾아
-    공격자 IP를 식별하고, note(base64) 토큰을 공격자 IP로 XOR 복호해 flag를 도출하라.
+    dnp3_sabotage.pcap 은 변전소 제어망의 **실 DNP3(IEEE 1815) 캡처**다(Wireshark 가 포트 20000
+    을 DNP3 로 디섹션). 정상 마스터(10.30.0.4)의 Class 0 READ 폴링 사이에, 무단 마스터가 보호
+    제어점(차단기 CB, index 7)에 DIRECT_OPERATE(FC5, LATCH_ON)를 내린 사보타주가 숨어 있다. 그
+    프레임에는 g110 octet string 오브젝트로 토큰이 실려 있다. 보호 제어점 OPERATE 를 정상 마스터가
+    아닌 출발지에서 찾아 공격자 IP 를 식별하고, octet string 페이로드를 공격자 IP 로 XOR 복호해 flag.
   red_task:
-    goal: "보호 제어점 무단 OPERATE의 공격자 IP 식별 → note 토큰 XOR 복호 → flag"
+    goal: "보호 제어점 무단 DIRECT_OPERATE의 공격자 IP 식별 → octet string 페이로드 XOR 복호 → flag"
     submit_fields: ["attacker_ip", "flag"]
   scoring:
     red_verify: "flag_match"
-  artifacts: ["dnp3_log.jsonl"]
+  artifacts: ["dnp3_sabotage.pcap"]
   safety:
     profile: "standard"
-    notes: "합성 DNP3 로그(실트래픽/실장비 무관). IP/토큰/플래그는 팀별 더미값."
+    notes: >
+      실 DNP3 캡처(shared/ics/dnp3.py 실 인코더 + shared/net/pcap.py 프레이밍). 합성 트래픽·합성
+      호스트(실장비/실네트워크 무관). IP·토큰·플래그는 팀별 동적 HMAC.

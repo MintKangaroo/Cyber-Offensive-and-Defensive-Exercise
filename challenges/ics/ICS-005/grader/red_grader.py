@@ -24,7 +24,7 @@ def dynamic_flag(team): return f"flag{{profinet_dcp_spoof_{_hmac('ICS-005', team
 
 
 def attacker_mac(team):
-    h = _hmac("ICS-005-mac", team, 6)
+    h = _hmac("ICS-005-mac", team, 8)
     return "de:ad:" + ":".join(h[i:i+2] for i in range(0, 8, 2))
 
 

@@ -1,22 +1,25 @@
 challenge:
   id: "ICS-005"
-  title: "Profinet DCP 스푸핑 분석 - Station Identity Spoof"
+  title: "Profinet DCP 스푸핑 분석 - 실 pcap 포렌식"
   category: "ics"
   difficulty: "medium"
   points: { red: 120, blue: 0 }
   mitre: [T0842, T0830]
   description: |
-    profinet_dcp.jsonl은 스마트팩토리 셀의 합성 Profinet DCP(Discovery and Configuration
-    Protocol) 트래픽 로그다. 정상 스테이션(plc-line-a)의 Ident 응답 사이에, 무단 MAC이 같은
-    station_name을 다른 IP로 DCP-Set 하는 신원 스푸핑(MITM)이 숨어 있다. 정상 MAC이 아닌
-    출발지가 대상 스테이션을 DCP-Set 한 레코드를 찾아 공격자 MAC을 식별하고, note(base64)
-    토큰을 공격자 MAC으로 XOR 복호해 flag를 도출하라.
+    profinet_dcp.pcap 은 스마트팩토리 셀의 **실 Profinet DCP 캡처**(raw Ethernet, EtherType
+    0x8892)다(Wireshark 가 PN-DCP 로 디섹션). 정상 스테이션들의 Ident 응답 사이에, 무단 MAC 이
+    대상 스테이션(plc-line-a)의 station_name 을 다른 IP 로 DCP-Set 하는 신원 스푸핑(MITM)이 숨어
+    있다. 그 Set 프레임에는 Type-of-Station 블록으로 토큰이 실려 있다. 대상 station_name 을 정상
+    MAC 이 아닌 출발지가 DCP-Set 한 프레임을 찾아 공격자 MAC 을 식별하고, 토큰 블록을 공격자
+    MAC 으로 XOR 복호해 flag 를 도출하라.
   red_task:
-    goal: "스테이션 신원 스푸핑(DCP-Set)의 공격자 MAC 식별 → note 토큰 XOR 복호 → flag"
+    goal: "스테이션 신원 스푸핑(DCP-Set)의 공격자 MAC 식별 → 토큰 블록 XOR 복호 → flag"
     submit_fields: ["attacker_mac", "flag"]
   scoring:
     red_verify: "flag_match"
-  artifacts: ["profinet_dcp.jsonl"]
+  artifacts: ["profinet_dcp.pcap"]
   safety:
     profile: "standard"
-    notes: "합성 Profinet DCP 로그(실트래픽/실장비 무관). MAC/토큰/플래그는 팀별 더미값."
+    notes: >
+      실 Profinet DCP 캡처(shared/ics/profinet.py 실 인코더 + shared/net/pcap.py L2
+      프레이밍). 합성 트래픽·합성 호스트(실장비/실네트워크 무관). MAC·토큰·플래그는 팀별 동적 HMAC.

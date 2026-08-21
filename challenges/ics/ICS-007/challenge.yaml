@@ -1,22 +1,25 @@
 challenge:
   id: "ICS-007"
-  title: "HART 명령 주입 분석 - Transmitter Range Tamper"
+  title: "HART 명령 주입 분석 - 실 pcap 포렌식"
   category: "ics"
   difficulty: "medium"
   points: { red: 120, blue: 0 }
   mitre: [T0836, T0855]
   description: |
-    hart_traffic.jsonl은 정유 플랜트 계기망의 합성 HART-IP 트래픽 로그다. 정상 자산관리시스템
-    (AMS)의 읽기 명령(cmd 1/3) 사이에, 무단 마스터가 안전 트랜스미터(PT-101)에 범위 재설정
-    쓰기(cmd 35) 명령을 내려 계측값을 스푸핑한 사보타주가 숨어 있다. 안전 트랜스미터에 대한
-    write 명령(cmd 34/35/45/46)을 정상 AMS가 아닌 출발지에서 찾아 공격자 IP를 식별하고,
-    note(base64) 토큰을 공격자 IP로 XOR 복호해 flag를 도출하라.
+    hart_sabotage.pcap 은 정유 플랜트 계기망의 **실 HART-IP 캡처**다(Wireshark 가 포트 5094 를
+    HART-IP 로 디섹션). 정상 자산관리시스템(AMS, 10.60.0.5)의 읽기(cmd 1/3) 사이에, 무단 마스터가
+    안전 트랜스미터(PT-101 = polling address 1)에 범위 재설정 쓰기(cmd 35)를 내려 계측값을 스푸핑한
+    사보타주가 숨어 있다. cmd 35 의 HART 데이터 바이트가 토큰이다. 안전 트랜스미터에 write 명령
+    (cmd 34/35/45/46)을 내린 정상 아닌 출발지를 찾아 공격자 IP 를 식별하고, HART 명령 데이터를
+    공격자 IP 로 XOR 복호해 flag 를 도출하라.
   red_task:
-    goal: "안전 트랜스미터 무단 HART write의 공격자 IP 식별 → note 토큰 XOR 복호 → flag"
+    goal: "안전 트랜스미터 무단 write(cmd35)의 공격자 IP 식별 → HART 데이터 XOR 복호 → flag"
     submit_fields: ["attacker_ip", "flag"]
   scoring:
     red_verify: "flag_match"
-  artifacts: ["hart_traffic.jsonl"]
+  artifacts: ["hart_sabotage.pcap"]
   safety:
     profile: "standard"
-    notes: "합성 HART-IP 로그(실트래픽/실장비 무관). IP/토큰/플래그는 팀별 더미값."
+    notes: >
+      실 HART-IP 캡처(shared/ics/hart.py 실 인코더 + shared/net/pcap.py 프레이밍). 합성
+      트래픽·합성 호스트(실장비/실네트워크 무관). IP·토큰·플래그는 팀별 동적 HMAC.
