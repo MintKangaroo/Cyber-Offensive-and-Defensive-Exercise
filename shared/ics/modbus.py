@@ -91,6 +91,59 @@ def handle_pdu(bank: ModbusBank, pdu: bytes) -> bytes:
         return _exc(fc, 3)   # illegal data value(형식 오류)
 
 
+# ---------------------------------------------------------------------------
+# 요청 PDU 빌더 + 프레임/PDU 파서 (클라이언트·pcap 생성·포렌식 분석 재사용)
+# ---------------------------------------------------------------------------
+def mbap(pdu: bytes, unit: int = 1, tid: int = 1) -> bytes:
+    """MBAP 헤더(tid, pid=0, len, unit) + PDU → 완전한 Modbus/TCP 프레임."""
+    return struct.pack(">HHHB", tid, 0, len(pdu) + 1, unit) + pdu
+
+
+def build_read_holding(addr: int, qty: int) -> bytes:
+    return struct.pack(">BHH", 3, addr, qty)
+
+
+def build_write_single(addr: int, value: int) -> bytes:
+    return struct.pack(">BHH", 6, addr, value & 0xFFFF)
+
+
+def build_write_multiple(addr: int, values: list[int]) -> bytes:
+    body = b"".join(struct.pack(">H", v & 0xFFFF) for v in values)
+    return struct.pack(">BHHB", 16, addr, len(values), len(body)) + body
+
+
+def parse_frame(frame: bytes) -> Optional[tuple[int, int, bytes]]:
+    """Modbus/TCP 프레임 → (tid, unit, pdu). 형식 불량이면 None."""
+    if len(frame) < 8:
+        return None
+    tid, pid, length, unit = struct.unpack(">HHHB", frame[:7])
+    pdu = frame[7:7 + max(0, length - 1)]
+    return tid, unit, pdu
+
+
+def parse_pdu(pdu: bytes) -> dict:
+    """요청 PDU 의미 해석 → {fc, addr, qty?/value?/values?/raw_bytes?}. 포렌식용."""
+    if not pdu:
+        return {"fc": None}
+    fc = pdu[0]
+    try:
+        if fc in (1, 2, 3, 4):
+            addr, qty = struct.unpack(">HH", pdu[1:5])
+            return {"fc": fc, "addr": addr, "qty": qty}
+        if fc in (5, 6):
+            addr, value = struct.unpack(">HH", pdu[1:5])
+            return {"fc": fc, "addr": addr, "value": value}
+        if fc == 16:
+            addr, qty = struct.unpack(">HH", pdu[1:5])
+            bytecount = pdu[5]
+            raw = pdu[6:6 + bytecount]
+            values = list(struct.unpack(">" + "H" * qty, raw)) if len(raw) == qty * 2 else []
+            return {"fc": fc, "addr": addr, "qty": qty, "values": values, "raw_bytes": raw}
+    except (struct.error, IndexError):
+        pass
+    return {"fc": fc}
+
+
 async def _handle_client(bank: ModbusBank, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     try:
         while True:
