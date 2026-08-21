@@ -1,21 +1,24 @@
 challenge:
   id: "ICS-002"
-  title: "Modbus 사보타주 분석 - 안전 레지스터 무단 쓰기"
+  title: "Modbus 사보타주 분석 - 실 pcap 포렌식"
   category: "ics"
   difficulty: "medium"
   points: { red: 120, blue: 0 }
   mitre: [T0836, T0855]
   description: |
-    modbus_traffic.jsonl은 발전 설비 제어망의 합성 Modbus/TCP 트래픽 로그다. 정상 HMI의
-    읽기 트래픽 사이에, 무단 마스터가 안전 레지스터(40001)에 쓰기(func 6)를 수행한 사보타주가
-    숨어 있다. 안전 레지스터에 대한 write를 정상 HMI가 아닌 출발지에서 찾아 공격자 IP를 식별하고,
-    해당 레코드 note(base64) 토큰을 공격자 IP로 XOR 복호해 flag를 도출하라.
+    modbus_sabotage.pcap 은 발전 설비 제어망의 **실 Modbus/TCP 캡처**다(Wireshark·tcpdump 가
+    포트 502 를 Modbus 로 디섹션). 정상 HMI(10.20.0.5)의 FC3 읽기 사이에, 무단 마스터가
+    안전 레지스터(40001 = 프로토콜 주소 0)에 FC16(다중 쓰기)로 페이로드를 써넣은 사보타주가
+    숨어 있다. 안전 레지스터에 대한 write 를 정상 HMI 가 아닌 출발지에서 찾아 공격자 IP 를
+    식별하고, FC16 페이로드 바이트를 공격자 IP 로 반복 XOR 복호해 flag 를 도출하라.
   red_task:
-    goal: "안전 레지스터 무단 write의 공격자 IP 식별 → note 토큰 XOR 복호 → flag"
+    goal: "안전 레지스터 무단 write(FC16)의 공격자 IP 식별 → 페이로드 XOR 복호 → flag"
     submit_fields: ["attacker_ip", "flag"]
   scoring:
     red_verify: "flag_match"
-  artifacts: ["modbus_traffic.jsonl"]
+  artifacts: ["modbus_sabotage.pcap"]
   safety:
     profile: "standard"
-    notes: "합성 Modbus 로그(실트래픽/실장비 무관). IP/토큰/플래그는 팀별 더미값."
+    notes: >
+      실 Modbus/TCP 캡처(shared/ics/modbus.py 실 인코더 + shared/net/pcap.py 프레이밍). 합성
+      트래픽·합성 호스트(실장비/실네트워크 무관). IP·토큰·플래그는 팀별 동적 HMAC.
