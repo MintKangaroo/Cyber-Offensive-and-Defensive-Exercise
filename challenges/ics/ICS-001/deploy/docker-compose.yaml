@@ -1,13 +1,17 @@
-version: "3.8"
+# 빌드 컨텍스트는 레포 루트(shared/ 재사용). 레포 루트에서 실행:
+#   CHALLENGE_SECRET=<secret> docker compose -f challenges/ics/ICS-001/deploy/docker-compose.yaml up --build
 services:
   ics001_deploy:
     build:
-      context: .
+      context: ../../../..            # 레포 루트
+      dockerfile: challenges/ics/ICS-001/deploy/Dockerfile
     container_name: ics001_deploy
     ports:
-      - "8111:8111"
+      - "4840:4840"                    # 실 OPC UA/TCP 공격 표면
     environment:
-      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-ics001-dev-secret}
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:?ICS-001 requires CHALLENGE_SECRET}
+      - TEAM_ID=${TEAM_ID:-default}
+      - OPCUA_PORT=4840
     read_only: true
     tmpfs:
       - /tmp
