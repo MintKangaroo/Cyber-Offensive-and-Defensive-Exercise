@@ -1,22 +1,24 @@
 challenge:
   id: "ICS-012"
-  title: "MQTT Sparkplug B 무단 액추에이터 명령 분석 - DCMD Injection"
+  title: "MQTT Sparkplug B 무단 명령 분석 - 실 pcap 포렌식"
   category: "ics"
   difficulty: "medium"
   points: { red: 120, blue: 0 }
   mitre: [T0855, T0831]
   description: |
-    mqtt_traffic.jsonl은 IIoT 게이트웨이의 합성 MQTT Sparkplug B 트래픽 로그다. 정상 SCADA의
-    NDATA/DDATA 텔레메트리 사이에, 무단 퍼블리셔가 펌프 액추에이터에 DCMD(device command)로
-    Pump/Control/Run=false 를 발행해 펌프를 강제 정지시킨 사보타주가 숨어 있다. 정상 SCADA가 아닌
-    출발지에서 Pump/Control 메트릭에 DCMD를 발행한 프레임을 찾아 공격자 IP를 식별하고, note(base64)
-    토큰을 공격자 IP로 XOR 복호해 flag를 도출하라.
+    mqtt_sabotage.pcap 은 스마트팩토리 IIoT 브로커망의 **실 MQTT Sparkplug B 캡처**다(Wireshark 가
+    포트 1883 을 MQTT 로 디섹션). 정상 SCADA(10.90.0.5)의 DDATA 텔레메트리 PUBLISH 사이에, 무단
+    퍼블리셔가 DCMD 토픽으로 펌프 액추에이터 명령(Pump/Control/Run)을 주입한 사보타주가 숨어
+    있다. DCMD PUBLISH 의 Sparkplug body 에 토큰이 실려 있다. DCMD 토픽으로 액추에이터 명령을 낸
+    정상 아닌 출발지를 찾아 공격자 IP 를 식별하고, body 를 공격자 IP 로 XOR 복호해 flag 를 도출하라.
   red_task:
-    goal: "펌프 액추에이터 MQTT DCMD의 공격자 IP 식별 → note 토큰 XOR 복호 → flag"
+    goal: "무단 DCMD 액추에이터 명령의 공격자 IP 식별 → Sparkplug body XOR 복호 → flag"
     submit_fields: ["attacker_ip", "flag"]
   scoring:
     red_verify: "flag_match"
-  artifacts: ["mqtt_traffic.jsonl"]
+  artifacts: ["mqtt_sabotage.pcap"]
   safety:
     profile: "standard"
-    notes: "합성 MQTT Sparkplug B 로그(실트래픽/실장비 무관). IP/토큰/플래그는 팀별 더미값."
+    notes: >
+      실 MQTT Sparkplug B 캡처(shared/ics/mqtt_sparkplug.py 실 인코더 + shared/net/pcap.py
+      프레이밍). 합성 트래픽·합성 호스트(실장비/실네트워크 무관). IP·토큰·플래그는 팀별 동적 HMAC.

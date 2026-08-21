@@ -1,15 +1,14 @@
-# ICS-008 — BACnet 무단 WriteProperty 분석 라이트업
+# ICS-008 — BACnet 무단 WriteProperty 분석 (실 pcap 포렌식) 라이트업
+- 분야: ics / 난이도: medium / MITRE ATT&CK for ICS: T0855, T0836
 
-- 분야: ics / 난이도: medium / MITRE: T0855, T0836
+## 무엇이 달라졌나 (합성 JSON 로그 → 실 pcap)
+`bacnet_sabotage.pcap` — **진짜 BACnet/IP 캡처**. Wireshark 가 UDP 47808 을 BACnet 으로
+디섹션한다. 프레임은 `shared/ics/bacnet.py`(BVLC/NPDU/APDU) + `shared/net/pcap.py`.
 
 ## 의도된 해법
-1. `bacnet_traffic.jsonl` 파싱 → bacnet_service=15(WriteProperty)이고 object_type=analog-output
-   (CRAC 냉방 setpoint)이며 src≠정상 BMS(10.70.0.10)인 레코드 = 무단 장치.
-2. 그 src가 공격자 IP. note(base64)를 공격자 IP로 XOR → `flag{bacnet_priority_override_<hmac12>}`.
-
-## 함정
-- 정상 BMS도 조명(binary-output)에 WriteProperty를 하지만 object_type/src로 걸러진다.
-- priority 8(수동 오버라이드)이 사보타주 시그널이나, 판별 키는 object_type+src.
+1. Wireshark `bacnet` 필터. 2. 냉방 setpoint(analog-output)에 WriteProperty(우선순위 8)를
+정상 BMS(10.70.0.10)가 아닌 출발지에서 찾는다 → 공격자 IP. 3. WriteProperty 값(OctetString,
+토큰)을 공격자 IP 로 반복 XOR → flag.
 
 ## 검증
-- C-QA `run_all.py --challenge ICS-008`(artifact_solve): 생성→solve→grade + 빈제출 거부. 팀별 유니크.
+`artifact_solve` 통과 + 빈제출 거부. 팀별 HMAC 유니크.

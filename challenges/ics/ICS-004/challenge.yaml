@@ -1,22 +1,24 @@
 challenge:
   id: "ICS-004"
-  title: "IEC 104 ASDU 조작 추적 - Command Injection"
+  title: "IEC 104 명령 주입 분석 - 실 pcap 포렌식"
   category: "ics"
   difficulty: "medium"
   points: { red: 120, blue: 0 }
   mitre: [T0855]
   description: |
-    iec104_log.jsonl은 변전소 원격제어망의 합성 IEC 60870-5-104 트래픽 로그다. 정상 SCADA
-    마스터의 감시 방향 ASDU(M_SP_NA_1=1, 자발 COT=3) 사이에, 무단 제어국이 보호 IOA(차단기, ioa=7)에
-    단일명령 C_SC_NA_1(type 45, 활성화 COT=6)을 내린 사보타주가 숨어 있다. 보호 IOA에 대한
-    제어 ASDU를 정상 마스터가 아닌 출발지에서 찾아 공격자 IP를 식별하고, note(base64) 토큰을
-    공격자 IP로 XOR 복호해 flag를 도출하라.
+    iec104_sabotage.pcap 은 전력 원격제어망의 **실 IEC 60870-5-104 캡처**다(Wireshark 가 포트
+    2404 를 IEC 104 로 디섹션). 정상 제어국(10.40.0.3)의 감시 트래픽 사이에, 무단 제어국이 보호
+    차단기(CB, IOA=7)에 C_SC_NA_1(단일명령, 활성화)을 주입한 사보타주가 숨어 있다. 명령 ASDU
+    정보요소에 토큰이 실려 있다. 보호 IOA 에 제어 ASDU 를 내린 정상 아닌 출발지를 찾아 공격자
+    IP 를 식별하고, 정보요소 페이로드를 공격자 IP 로 XOR 복호해 flag 를 도출하라.
   red_task:
-    goal: "보호 IOA 무단 제어 ASDU의 공격자 IP 식별 → note 토큰 XOR 복호 → flag"
+    goal: "보호 IOA 무단 제어 ASDU의 공격자 IP 식별 → 정보요소 페이로드 XOR 복호 → flag"
     submit_fields: ["attacker_ip", "flag"]
   scoring:
     red_verify: "flag_match"
-  artifacts: ["iec104_log.jsonl"]
+  artifacts: ["iec104_sabotage.pcap"]
   safety:
     profile: "standard"
-    notes: "합성 IEC 104 로그(실트래픽/실장비 무관). IP/토큰/플래그는 팀별 더미값."
+    notes: >
+      실 IEC 104 캡처(shared/ics/iec104.py 실 인코더 + shared/net/pcap.py 프레이밍). 합성
+      트래픽·합성 호스트(실장비/실네트워크 무관). IP·토큰·플래그는 팀별 동적 HMAC.

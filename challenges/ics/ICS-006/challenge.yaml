@@ -1,22 +1,25 @@
 challenge:
   id: "ICS-006"
-  title: "IEC 61850 GOOSE 위조 분석 - Spoofed Trip"
+  title: "IEC 61850 GOOSE 위조 분석 - 실 pcap 포렌식"
   category: "ics"
   difficulty: "hard"
   points: { red: 130, blue: 0 }
   mitre: [T0832, T0855]
   description: |
-    goose_messages.jsonl은 변전소 프로세스버스의 합성 IEC 61850 GOOSE 메시지 로그다. 정상 보호
-    IED의 GOOSE 발행(단조 sqNum) 사이에, 무단 발행자가 같은 보호 gocbRef로 비정상적으로 높은
-    stNum과 함께 CB_Trip=true를 주입한 GOOSE 스푸핑(오작동 유도)이 숨어 있다. 보호 gocbRef의
-    트립 GOOSE를 정상 IED가 아닌 출발지가 발행한 레코드를 찾아 공격자 MAC을 식별하고, note(base64)
-    토큰을 공격자 MAC으로 XOR 복호해 flag를 도출하라.
+    goose_messages.pcap 은 변전소 보호망의 **실 IEC 61850 GOOSE 캡처**(raw Ethernet, EtherType
+    0x88B8)다(Wireshark 가 GOOSE 로 디섹션). 정상 보호 IED(00:21:c1:aa:bb:cc)의 주기적 GOOSE
+    사이에, 무단 MAC 이 같은 gocbRef 로 높은 stNum 의 위조 트립 GOOSE(CB_Trip=true)를 주입한
+    사보타주가 숨어 있다. 위조 GOOSE 의 allData 옥텟열에 토큰이 실려 있다. 트립 gocbRef 로
+    CB_Trip=true 를 낸 정상 아닌 MAC 을 찾아 공격자 MAC 을 식별하고, 옥텟열을 공격자 MAC 으로
+    XOR 복호해 flag 를 도출하라.
   red_task:
-    goal: "스푸핑된 트립 GOOSE의 공격자 MAC 식별 → note 토큰 XOR 복호 → flag"
+    goal: "위조 트립 GOOSE의 공격자 MAC 식별 → allData 옥텟열 XOR 복호 → flag"
     submit_fields: ["attacker_mac", "flag"]
   scoring:
     red_verify: "flag_match"
-  artifacts: ["goose_messages.jsonl"]
+  artifacts: ["goose_messages.pcap"]
   safety:
     profile: "standard"
-    notes: "합성 IEC 61850 GOOSE 로그(실트래픽/실장비 무관). MAC/토큰/플래그는 팀별 더미값."
+    notes: >
+      실 IEC 61850 GOOSE 캡처(shared/ics/goose.py 실 BER 인코더 + shared/net/pcap.py L2
+      프레이밍). 합성 트래픽·합성 호스트(실장비/실네트워크 무관). MAC·토큰·플래그는 팀별 동적 HMAC.
