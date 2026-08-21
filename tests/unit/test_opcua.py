@@ -83,3 +83,54 @@ def test_serve_hel_ack_and_opn_live():
         server.close()
 
     asyncio.run(run())
+
+
+def test_session_browse_read_roundtrip():
+    """실 OPC UA 세션 계층: CreateSession→ActivateSession(Anonymous)→Browse→Read.
+
+    익명 세션으로 은닉 노드를 Browse 로 발견하고 Read 로 값을 회수한다(ICS-001 경로).
+    on_read 콜백(SIEM 트리거)이 접근 노드로 발화하는지도 확인.
+    """
+    hidden = "ns=4;s=Diag.Maint_cafe"
+    space = {"ns=2;s=Boiler.TempC": 210.5, hidden: "flag{opcua_anon_read_test}"}
+    reads = []
+
+    async def run():
+        server = await opcua.serve(
+            host="127.0.0.1", port=0,
+            browse_nodes=lambda: [(n, n.split(";")[-1]) for n in space],
+            read_node=lambda n: space.get(n),
+            on_read=lambda n, peer: reads.append(n))
+        port = server.sockets[0].getsockname()[1]
+        loop = asyncio.get_event_loop()
+        browsed, values = await loop.run_in_executor(
+            None, lambda: opcua.session_browse_read("127.0.0.1", port, [hidden]))
+        server.close()
+        return browsed, values
+
+    browsed, values = asyncio.run(run())
+    assert hidden in browsed                       # 익명 Browse 로 은닉 노드 노출
+    assert values[hidden] == space[hidden]         # 익명 Read 로 값(플래그) 회수
+    assert hidden in reads                          # on_read(SIEM 트리거) 발화
+
+
+def test_read_node_value_types():
+    """Variant 스칼라 인코딩 왕복(String/Double/Int32)."""
+    space = {"ns=2;s=a": "txt", "ns=2;s=b": 3.14, "ns=2;s=c": 42}
+
+    async def run():
+        server = await opcua.serve(host="127.0.0.1", port=0,
+                                   browse_nodes=lambda: [],
+                                   read_node=lambda n: space.get(n))
+        port = server.sockets[0].getsockname()[1]
+        loop = asyncio.get_event_loop()
+        _, values = await loop.run_in_executor(
+            None, lambda: opcua.session_browse_read(
+                "127.0.0.1", port, ["ns=2;s=a", "ns=2;s=b", "ns=2;s=c"]))
+        server.close()
+        return values
+
+    values = asyncio.run(run())
+    assert values["ns=2;s=a"] == "txt"
+    assert abs(values["ns=2;s=b"] - 3.14) < 1e-9
+    assert values["ns=2;s=c"] == 42
