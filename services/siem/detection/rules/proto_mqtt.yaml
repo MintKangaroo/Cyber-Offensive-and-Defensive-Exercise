@@ -1,0 +1,11 @@
+# §5 실 프로토콜 확장: MQTT Sparkplug B(IIoT 엣지→브로커) 탐지 규칙.
+# 트윈이 실제 MQTT PUBLISH(포트 1883)로 DCMD(디바이스 명령)를 받으면 raw.protocol=mqtt 로
+# SIEM access 로그를 흘린다. 미인가 DCMD publish = 엣지 디바이스 원격 제어 명령 주입.
+- id: ICS-MQTT-SPARKPLUG-DCMD
+  title: "ICS 미인가 MQTT Sparkplug B DCMD publish - IIoT 엣지 원격 명령"
+  severity: 4
+  mitre: [T0855, T0885]        # Unauthorized Command Message, Commonly Used Port
+  source_type: twin
+  kind: match
+  match:
+    raw.protocol: "mqtt"

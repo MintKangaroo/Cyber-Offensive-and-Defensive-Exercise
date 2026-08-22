@@ -1,0 +1,11 @@
+# §5 실 프로토콜 확장: BACnet/IP(빌딩 자동화) 탐지 규칙.
+# 트윈이 실제 BVLC/NPDU/APDU(포트 47808)로 WriteProperty 를 받으면 raw.protocol=bacnet 로
+# SIEM access 로그를 흘린다. 미인가 WriteProperty(Analog Output) = 공조/급기 설정값 무단 변경.
+- id: ICS-BACNET-WRITEPROP
+  title: "ICS 미인가 BACnet WriteProperty(Analog Output) - 빌딩 자동화 설정값 변조"
+  severity: 4
+  mitre: [T0836, T0855]        # Modify Parameter, Unauthorized Command Message
+  source_type: twin
+  kind: match
+  match:
+    raw.protocol: "bacnet"

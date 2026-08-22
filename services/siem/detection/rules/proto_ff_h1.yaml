@@ -1,0 +1,12 @@
+# §5 실 프로토콜 확장: Foundation Fieldbus H1(공정 안전계장) 탐지 규칙.
+# 트윈이 실제 FF 블록 파라미터 쓰기로 안전 PID 블록의 MODE_BLK 을 O/S(Out-of-Service)로
+# 바꾸면 raw.protocol=ff_h1 로 SIEM access 로그를 흘린다. 안전 PID를 O/S 전환 = 제어루프
+# 무력화(공정 안전기능 상실) → 미인가 안전블록 정지.
+- id: ICS-FF-H1-MODE-OOS
+  title: "ICS 미인가 Foundation Fieldbus MODE_BLK O/S - 안전 PID 블록 정지"
+  severity: 5
+  mitre: [T0836, T0831]        # Modify Parameter, Manipulation of Control
+  source_type: twin
+  kind: match
+  match:
+    raw.protocol: "ff_h1"
