@@ -49,3 +49,17 @@
   sequence_steps:
     - vuln_id: "HSP-001"
     - vuln_id: "HSP-003"
+
+# §5 실 프로토콜 확장: 변전소 킬체인 - IEC 61850 MMS 정찰(IED 열람) 후 위조 GOOSE 트립.
+# 같은 src.ip 가 먼저 MMS(raw.protocol=iec61850)로 IED를 식별하고, 이어 위조 GOOSE(raw.protocol=goose)로
+# 보호 트립을 주입하면 계층2 스푸핑까지 이어진 실공격으로 판단해 발화.
+- id: ICS-SUBSTATION-KILLCHAIN-SEQ-001
+  title: "변전소 킬체인 - IEC 61850 MMS 정찰 후 위조 GOOSE 트립"
+  severity: 5
+  mitre: [T0888, T0856]        # Remote System Information Discovery, Spoof Reporting Message
+  kind: sequence
+  sequence_group_by: "src.ip"
+  sequence_within_sec: 300
+  sequence_steps:
+    - raw.protocol: "iec61850"
+    - raw.protocol: "goose"

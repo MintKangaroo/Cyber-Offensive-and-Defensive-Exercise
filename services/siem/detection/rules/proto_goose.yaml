@@ -1,0 +1,11 @@
+# §5 실 프로토콜 확장: IEC 61850 GOOSE(변전소 계층2 멀티캐스트) 탐지 규칙.
+# 트윈이 위조 GOOSE 프레임(stNum/sqNum 조작)으로 보호 트립을 주입하면 raw.protocol=goose 로
+# SIEM access 로그를 흘린다. stNum 증가 위조 = 정상 IED보다 앞선 상태로 인식되어 차단기 오트립.
+- id: ICS-GOOSE-SPOOF-TRIP
+  title: "ICS 위조 GOOSE 보호 트립(stNum 조작) - 변전소 차단기 오작동"
+  severity: 5
+  mitre: [T0856, T0831]        # Spoof Reporting Message, Manipulation of Control
+  source_type: twin
+  kind: match
+  match:
+    raw.protocol: "goose"

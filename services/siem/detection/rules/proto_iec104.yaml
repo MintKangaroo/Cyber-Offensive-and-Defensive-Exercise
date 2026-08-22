@@ -1,0 +1,11 @@
+# §5 실 프로토콜 확장: IEC 60870-5-104(전력계통 SCADA→RTU) 탐지 규칙.
+# 트윈이 실제 APCI/ASDU(포트 2404)로 C_SC_NA_1(단일 명령)을 받으면 raw.protocol=iec104 로
+# SIEM access 로그를 흘린다. 미인가 C_SC_NA_1 = 계통 RTU 차단기/스위치 직접 제어(정전 유발).
+- id: ICS-IEC104-SINGLE-COMMAND
+  title: "ICS 미인가 IEC 104 단일명령(C_SC_NA_1) - 전력계통 RTU 제어"
+  severity: 5
+  mitre: [T0855, T0831]        # Unauthorized Command Message, Manipulation of Control
+  source_type: twin
+  kind: match
+  match:
+    raw.protocol: "iec104"
