@@ -102,6 +102,65 @@ attach_modbus_ics(app, ModbusIcsConfig(
 from shared.ics.twin_iec61850 import attach_iec61850  # noqa: E402
 attach_iec61850(app, asset="datacenter_bms", vuln_id="DCX-002")
 
+# ---------------------------------------------------------------------------
+# 실 BACnet/IP (§5 실 프로토콜 확장, Tier-3) — 빌딩 자동화(BMS/HVAC)의 사실상 표준.
+# WriteProperty 로 CRAC 냉방 설정치(Analog Output present-value)를 무단 상향 → 과열 유도(DCX-001).
+# 전송은 트윈 관례(HTTP-sim)를 따르되, 실 인코더(shared/ics/bacnet)로 APDU 를 만들어 자체
+# 파서로 왕복 디코드한 정보를 SIEM access 로그(raw.protocol=bacnet)로 흘려 Blue 탐지를 성립시킨다.
+# ---------------------------------------------------------------------------
+import json as _json  # noqa: E402
+import time as _time  # noqa: E402
+from pydantic import BaseModel  # noqa: E402
+from shared.event_client import emit_event as _emit_event  # noqa: E402
+from shared.event_schema import Event as _Event, EventType as _EventType, RedPhase as _RedPhase  # noqa: E402
+from shared.siem_access_log import get_siem_logger as _get_siem_logger  # noqa: E402
+from shared.ics.bacnet import (build_write_property as _bac_write, parse_apdu as _bac_parse,  # noqa: E402
+                               OBJ_ANALOG_OUTPUT, PROP_PRESENT_VALUE)
+
+_BAC_ASSET = "datacenter_bms"
+_bac_siem = _get_siem_logger(_BAC_ASSET)
+
+
+class BacnetWrite(BaseModel):
+    instance: int = 3               # AO 인스턴스(예: CRAC-3 냉방 설정치)
+    setpoint_c: float = 30.0        # 무단 상향된 냉방 설정치(과열 유도)
+    priority: int = 8
+
+
+@app.post("/api/bacnet/write-property")
+def bacnet_write_property(req: BacnetWrite):
+    """BACnet WriteProperty 로 CRAC 냉방 설정치(AO present-value) 무단 변조 → 과열 유도."""
+    value = str(req.setpoint_c).encode()          # OctetString 값(합성 표현)
+    frame = _bac_write(OBJ_ANALOG_OUTPUT, req.instance, value, prop=PROP_PRESENT_VALUE,
+                       priority=req.priority)
+    _bac_parse(frame)                             # 왕복 파싱(정직성: 자체 디섹션 가능 확인)
+    try:
+        _bac_siem.info(_json.dumps({
+            "ts": _time.time(), "asset": _BAC_ASSET, "method": "BACNET",
+            "endpoint": "/bacnet/writeproperty/AO", "status": 200, "vuln_id": "DCX-001",
+            "team_id": "default", "trace_id": _Event.session_trace_id("bacnet", _BAC_ASSET),
+            "protocol": "bacnet", "service": "WriteProperty",
+            "object": f"AO:{req.instance}", "prop": "present-value",
+            "setpoint_c": req.setpoint_c, "ics_technique": "T0836"}))
+    except Exception:
+        pass
+    try:
+        _emit_event(
+            event_id=_Event.make_id("bacnet", _BAC_ASSET, "DCX-001", str(req.instance), str(_time.time())),
+            event_type=_EventType.red_attack_started, actor="red", target_asset=_BAC_ASSET,
+            vuln_id="DCX-001", phase=_RedPhase.lateral_movement, team_id="default",
+            trace_id=_Event.session_trace_id("bacnet", _BAC_ASSET),
+            metadata={"protocol": "bacnet", "service": "WriteProperty",
+                      "object": f"AnalogOutput:{req.instance}", "setpoint_c": req.setpoint_c,
+                      "priority": req.priority, "ics_technique": "T0836",
+                      "note": "unauthenticated BACnet WriteProperty to cooling setpoint"})
+    except Exception:
+        pass
+    return {"protocol": "bacnet", "service": "WriteProperty",
+            "object": f"AnalogOutput:{req.instance}", "setpoint_c": req.setpoint_c,
+            "frame_hex": frame.hex()}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8207)
