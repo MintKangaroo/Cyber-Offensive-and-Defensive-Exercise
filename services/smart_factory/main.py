@@ -108,6 +108,110 @@ attach_profinet(app, asset="smart_factory", vuln_id="FAC-001",
                                       device_id=0x0301, ip="10.20.0.11",
                                       vendor_value="Siemens S7-1500 PN/IE"))
 
+# ---------------------------------------------------------------------------
+# 실 EtherNet/IP+CIP / MQTT+Sparkplug B (§5 실 프로토콜 확장, Tier-3) — 이산 제조 IIoT.
+# 전송은 트윈 관례(HTTP-sim)를 따르되, 실 인코더(shared/ics/enip·mqtt_sparkplug)로 프레임을
+# 만들어 자체 파서로 왕복 디코드한 명령 정보를 SIEM access 로그(raw.protocol=enip|mqtt)로 흘려
+# Blue 탐지를 성립시킨다. 둘 다 무인증(insecure-by-design) 산업 이더넷/브로커 프로토콜이다.
+# ---------------------------------------------------------------------------
+import json as _json  # noqa: E402
+import time as _time  # noqa: E402
+from pydantic import BaseModel  # noqa: E402
+from shared.event_client import emit_event as _emit_event  # noqa: E402
+from shared.event_schema import Event as _Event, EventType as _EventType, RedPhase as _RedPhase  # noqa: E402
+from shared.siem_access_log import get_siem_logger as _get_siem_logger  # noqa: E402
+from shared.ics.enip import (build_cip_request as _cip_req, build_sendrrdata as _enip_send,  # noqa: E402
+                             parse_sendrrdata as _enip_parse, SVC_SET_ATTR_SINGLE)
+from shared.ics.mqtt_sparkplug import (build_sparkplug_payload as _spb_payload,  # noqa: E402
+                                       build_publish as _mqtt_publish, parse_publish as _mqtt_parse)
+
+_FAC_ASSET = "smart_factory"
+_fac_siem = _get_siem_logger(_FAC_ASSET)
+
+
+class EnipCip(BaseModel):
+    class_id: int = 0x28        # 드라이브/모션 관련 예시 CIP 클래스
+    instance: int = 1
+    attribute: int = 3          # 속도/설정 속성
+    value: int = 150            # 무단 설정치(과속 유도)
+
+
+@app.post("/api/enip/cip")
+def enip_cip(req: EnipCip):
+    """EtherNet/IP CIP SetAttributeSingle 로 드라이브/모션 속성 무단 쓰기(제어 조작)."""
+    data = int(req.value).to_bytes(2, "little")
+    cip = _cip_req(SVC_SET_ATTR_SINGLE, req.class_id, req.instance, req.attribute, data)
+    frame = _enip_send(cip)
+    parsed = _enip_parse(frame)
+    try:
+        _fac_siem.info(_json.dumps({
+            "ts": _time.time(), "asset": _FAC_ASSET, "method": "ENIP",
+            "endpoint": "/enip/cip/set_attr_single", "status": 200, "vuln_id": "FAC-004",
+            "team_id": "default", "trace_id": _Event.session_trace_id("enip", _FAC_ASSET),
+            "protocol": "enip", "service": "SetAttributeSingle",
+            "class": parsed.class_id if parsed else req.class_id,
+            "instance": parsed.instance if parsed else req.instance,
+            "attribute": parsed.attribute if parsed else req.attribute, "ics_technique": "T0836"}))
+    except Exception:
+        pass
+    try:
+        _emit_event(
+            event_id=_Event.make_id("enip", _FAC_ASSET, "FAC-004", str(req.class_id), str(_time.time())),
+            event_type=_EventType.red_attack_started, actor="red", target_asset=_FAC_ASSET,
+            vuln_id="FAC-004", phase=_RedPhase.lateral_movement, team_id="default",
+            trace_id=_Event.session_trace_id("enip", _FAC_ASSET),
+            metadata={"protocol": "enip", "service": "SetAttributeSingle",
+                      "class": req.class_id, "instance": req.instance, "attribute": req.attribute,
+                      "value": req.value, "ics_technique": "T0836",
+                      "note": "unauthenticated EtherNet/IP CIP attribute write to drive"})
+    except Exception:
+        pass
+    return {"protocol": "enip", "service": "SetAttributeSingle", "class": req.class_id,
+            "instance": req.instance, "attribute": req.attribute, "value": req.value,
+            "frame_hex": frame.hex()}
+
+
+class MqttCommand(BaseModel):
+    group: str = "Line-A"
+    node: str = "robot-1"
+    metric: str = "Robot/Speed"
+    value: int = 150           # 무단 명령값(로봇 속도 등)
+
+
+@app.post("/api/mqtt/command")
+def mqtt_command(req: MqttCommand):
+    """Sparkplug B DCMD PUBLISH 로 IIoT 디바이스에 무단 명령(로봇 속도 등) 하달."""
+    topic = f"spBv1.0/{req.group}/DCMD/{req.node}"
+    body = int(req.value).to_bytes(4, "big")
+    payload = _spb_payload(req.metric, body)
+    packet = _mqtt_publish(topic, payload)
+    parsed = _mqtt_parse(packet)
+    try:
+        _fac_siem.info(_json.dumps({
+            "ts": _time.time(), "asset": _FAC_ASSET, "method": "MQTT",
+            "endpoint": "/mqtt/publish/DCMD", "status": 200, "vuln_id": "FAC-002",
+            "team_id": "default", "trace_id": _Event.session_trace_id("mqtt", _FAC_ASSET),
+            "protocol": "mqtt", "mqtt_type": "PUBLISH",
+            "topic": parsed.topic if parsed else topic,
+            "metric": parsed.metric if parsed else req.metric, "ics_technique": "T0855"}))
+    except Exception:
+        pass
+    try:
+        _emit_event(
+            event_id=_Event.make_id("mqtt", _FAC_ASSET, "FAC-002", req.node, str(_time.time())),
+            event_type=_EventType.red_attack_started, actor="red", target_asset=_FAC_ASSET,
+            vuln_id="FAC-002", phase=_RedPhase.lateral_movement, team_id="default",
+            trace_id=_Event.session_trace_id("mqtt", _FAC_ASSET),
+            metadata={"protocol": "mqtt", "mqtt_type": "PUBLISH", "topic": topic,
+                      "sparkplug": "DCMD", "metric": req.metric, "value": req.value,
+                      "ics_technique": "T0855",
+                      "note": "unauthenticated Sparkplug B DCMD command to IIoT device"})
+    except Exception:
+        pass
+    return {"protocol": "mqtt", "mqtt_type": "PUBLISH", "topic": topic,
+            "metric": req.metric, "value": req.value, "packet_hex": packet.hex()}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8202)

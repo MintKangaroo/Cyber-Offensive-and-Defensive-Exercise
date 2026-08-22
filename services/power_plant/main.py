@@ -572,6 +572,93 @@ def firmware_update(req: FirmwareUpdate):
     return {"patched": False, "status": "firmware flashed (no signature check)", "version": req.version}
 
 
+# ---------------------------------------------------------------------------
+# 실 IEC 60870-5-104 / GOOSE (§5 실 프로토콜 확장, Tier-3) — 전력 원격제어·변전소 보호.
+# 두 프로토콜 모두 무인증(insecure-by-design)이다. 전송은 트윈 관례(HTTP-sim)를 따르되,
+# 실 인코더(shared/ics/iec104·goose)로 프레임을 만들어 자체 파서로 왕복 디코드한 명령
+# 정보를 SIEM access 로그(raw.protocol=iec104|goose)로 흘려 Blue 탐지를 성립시킨다.
+# ---------------------------------------------------------------------------
+from shared.ics.iec104 import (build_asdu as _iec_asdu, build_i_apdu as _iec_apdu,  # noqa: E402
+                               parse_apdu as _iec_parse, C_SC_NA_1)
+from shared.ics.goose import (build_goose as _goose_build, parse_goose as _goose_parse)  # noqa: E402
+
+
+class Iec104Command(BaseModel):
+    ioa: int = 3000            # 정보객체 주소(예: 차단기 원격제어점)
+    on: bool = False           # 단일명령 SCO 값(트립/투입)
+    common_addr: int = 1
+
+
+@app.post("/api/iec104/command")
+def iec104_command(req: Iec104Command):
+    """IEC 104 단일명령(C_SC_NA_1)으로 RTU/차단기 원격제어. 무인증 → 미인가 제어(그리드/SIS)."""
+    sco = 0x01 if req.on else 0x00
+    asdu = _iec_asdu(C_SC_NA_1, cot=6, common_addr=req.common_addr, ioa=req.ioa, info=bytes([sco]))
+    apdu = _iec_apdu(asdu, send_seq=0, recv_seq=0)
+    parsed = _iec_parse(apdu)
+    try:
+        _siem_log.info(_json.dumps({
+            "ts": time.time(), "asset": ASSET_NAME, "method": "IEC104",
+            "endpoint": "/iec104/c_sc_na/rtu", "status": 200, "vuln_id": "PP-006",
+            "team_id": "default", "trace_id": Event.session_trace_id("iec104", ASSET_NAME),
+            "protocol": "iec104", "type_id": parsed.type_id if parsed else C_SC_NA_1,
+            "cot": parsed.cot if parsed else 6, "ioa": parsed.ioa if parsed else req.ioa,
+            "ics_technique": "T0855", "apdu_len": len(apdu)}))
+    except Exception:
+        pass
+    try:
+        emit_event(
+            event_id=Event.make_id("iec104", ASSET_NAME, "PP-006", str(req.ioa), str(time.time())),
+            event_type=EventType.red_attack_started, actor="red", target_asset=ASSET_NAME,
+            vuln_id="PP-006", phase=RedPhase.lateral_movement, team_id="default",
+            trace_id=Event.session_trace_id("iec104", ASSET_NAME),
+            metadata={"protocol": "iec104", "fc": "C_SC_NA_1(single_command)", "ioa": req.ioa,
+                      "cot": 6, "command": "ON" if req.on else "OFF", "ics_technique": "T0855",
+                      "note": "unauthenticated IEC-104 telecontrol command"})
+    except Exception:
+        pass
+    return {"protocol": "iec104", "sent": "C_SC_NA_1", "ioa": req.ioa,
+            "command": "ON" if req.on else "OFF", "apdu_hex": apdu.hex()}
+
+
+class GooseTrip(BaseModel):
+    gocb_ref: str = "IED1CFG/LLN0$GO$gcb01"
+    dat_set: str = "IED1CFG/LLN0$Protection"
+    st_num: int = 2            # stNum 증가 = 새 상태변경(트립) 이벤트 → 스푸핑 주입
+    sq_num: int = 0
+    trip: bool = True
+
+
+@app.post("/api/goose/publish")
+def goose_publish(req: GooseTrip):
+    """스푸핑 GOOSE 트립 주입(변전소 보호). stNum 증가 = 새 트립 이벤트로 릴레이를 오작동시킴."""
+    frame = _goose_build(req.gocb_ref, req.dat_set, req.st_num, req.sq_num, trip=req.trip)
+    parsed = _goose_parse(frame) or {}
+    try:
+        _siem_log.info(_json.dumps({
+            "ts": time.time(), "asset": ASSET_NAME, "method": "GOOSE",
+            "endpoint": "/goose/protection/trip", "status": 200, "vuln_id": "PP-006",
+            "team_id": "default", "trace_id": Event.session_trace_id("goose", ASSET_NAME),
+            "protocol": "goose", "gocb_ref": parsed.get("gocbRef", req.gocb_ref),
+            "st_num": parsed.get("stNum", req.st_num), "trip": parsed.get("trip", req.trip),
+            "ics_technique": "T0855"}))
+    except Exception:
+        pass
+    try:
+        emit_event(
+            event_id=Event.make_id("goose", ASSET_NAME, "PP-006", str(req.st_num), str(time.time())),
+            event_type=EventType.red_attack_started, actor="red", target_asset=ASSET_NAME,
+            vuln_id="PP-006", phase=RedPhase.lateral_movement, team_id="default",
+            trace_id=Event.session_trace_id("goose", ASSET_NAME),
+            metadata={"protocol": "goose", "gocb_ref": req.gocb_ref, "st_num": req.st_num,
+                      "trip": req.trip, "ics_technique": "T0855",
+                      "note": "spoofed GOOSE protection trip (stNum incremented)"})
+    except Exception:
+        pass
+    return {"protocol": "goose", "gocb_ref": req.gocb_ref, "st_num": req.st_num,
+            "trip": req.trip, "frame_hex": frame.hex()}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8002)
