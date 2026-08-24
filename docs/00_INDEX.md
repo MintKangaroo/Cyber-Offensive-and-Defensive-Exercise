@@ -3,6 +3,12 @@
 Live Fire 사이버 모의공방훈련 플랫폼을 Claude Code 팀 에이전트로 구축하기 위한 기획·프롬프트 문서 모음.
 아래 순서대로 읽고, 09번 역할 정의에 따라 에이전트에 분배한다.
 
+> ℹ️ **`01`~`31`은 빌드 착수 시점의 설계·프롬프트 문서(design-time spec)입니다.** 구현이 진행되며
+> 코드가 이 스펙을 넘어선 부분이 많으므로, **현재 플랫폼의 정본 상태는 [`../README.md`](../README.md)와
+> [`../CHANGELOG.md`](../CHANGELOG.md)** 입니다. 갭 해소 현황은 [`GAP_ANALYSIS.md`](GAP_ANALYSIS.md) 상단 배너를,
+> 실 ICS 프로토콜 공방은 [`ICS-KILLCHAIN.md`](ICS-KILLCHAIN.md)를 참고하세요. 이 스펙 문서들은
+> "왜 이렇게 지었나"의 설계 의도 기록으로 보존됩니다.
+
 ## 읽는 순서
 
 **0. 시작점**
