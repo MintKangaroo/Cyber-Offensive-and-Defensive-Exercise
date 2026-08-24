@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 ### Added
+- **ICS 챌린지 13종 실 프로토콜 재저작**: ICS-000~012를 HTTP 목업/합성 로그 → **실 프로토콜**로 전면
+  재저작. 라이브 서버형(ICS-000 Modbus/TCP·ICS-001 OPC UA — 실 서버에 직접 익스플로잇)과 pcap 포렌식형
+  (Modbus·DNP3·Profinet·HART·S7comm·IEC104·GOOSE·BACnet·FF-H1·EtherNet/IP·MQTT — Wireshark로 분석하는
+  실 프로토콜 캡처). `shared/ics/` 실 인코더 12종 + `shared/net/pcap.py` pcap 인프라 신설. 사보타주
+  write/command 데이터필드에 토큰(=flag⊕공격자ID) 운반. 전 챌린지 artifact_solve 통과, validate 70/70.
+- **Tier-3 프로토콜 실 트윈 배선**: 6종(IEC104·GOOSE·BACnet·EtherNet/IP·MQTT·FF-H1)을 라이브 트윈
+  런타임(power_plant·datacenter_bms·refinery_plant·smart_factory)에 연결 — 실 프로토콜 명령을 SIEM
+  access 로그(`raw.protocol=*`)로 배출. (PR #26)
+- **Blue SIEM 실 프로토콜 탐지 규칙 확장**: `proto_{iec104,goose,bacnet,enip,mqtt,ff_h1}.yaml` 6종
+  (kind:match, MITRE ICS T0855/T0831/T0836/T0856/T0885) + 변전소 킬체인 sequence(MMS 정찰→GOOSE 위조트립).
+  탐지 규칙 총 66종 로드. (PR #25)
+- **트윈→SIEM 라이브 탐지 루프 E2E 검증**: 실 도커 스택에서 6개 프로토콜 엔드포인트 POST →
+  access 로그 → siem_api file-tailer → DetectionEngine → `/alerts` **6/6 규칙 발화**(severity·MITRE 정확) 확인.
+- **완성도 · 문서 동기화**: README에 완성도/검증 현황 섹션 추가(70 챌린지·434 유닛·CI 7/7·E2E 6/6·14 실 프로토콜),
+  `docs/GAP_ANALYSIS.md`에 Phase-0 갭 11건 해소 현황 배너, `docs/00_INDEX.md`에 설계 시점 문서 안내 추가.
 - **Live Fire 방송 오버레이**: OBS/browser-source 전용 `scorebar`·`standings`·LiveCTF
   `bracket` 레이아웃과 transparent/solid/chroma 출력을 추가. 전용 무인증
   `broadcast-overlay.v1` API는 public delayed scoreboard, aggregate 서비스 상태와

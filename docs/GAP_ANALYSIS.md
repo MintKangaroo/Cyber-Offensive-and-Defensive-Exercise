@@ -1,5 +1,29 @@
 # GAP_ANALYSIS — 코드 실측 기반 갭 분석 (Phase 0)
 
+> ⚠️ **이 문서는 Phase-0 착수 시점(초기) 스냅샷입니다.** 아래 11개 갭은 이후 4주차 전면 감사
+> 리메디에이션 + §5 실 프로토콜 확장 작업으로 **대부분 해소**되었습니다. 원본 표본은 출발점 기록으로
+> 보존하되, **현재 상태는 아래 「해소 현황(2026-08 기준)」과 [`../README.md`](../README.md) · [`../CHANGELOG.md`](../CHANGELOG.md)를 정본으로 삼으세요.**
+>
+> ### 해소 현황 (2026-08 기준)
+>
+> | # | 원 갭(Phase-0) | 현재 | 근거 |
+> |---|---|---|---|
+> | 1 | 인증/세션 부분구현 | ✅ 해소 | RBAC fail-closed 전환, 정적 토큰→서비스 인증 게이트(감사 1.4·1.6·3.1) |
+> | 2 | 영속성 부분구현 | ✅ 해소 | WAL 5저장소·events.db reconcile·스냅샷 복원(감사 3.6·3.7·4.8) |
+> | 3 | 실시간 전송 폴링 | ✅ 해소 | SSE 단일 허브 전환(폴링 제거, 관전자 100명 p95 77ms) |
+> | 4 | SIEM 대규모 미측정 | 🟡 완화 | FTS5 인덱스 + nightly k6 부하 위임 |
+> | 5 | 대시보드 배포 미구현 | ✅ 해소 | Dockerfile·게이트웨이·프로덕션 배포 경로 추가 |
+> | 6 | **트윈 프로토콜 HTTP 모사** | ✅ **해소** | **14종 실 ICS 프로토콜**(`shared/ics/*`,`shared/space/ccsds`) — 11섹터 트윈 전부 실 프로토콜, 트윈→SIEM 라이브 탐지 E2E 6/6 |
+> | 7 | defense_network AD HTTP 모사 | 🟡 부분 | 실 SMTP(오픈릴레이 DN-004) 도입; Kerberos/Samba 정통 AD는 후속 여지 |
+> | 8 | 관측성 미구현 | ✅ 해소 | Prometheus `/metrics` 전 서비스 집계 |
+> | 9 | 테스트/보안CI 부분 | ✅ 해소 | 유닛 434 + CI 7잡(secret-scan·supply-chain·trivy·bandit·pip-audit) |
+> | 10 | 공정성/안티치트 미구현 | ✅ 해소 | rate-limit·lockout·담합 탐지·제출 감사(감사 3.4·SOC) |
+> | 11 | 저장소 위생 미구현 | ✅ 해소 | LICENSE·SECURITY.md·CONTRIBUTING·.env.example·CHANGELOG·git 태그 |
+>
+> 남은 것은 기능 결함이 아니라 **장시간 실측**(U-3 부하 포화·U-5 Zeek 레이스·U-6 OOM 소크)뿐.
+
+---
+
 > 작성 원칙: README/문서 주장을 **코드 실측**으로 검증. 근거는 `파일:라인` 인용. 이번 분석에서 코드는 수정하지 않음.
 > 실측 환경: 로컬 docker 스택 실행 중, 재시작 테스트는 실제 `docker compose restart` 수행.
 

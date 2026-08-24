@@ -4,11 +4,32 @@
 > 데이터센터 · 병원** 등 **11개 ICS/OT 섹터**를 모사한 디지털 트윈 위에서
 > Red(공격) · Blue(방어) · 관전자 · 교관이 함께 훈련하는 **풀스택 사이버 레인지**입니다.
 > 취약 서비스 트윈(**60종**), EDR, SIEM, 시나리오 엔진, 실시간 대시보드, 자동 채점(AAR),
-> 그리고 7개 분야 **69개 CTF 챌린지**를 하나의 `docker compose`로 기동합니다.
+> 그리고 7개 분야 **70개 CTF 챌린지**를 하나의 `docker compose`로 기동합니다.
 >
-> 여기에 **실제 Modbus/TCP 를 말하는 ICS 트윈**(공격→물리 파괴→탐지→방어 완전 공방 루프),
+> 여기에 **14종 실 ICS 프로토콜을 말하는 디지털 트윈**(Modbus·DNP3·OPC UA·S7comm·IEC104·GOOSE·
+> IEC61850·BACnet·EtherNet/IP·MQTT·HART·Profinet·FF-H1·CCSDS — 공격→물리 파괴→탐지→방어 완전 공방 루프),
 > **SSE 실시간 상황판 + 단일 관리 콘솔(Control Tower)**, **인시던트·안티치트·위기 인젝트**,
 > **Prometheus 관측성·시나리오 저작 도구**까지 갖춘 운영형 레인지입니다.
+
+## 완성도 · 검증 현황
+
+![status](https://img.shields.io/badge/status-operational-2aa25c) ![challenges](https://img.shields.io/badge/challenges-70%2F70-2aa25c) ![tests](https://img.shields.io/badge/unit-434%20passed-2aa25c) ![ci](https://img.shields.io/badge/CI-7%2F7-2aa25c)
+
+**운영 준비 완료(operational).** 4주차 전면 보안 감사(Showstopper 11건 · 35개 항목)를 전량 리메디에이션했고,
+남은 항목은 새 기능이 아니라 장시간 부하/소크 실측(nightly·소크 위임)뿐입니다.
+
+| 검증 축 | 결과 |
+|---|---|
+| 챌린지 자동 QA | **70 / 70** 통과 |
+| 백엔드 유닛 테스트 | **434 passed** |
+| CI 파이프라인 | **7 / 7** green (unit·integration·challenges·clean-install·dashboard·secret-scan·supply-chain) |
+| 트윈→SIEM 라이브 탐지 E2E | **6 / 6** 규칙 발화 (실 도커 스택) |
+| 실 ICS 프로토콜 | **14종** (11개 섹터 트윈 전부 실 프로토콜 구사) |
+| 라이브 실측 실결함 수정 | **7건** (정적 분석이 못 잡은 런타임 결함) |
+
+> ICS 챌린지 13종은 전부 HTTP 목업 → **실 프로토콜**(라이브 서버 익스플로잇 또는 실 pcap 포렌식)로 재저작 완료.
+> 감사 §7 「대외 공개 최소조건」 충족. 상세 이력은 [`CHANGELOG.md`](CHANGELOG.md), 갭 해소 현황은
+> [`docs/GAP_ANALYSIS.md`](docs/GAP_ANALYSIS.md) 상단 배너 참고.
 
 ## 처음 시작하기
 
@@ -702,7 +723,7 @@ docker compose down
 
 **소개 · 구조**
 - [무엇을 하는 플랫폼인가](#무엇을-하는-플랫폼인가) · [아키텍처](#아키텍처) · [주요 화면](#주요-화면-스크린샷) · [핵심 기능](#핵심-기능)
-- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (69종)](#챌린지-카탈로그-69종)
+- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (70종)](#챌린지-카탈로그-70종)
 
 **시작 · 품질 · 접근제어**
 - [처음 시작하기](#처음-시작하기) · [경기 운영 방법](#경기-운영-방법) · [빠른 시작](#빠른-시작)
@@ -847,7 +868,7 @@ EDR 8080 · AAR 8090 · **Attack/Defense 8100** · **Match vhost 8088** · 대�
 | **디지털 트윈** | **11개 ICS/OT 섹터**(위성·전력·사내망 + 정유·스마트팩토리·수도·LNG·철도·공항·데이터센터·병원)에 **취약 서비스 60종**(SQLi/IDOR/RCE/명령주입/SSRF/XXE/LDAP + OPC UA·Modbus·HART·SIS·ESD·Profinet 등 OT 프로토콜)을 내장하고 텔레메트리·access log를 발생. **11개 섹터 전부 per-twin 네트워크 격리**(nginx 게이트웨이 + internal 네트워크)로 lateral·egress 차단. |
 | **클라우드 네이티브 공격면** | `cloud_native` 트윈 — **IMDS SSRF**(자격증명 탈취, T1552.005)·**노출 Docker API**(T1610)·**kubelet 익명 exec**(T1609)·**시크릿 노출**(T1552.001)·**SSTI RCE**(T1059). SIEM 규칙 5종으로 탐지→채점. ICS 외 현대 공격면. |
 | **EDR** | 프로세스 스냅샷 수집 → 리버스쉘·웹서버발 셸 생성 등 행위 탐지 → 호스트 격리/프로세스 kill(감사 로그). |
-| **SIEM** | 인제스천(11개 트윈 로그·Suricata·Zeek·pfSense syslog) → 정규화 → 규칙(match/threshold/sequence/periodicity, **ICS/OT 섹터 규칙 19종**: match 16 + 섹터 킬체인 sequence 2 + OT 다중취약점 threshold 1) 탐지 → Live Fire 점수 연동. ATT&CK 커버리지 매핑. |
+| **SIEM** | 인제스천(11개 트윈 로그·Suricata·Zeek·pfSense syslog) → 정규화 → 규칙(match/threshold/sequence/periodicity, 총 **66종 로드**; ICS/OT 실 프로토콜 규칙에 Tier-3 6종(IEC104·GOOSE·BACnet·EtherNet/IP·MQTT·FF-H1) + 변전소 킬체인 sequence 추가) 탐지 → Live Fire 점수 연동. ATT&CK 커버리지 매핑. |
 | **시나리오 엔진** | 코드로 정의된 킬체인 시나리오(순서 강제, chain bonus). **14개 시나리오** 로드 — **11개 섹터 전부 전용 킬체인** + 크로스오버 3(**IT→OT 피벗** 포함: 사내망 발판→자격증명 탈취→정유 OPC UA 정찰→SIS 사보타주로 Purdue 경계를 넘는 멀티에셋 킬체인). |
 | **점수/AAR** | 이벤트 → 자동 채점(Red 목표 / Blue 탐지·복구). MTTD/MTTR·탐지율·오탐률·ATT&CK 히트맵·**PDF 리포트** 자동 생성. |
 | **복구 판정** | NOC Monitor가 트윈 헬스를 폴링, 침해→패치→복구를 판정해 MTTR 산출·Blue 가점. |
@@ -856,8 +877,8 @@ EDR 8080 · AAR 8090 · **Attack/Defense 8100** · **Match vhost 8088** · 대�
 | **실시간 상황판** | **SSE 단일 허브**(폴링 제거, 관전자 100명 반영지연 p95 77ms) + **Control Tower**(전 서비스 헬스·라이브 피드·시나리오/긴급정지 단일 관리, 워룸·모바일 반응형). → [실시간 푸시](#실시간-푸시-p0-4--폴링-제거) · [Control Tower](#통합-관리-콘솔--control-tower-단일-화면-운영) |
 | **경쟁 무결성 · SOC** | 플래그 **rate-limit·lockout·담합 탐지**(안티치트) · **인시던트 케이스**(알림→승격·SLA·MTTA/MTTR·AAR) · **비기술 인젝트**(언론/규제 위기대응·루브릭 채점). → [무결성·SOC](#경쟁-무결성--soc-케이스-운영) |
 | **관측성 · 저작** | Prometheus `/metrics` 전 서비스 집계 · 시나리오 **lint·dry-run·phase-clock** 저작 도구. → [관측성·저작](#플랫폼-관측성--시나리오-저작) |
-| **ICS 실프로토콜 공방** | power_plant·water_utility가 **실제 Modbus/TCP(502)** 를 말함 → 공격(SIS 무력화·과속) → **연속 물리 파괴** → MITRE ICS 탐지(SIEM) → Blue **SIS 재무장 방어**. → [ICS 킬체인](docs/ICS-KILLCHAIN.md) |
-| **69 챌린지** | 7개 분야 × easy~insane. 팀별 동적 플래그(HMAC)로 답 공유 방지. 전부 자동 QA 통과. |
+| **ICS 실프로토콜 공방** | **11개 섹터 트윈 전부 실 프로토콜을 말함** — Modbus/TCP 기본 + 7개 섹터 확장 스위트(전력망 DNP3·IEC104·GOOSE, 정유 OPC UA·HART·FF-H1, 스마트팩토리 S7·Profinet·EtherNet/IP·MQTT, 데이터센터 IEC61850·BACnet, 위성 CCSDS, 사내망 SMTP). 공격(SIS 무력화·과속) → **연속 물리 파괴** → MITRE ICS 탐지(SIEM) → Blue **SIS 재무장 방어**. **트윈→SIEM 라이브 탐지 루프 E2E 검증(6/6 발화).** → [ICS 킬체인](docs/ICS-KILLCHAIN.md) |
+| **70 챌린지** | 7개 분야 × easy~insane. **ICS 13종은 실 프로토콜(라이브 서버 익스플로잇/실 pcap 포렌식)로 재저작.** 팀별 동적 플래그(HMAC)로 답 공유 방지. 전부 자동 QA 통과. |
 
 ---
 
@@ -1011,9 +1032,9 @@ patched/vulnerable 상태를 한 번에 판정합니다.
 
 ---
 
-## 챌린지 카탈로그 (69종)
+## 챌린지 카탈로그 (70종)
 
-web·forensics·network·reversing·detection·ai 6개 분야가 모두 **easy → medium → hard → insane** 난이도 곡선을 갖추고 있습니다.
+web·forensics·network·reversing·detection·ai·ICS/OT 7개 분야가 모두 **easy → medium → hard → insane** 난이도 곡선을 갖추고 있습니다.
 표기: `점수(Red/Blue)`. 팀마다 플래그·정답이 HMAC으로 달라 답 공유가 불가능합니다.
 
 <details open>
@@ -1079,7 +1100,7 @@ web·forensics·network·reversing·detection·ai 6개 분야가 모두 **easy �
 </details>
 
 <details>
-<summary><b>🕵️ Detection (13) — Blue 전용, 진짜 SIEM 엔진이 채점</b></summary>
+<summary><b>🕵️ Detection (14) — Blue 전용, 진짜 SIEM 엔진이 채점</b></summary>
 
 | ID | 제목 | 난이도 | ATT&CK | 점수 |
 |---|---|---|---|---|
@@ -1093,6 +1114,7 @@ web·forensics·network·reversing·detection·ai 6개 분야가 모두 **easy �
 | DET-010 | EtherNet/IP CIP 안전 어셈블리 무단 SetAttribute 탐지 | medium | T0836,T0855 | 0/80 |
 | DET-011 | S7comm 안전 DB(62) 무단 WRITE_VAR 탐지 | medium | T0836,T0855 | 0/80 |
 | DET-012 | MQTT Sparkplug B 무단 액추에이터 DCMD 탐지 | medium | T0855,T0831 | 0/80 |
+| DET-013 | 위성 TT&C — 무단 자세제어 안전해제 텔레커맨드 탐지 (CCSDS) | medium | T0855,T0814 | 0/85 |
 | DET-004 | C2 비콘 주기성 탐지 | hard | T1071 | 0/90 |
 | DET-008 | Foundation Fieldbus MODE_BLK O/S(제어루프 정지) 탐지 | hard | T0836,T0855,T0831 | 0/90 |
 | DET-009 | APT Low-and-Slow 비콘 헌팅(노이즈 90%) | insane | T1071.004,T1029 | 0/200 |
@@ -1228,7 +1250,7 @@ python3 infra/challenge_qa/run_all.py --challenge NET-007
 - **통합 스모크 36/36** (`scripts/smoke_test.sh`) — 헬스 → 트윈공격 → SIEM 인제스천 → 점수 →
   시나리오 → EDR 탐지 → AAR/PDF → 네트워크 격리 → **SSE 실시간 푸시**까지 E2E. **실제 docker 스택에서
   통과 확인**(신규 서비스 auth·incident·injects·observability 빌드·기동 포함).
-- **C-QA 파이프라인** (`infra/challenge_qa/run_all.py`) — 챌린지 타입별 올바른 게이트로 69종 전부 검증:
+- **C-QA 파이프라인** (`infra/challenge_qa/run_all.py`) — 챌린지 타입별 올바른 게이트로 70종 전부 검증:
   - **서비스형(docker)**: `deploy_up → intended_solve → blank_submit → flag_determinism → teardown`
   - **아티팩트형**: `artifact_solve` (생성 → 시그니처 분기 solve → 채점 + 빈제출 거부)
   - **탐지형(DET)**: `detection_solve` (데이터셋 생성 → **진짜 SIEM DetectionEngine** 채점 + no-op 규칙 거부)
