@@ -869,6 +869,7 @@ EDR 8080 · AAR 8090 · **Attack/Defense 8100** · **Match vhost 8088** · 대�
 | **클라우드 네이티브 공격면** | `cloud_native` 트윈 — **IMDS SSRF**(자격증명 탈취, T1552.005)·**노출 Docker API**(T1610)·**kubelet 익명 exec**(T1609)·**시크릿 노출**(T1552.001)·**SSTI RCE**(T1059). SIEM 규칙 5종으로 탐지→채점. ICS 외 현대 공격면. |
 | **EDR** | 프로세스 스냅샷 수집 → 리버스쉘·웹서버발 셸 생성 등 행위 탐지 → 호스트 격리/프로세스 kill(감사 로그). |
 | **SIEM** | 인제스천(11개 트윈 로그·Suricata·Zeek·pfSense syslog) → 정규화 → 규칙(match/threshold/sequence/periodicity, 총 **66종 로드**; ICS/OT 실 프로토콜 규칙에 Tier-3 6종(IEC104·GOOSE·BACnet·EtherNet/IP·MQTT·FF-H1) + 변전소 킬체인 sequence 추가) 탐지 → Live Fire 점수 연동. ATT&CK 커버리지 매핑. |
+| **배경 트래픽** | `traffic_generator`가 트윈 **양성 엔드포인트**(health·read-only)로 실 HTTP를 흘려 **네트워크 계층 노이즈**를 생성 — 합성 로그가 아니라 공격과 **동일한 SIEM 파이프라인**(트윈 access 로그→탐지엔진)을 통과. ground truth 라벨(`is_background`)로 **AAR 오탐률 채점**의 근거 제공. 기본 OFF(`BACKGROUND_TRAFFIC_ENABLED=true`로 활성, 업무시간 가중). |
 | **시나리오 엔진** | 코드로 정의된 킬체인 시나리오(순서 강제, chain bonus). **14개 시나리오** 로드 — **11개 섹터 전부 전용 킬체인** + 크로스오버 3(**IT→OT 피벗** 포함: 사내망 발판→자격증명 탈취→정유 OPC UA 정찰→SIS 사보타주로 Purdue 경계를 넘는 멀티에셋 킬체인). |
 | **점수/AAR** | 이벤트 → 자동 채점(Red 목표 / Blue 탐지·복구). MTTD/MTTR·탐지율·오탐률·ATT&CK 히트맵·**PDF 리포트** 자동 생성. |
 | **복구 판정** | NOC Monitor가 트윈 헬스를 폴링, 침해→패치→복구를 판정해 MTTR 산출·Blue 가점. |

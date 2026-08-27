@@ -93,13 +93,32 @@ def compute_detection_rate(events: list[dict]) -> Optional[float]:
     return detected_attacks / len(attacks)
 
 
+def _alert_is_background(alert: dict) -> bool:
+    """감사 G-11: 배경(양성) 트래픽이 촉발한 알림인가.
+    traffic_generator가 흘린 실 트래픽은 트윈 access 로그에 is_background=true로 라벨되고,
+    파서가 이를 raw로 보존 + 'background_traffic' 태그로 노출한다 → SIEM 알림
+    matched_event까지 전파된다. 그 알림은 ground truth상 오탐이다."""
+    me = alert.get("matched_event")
+    if not isinstance(me, dict):
+        return False
+    if isinstance(me.get("raw"), dict) and me["raw"].get("is_background"):
+        return True
+    tags = me.get("tags")
+    return isinstance(tags, list) and "background_traffic" in tags
+
+
 def compute_false_positive_rate(alerts: list[dict], noise_event_ids: set[str]) -> Optional[float]:
     """오탐률 = (ground truth상 노이즈인데 알림이 뜬 것) / (전체 알림).
-    06번 문서 6절의 오탐 라벨(노이즈 생성기가 심어둔 ground truth)을 참조.
-    alert의 matched_event 안에 원본 이벤트 id가 있다고 가정."""
+    ground truth 소스 두 가지를 OR로 인정한다:
+      1) 합성 노이즈 생성기(team_id="noise") 이벤트 id — 기존 경로(06번 문서 6절).
+      2) 실 배경 트래픽(감사 G-11) — alert.matched_event의 is_background 라벨.
+    alert의 matched_event 안에 원본 이벤트(source_event_id 또는 raw 라벨)가 있다고 가정."""
     if not alerts:
         return None
-    fp_count = sum(1 for a in alerts if a.get("source_event_id") in noise_event_ids)
+    fp_count = sum(
+        1 for a in alerts
+        if a.get("source_event_id") in noise_event_ids or _alert_is_background(a)
+    )
     return fp_count / len(alerts)
 
 

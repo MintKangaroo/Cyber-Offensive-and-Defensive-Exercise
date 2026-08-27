@@ -300,6 +300,25 @@ services:
     depends_on: [event_collector]
     networks: [range_control]
 
+  # 감사 §3 G-11: 네트워크 계층 배경(양성) 트래픽 생성기. 트윈망에 소속돼 트윈의 양성
+  # 엔드포인트로 실 HTTP를 흘린다 → 트윈이 진짜 access 로그를 남김 → 공격과 동일한 SIEM
+  # 파이프라인 통과(합성 노이즈가 아닌 실 트래픽). 기본 OFF, 호스트 미노출(트윈망 내부 전용).
+  # config_service와 동일하게 range_control + 11개 트윈망에 연결(cloud_native는 range_control).
+  traffic_generator:
+    mem_limit: 256m
+    cpus: "0.5"
+    build: { context: ., dockerfile: services/traffic_generator/Dockerfile }
+    container_name: traffic_generator
+    environment:
+      - BACKGROUND_TRAFFIC_ENABLED=${BACKGROUND_TRAFFIC_ENABLED:-false}
+      - BACKGROUND_TRAFFIC_EPS=${BACKGROUND_TRAFFIC_EPS:-1.0}
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-}          # /control(start/stop) 인증
+      - OBSERVER_TOKEN=${OBSERVER_TOKEN:-}              # /stats 조회(read 게이트)
+      - RED_TOKEN=${RED_TOKEN:-}
+      - BLUE_TOKEN=${BLUE_TOKEN:-}
+      - RBAC_ALLOW_INSECURE_DEV=${RBAC_ALLOW_INSECURE_DEV:-}
+    networks: [range_control, twin_ground_station, twin_power_plant, twin_defense_network, twin_refinery_plant, twin_smart_factory, twin_water_utility, twin_lng_terminal, twin_railway_signaling, twin_airport_ot, twin_datacenter_bms, twin_hospital_ot]
+
   observability:
     mem_limit: 512m
     cpus: "0.75"

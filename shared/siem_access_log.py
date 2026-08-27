@@ -87,6 +87,12 @@ def make_siem_access_middleware(
             "ua": request.headers.get("user-agent"),
             "latency_ms": round((time.time() - start) * 1000, 2),
         }
+
+        # 감사 G-11: traffic_generator가 흘리는 배경(양성) 트래픽은 X-Background-Traffic
+        # 헤더를 단다. 이 라벨을 access 로그에 그대로 실어(→ parser가 raw로 보존 → SIEM
+        # 알림 matched_event까지 전파) AAR 오탐률 채점의 ground truth로 쓴다.
+        if request.headers.get("x-background-traffic"):
+            entry["is_background"] = True
         try:
             logger.info(json.dumps(entry))
         except Exception:
