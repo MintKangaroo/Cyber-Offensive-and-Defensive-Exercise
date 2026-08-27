@@ -77,7 +77,9 @@ def parse_twin_log_line(raw_line: str, source_ip_fallback: Optional[str] = None)
             message=(f"{data.get('method','?')} {data.get('endpoint','?')} -> {status} "
                     f"(team={data.get('team_id','?')}, vuln={vuln_id or 'n/a'})"),
             raw=data,
-            tags=["twin_access_log"],
+            # 감사 G-11: 배경(양성) 트래픽은 ground truth 라벨을 태그로도 노출한다
+            # (raw.is_background는 보존, 태그는 소비자 필터·AAR 오탐률용).
+            tags=["twin_access_log"] + (["background_traffic"] if data.get("is_background") else []),
         )
     except Exception:
         return None  # 필드 이상 등 예기치 못한 실패도 안전하게 None(무한루프 방지)
