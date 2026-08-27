@@ -312,6 +312,7 @@ services:
     environment:
       - BACKGROUND_TRAFFIC_ENABLED=${BACKGROUND_TRAFFIC_ENABLED:-false}
       - BACKGROUND_TRAFFIC_EPS=${BACKGROUND_TRAFFIC_EPS:-1.0}
+      - BACKGROUND_TRAFFIC_ASSETS=${BACKGROUND_TRAFFIC_ASSETS:-}   # 콤마구분 스코프(미설정=전 트윈)
       - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:-}          # /control(start/stop) 인증
       - OBSERVER_TOKEN=${OBSERVER_TOKEN:-}              # /stats 조회(read 게이트)
       - RED_TOKEN=${RED_TOKEN:-}

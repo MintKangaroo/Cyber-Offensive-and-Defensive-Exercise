@@ -24,12 +24,18 @@ from pydantic import BaseModel
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 from shared.rbac import require_role, require_read  # noqa: E402
 from shared.lifespan import on_startup  # noqa: E402
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from driver import TrafficDriver  # noqa: E402
-from profile import TrafficProfile  # noqa: E402
+# 상대 import: 이 모듈은 uvicorn이 `services.traffic_generator.main`으로 로드하므로
+# 패키지 컨텍스트가 성립한다. driver도 `.profile`을 상대 import하므로 통일한다
+# (bare import는 driver의 상대 import와 충돌하고, 표준 `profile` 모듈을 셰도잉한다).
+from .driver import TrafficDriver  # noqa: E402
+from .profile import TrafficProfile  # noqa: E402
 
 ENABLED = os.environ.get("BACKGROUND_TRAFFIC_ENABLED", "false").lower() == "true"
 BASE_EPS = float(os.environ.get("BACKGROUND_TRAFFIC_EPS", "1.0"))
+# 자산 스코프(선택): 훈련에서 가동 중인 섹터만 겨냥하도록 콤마구분 화이트리스트.
+# 미설정이면 전 트윈(기본). 안 뜬 트윈에 헛발질(=error 카운트)하는 걸 막는다.
+_assets_env = os.environ.get("BACKGROUND_TRAFFIC_ASSETS", "").strip()
+ASSETS = [a.strip() for a in _assets_env.split(",") if a.strip()] or None
 
 app = FastAPI(title="Background Traffic Generator (TRAINING ONLY)")
 app.add_middleware(
@@ -38,7 +44,7 @@ app.add_middleware(
     allow_methods=["*"], allow_headers=["*"],
 )
 
-_profile = TrafficProfile(base_eps=BASE_EPS)
+_profile = TrafficProfile(base_eps=BASE_EPS, **({"assets": ASSETS} if ASSETS else {}))
 _driver = TrafficDriver(_profile)
 _task: asyncio.Task | None = None
 

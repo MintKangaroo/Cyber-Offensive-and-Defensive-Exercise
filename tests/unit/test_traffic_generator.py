@@ -87,6 +87,17 @@ def test_plan_request_none_when_no_assets():
     assert plan_request(p, random.Random(1)) is None
 
 
+def test_asset_scoping_limits_targets():
+    """BACKGROUND_TRAFFIC_ASSETS 스코프: 지정한 트윈만 겨냥한다."""
+    p = TrafficProfile(assets=["power_plant"])
+    assert p.enabled_assets() == ["power_plant"]
+    for _ in range(50):
+        req = plan_request(p, random.Random())
+        assert req.asset == "power_plant"
+    # 알 수 없는 자산은 걸러진다(포트/카탈로그 없음).
+    assert TrafficProfile(assets=["power_plant", "nonexistent"]).enabled_assets() == ["power_plant"]
+
+
 def test_plan_request_only_hits_benign_paths():
     p = TrafficProfile()
     rng = random.Random(7)
@@ -159,6 +170,16 @@ def test_driver_counts_errors_on_failure():
 def test_background_headers_base_are_labeled():
     assert BACKGROUND_HEADERS_BASE["X-Background-Traffic"] == "1"
     assert BACKGROUND_HEADERS_BASE["X-Team-Id"] == "noise"
+
+
+def test_service_module_imports():
+    """import 스모크: uvicorn이 `services.traffic_generator.main`으로 로드하는 경로를
+    유닛에서 재현한다. main이 driver/profile을 잘못 import하면(예: bare import로 driver의
+    상대 import와 충돌) 여기서 잡힌다 — 유닛이 main을 안 열면 integration까지 못 잡는다."""
+    import importlib
+    m = importlib.import_module("services.traffic_generator.main")
+    assert m.app.title.startswith("Background Traffic Generator")
+    assert hasattr(m, "_driver") and hasattr(m, "_profile")
 
 
 # --- ground truth 라벨이 파서를 통해 전파되는가 (감사 G-11) -------------------
