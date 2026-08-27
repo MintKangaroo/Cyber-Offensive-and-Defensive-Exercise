@@ -1,0 +1,114 @@
+[soak-load] duration=7200s rate=40.0/s workers=10 ec=http://localhost:8010 siem=http://localhost:8040
+[soak-load] t=64s sent=1594 fail=0 fail_rate=0.0000 avg=124.5ms max=2762ms status={200: 1594}
+[soak-load] t=129s sent=3094 fail=0 fail_rate=0.0000 avg=137.4ms max=2953ms status={200: 3094}
+[soak-load] t=193s sent=4683 fail=0 fail_rate=0.0000 avg=134.1ms max=3211ms status={200: 4683}
+[soak-load] t=257s sent=6506 fail=0 fail_rate=0.0000 avg=118.5ms max=3211ms status={200: 6506}
+[soak-load] t=318s sent=8152 fail=0 fail_rate=0.0000 avg=117.7ms max=3211ms status={200: 8152}
+[soak-load] t=378s sent=9965 fail=0 fail_rate=0.0000 avg=110.8ms max=4403ms status={200: 9965}
+[soak-load] t=440s sent=11813 fail=0 fail_rate=0.0000 avg=105.2ms max=4403ms status={200: 11813}
+[soak-load] t=502s sent=13678 fail=0 fail_rate=0.0000 avg=100.6ms max=4403ms status={200: 13678}
+[soak-load] t=566s sent=15413 fail=1 fail_rate=0.0001 avg=100.0ms max=4403ms status={200: 15412, -1: 1}
+[soak-load] t=629s sent=17509 fail=1 fail_rate=0.0001 avg=92.3ms max=4403ms status={200: 17508, -1: 1}
+[soak-load] t=693s sent=19513 fail=1 fail_rate=0.0001 avg=87.9ms max=4403ms status={200: 19512, -1: 1}
+[soak-load] t=757s sent=21441 fail=1 fail_rate=0.0000 avg=85.5ms max=4403ms status={200: 21440, -1: 1}
+[soak-load] t=822s sent=23331 fail=1 fail_rate=0.0000 avg=84.0ms max=4403ms status={200: 23330, -1: 1}
+[soak-load] t=886s sent=25138 fail=1 fail_rate=0.0000 avg=83.8ms max=4403ms status={200: 25137, -1: 1}
+[soak-load] t=951s sent=27078 fail=1 fail_rate=0.0000 avg=82.1ms max=4403ms status={200: 27077, -1: 1}
+[soak-load] t=1016s sent=29210 fail=1 fail_rate=0.0000 avg=78.4ms max=4403ms status={200: 29209, -1: 1}
+[soak-load] t=1078s sent=30492 fail=1 fail_rate=0.0000 avg=84.2ms max=7181ms status={200: 30491, -1: 1}
+[soak-load] t=1143s sent=32282 fail=1 fail_rate=0.0000 avg=83.2ms max=7181ms status={200: 32281, -1: 1}
+[soak-load] t=1208s sent=33841 fail=2 fail_rate=0.0001 avg=86.6ms max=7181ms status={200: 33839, -1: 2}
+[soak-load] t=1273s sent=35391 fail=2 fail_rate=0.0001 avg=88.8ms max=7181ms status={200: 35389, -1: 2}
+[soak-load] t=1338s sent=37263 fail=2 fail_rate=0.0001 avg=87.8ms max=7181ms status={200: 37261, -1: 2}
+[soak-load] t=1403s sent=38868 fail=2 fail_rate=0.0001 avg=89.3ms max=7181ms status={200: 38866, -1: 2}
+[soak-load] t=1468s sent=40726 fail=2 fail_rate=0.0000 avg=88.5ms max=7181ms status={200: 40724, -1: 2}
+[soak-load] t=1530s sent=42668 fail=2 fail_rate=0.0000 avg=87.2ms max=7181ms status={200: 42666, -1: 2}
+[soak-load] t=1591s sent=44607 fail=2 fail_rate=0.0000 avg=86.0ms max=7181ms status={200: 44605, -1: 2}
+[soak-load] t=1655s sent=46469 fail=2 fail_rate=0.0000 avg=85.1ms max=7181ms status={200: 46467, -1: 2}
+[soak-load] t=1720s sent=48071 fail=2 fail_rate=0.0000 avg=86.7ms max=7181ms status={200: 48069, -1: 2}
+[soak-load] t=1784s sent=49895 fail=2 fail_rate=0.0000 avg=84.9ms max=7181ms status={200: 49893, -1: 2}
+[soak-load] t=1849s sent=51846 fail=2 fail_rate=0.0000 avg=85.3ms max=9468ms status={200: 51844, -1: 2}
+[soak-load] t=1914s sent=53684 fail=2 fail_rate=0.0000 avg=85.0ms max=9468ms status={200: 53682, -1: 2}
+[soak-load] t=1977s sent=55825 fail=2 fail_rate=0.0000 avg=82.9ms max=9468ms status={200: 55823, -1: 2}
+[soak-load] t=2041s sent=57649 fail=2 fail_rate=0.0000 avg=82.8ms max=9468ms status={200: 57647, -1: 2}
+[soak-load] t=2106s sent=59731 fail=2 fail_rate=0.0000 avg=81.2ms max=9468ms status={200: 59729, -1: 2}
+[soak-load] t=2171s sent=61490 fail=2 fail_rate=0.0000 avg=81.5ms max=9468ms status={200: 61488, -1: 2}
+[soak-load] t=2235s sent=63242 fail=2 fail_rate=0.0000 avg=81.8ms max=9468ms status={200: 63240, -1: 2}
+[soak-load] t=2300s sent=65237 fail=2 fail_rate=0.0000 avg=80.8ms max=9468ms status={200: 65235, -1: 2}
+[soak-load] t=2362s sent=67328 fail=2 fail_rate=0.0000 avg=79.5ms max=9468ms status={200: 67326, -1: 2}
+[soak-load] t=2426s sent=68907 fail=2 fail_rate=0.0000 avg=80.6ms max=9468ms status={200: 68905, -1: 2}
+[soak-load] t=2490s sent=71042 fail=2 fail_rate=0.0000 avg=79.1ms max=9468ms status={200: 71040, -1: 2}
+[soak-load] t=2555s sent=73108 fail=2 fail_rate=0.0000 avg=78.0ms max=9468ms status={200: 73106, -1: 2}
+[soak-load] t=2619s sent=75037 fail=2 fail_rate=0.0000 avg=77.6ms max=9468ms status={200: 75035, -1: 2}
+[soak-load] t=2684s sent=77058 fail=2 fail_rate=0.0000 avg=76.8ms max=9468ms status={200: 77056, -1: 2}
+[soak-load] t=2749s sent=79195 fail=2 fail_rate=0.0000 avg=75.5ms max=9468ms status={200: 79193, -1: 2}
+[soak-load] t=2812s sent=81387 fail=2 fail_rate=0.0000 avg=74.1ms max=9468ms status={200: 81385, -1: 2}
+[soak-load] t=2876s sent=83505 fail=2 fail_rate=0.0000 avg=73.1ms max=9468ms status={200: 83503, -1: 2}
+[soak-load] t=2941s sent=85303 fail=2 fail_rate=0.0000 avg=73.3ms max=9468ms status={200: 85301, -1: 2}
+[soak-load] t=3006s sent=87236 fail=2 fail_rate=0.0000 avg=73.0ms max=9468ms status={200: 87234, -1: 2}
+[soak-load] t=3071s sent=89047 fail=2 fail_rate=0.0000 avg=73.2ms max=9468ms status={200: 89045, -1: 2}
+[soak-load] t=3136s sent=90817 fail=2 fail_rate=0.0000 avg=73.5ms max=9468ms status={200: 90815, -1: 2}
+[soak-load] t=3200s sent=92824 fail=2 fail_rate=0.0000 avg=72.9ms max=9468ms status={200: 92822, -1: 2}
+[soak-load] t=3263s sent=94554 fail=2 fail_rate=0.0000 avg=73.4ms max=9468ms status={200: 94552, -1: 2}
+[soak-load] t=3327s sent=96804 fail=2 fail_rate=0.0000 avg=72.1ms max=9468ms status={200: 96802, -1: 2}
+[soak-load] t=3393s sent=98981 fail=2 fail_rate=0.0000 avg=71.0ms max=9468ms status={200: 98979, -1: 2}
+[soak-load] t=3458s sent=101048 fail=2 fail_rate=0.0000 avg=70.4ms max=9468ms status={200: 101046, -1: 2}
+[soak-load] t=3523s sent=102693 fail=2 fail_rate=0.0000 avg=71.1ms max=9468ms status={200: 102691, -1: 2}
+[soak-load] t=3588s sent=104692 fail=2 fail_rate=0.0000 avg=70.7ms max=9468ms status={200: 104690, -1: 2}
+[soak-load] t=3653s sent=106878 fail=2 fail_rate=0.0000 avg=69.7ms max=9468ms status={200: 106876, -1: 2}
+[soak-load] t=3716s sent=108932 fail=2 fail_rate=0.0000 avg=69.2ms max=9468ms status={200: 108930, -1: 2}
+[soak-load] t=3781s sent=110985 fail=2 fail_rate=0.0000 avg=68.7ms max=9468ms status={200: 110983, -1: 2}
+[soak-load] t=3846s sent=112990 fail=2 fail_rate=0.0000 avg=68.4ms max=9468ms status={200: 112988, -1: 2}
+[soak-load] t=3911s sent=114703 fail=2 fail_rate=0.0000 avg=68.8ms max=9468ms status={200: 114701, -1: 2}
+[soak-load] t=3977s sent=116775 fail=2 fail_rate=0.0000 avg=68.3ms max=9468ms status={200: 116773, -1: 2}
+[soak-load] t=4043s sent=118689 fail=2 fail_rate=0.0000 avg=68.3ms max=9468ms status={200: 118687, -1: 2}
+[soak-load] t=4107s sent=120870 fail=2 fail_rate=0.0000 avg=67.5ms max=9468ms status={200: 120868, -1: 2}
+[soak-load] t=4172s sent=123012 fail=2 fail_rate=0.0000 avg=66.8ms max=9468ms status={200: 123010, -1: 2}
+[soak-load] t=4237s sent=124979 fail=2 fail_rate=0.0000 avg=66.6ms max=9468ms status={200: 124977, -1: 2}
+[soak-load] t=4303s sent=127039 fail=2 fail_rate=0.0000 avg=66.2ms max=9468ms status={200: 127037, -1: 2}
+[soak-load] t=4369s sent=129235 fail=2 fail_rate=0.0000 avg=65.5ms max=9468ms status={200: 129233, -1: 2}
+[soak-load] t=4434s sent=131138 fail=2 fail_rate=0.0000 avg=65.5ms max=9468ms status={200: 131136, -1: 2}
+[soak-load] t=4500s sent=133373 fail=2 fail_rate=0.0000 avg=64.7ms max=9468ms status={200: 133371, -1: 2}
+[soak-load] t=4562s sent=135403 fail=2 fail_rate=0.0000 avg=64.4ms max=9468ms status={200: 135401, -1: 2}
+[soak-load] t=4629s sent=137427 fail=2 fail_rate=0.0000 avg=64.1ms max=9468ms status={200: 137425, -1: 2}
+[soak-load] t=4695s sent=139528 fail=2 fail_rate=0.0000 avg=63.7ms max=9468ms status={200: 139526, -1: 2}
+[soak-load] t=4761s sent=141789 fail=2 fail_rate=0.0000 avg=62.9ms max=9468ms status={200: 141787, -1: 2}
+[soak-load] t=4827s sent=143672 fail=2 fail_rate=0.0000 avg=63.0ms max=9468ms status={200: 143670, -1: 2}
+[soak-load] t=4893s sent=145762 fail=2 fail_rate=0.0000 avg=62.7ms max=9468ms status={200: 145760, -1: 2}
+[soak-load] t=4959s sent=147858 fail=2 fail_rate=0.0000 avg=62.3ms max=9468ms status={200: 147856, -1: 2}
+[soak-load] t=5022s sent=149830 fail=2 fail_rate=0.0000 avg=62.2ms max=9468ms status={200: 149828, -1: 2}
+[soak-load] t=5088s sent=152021 fail=2 fail_rate=0.0000 avg=61.6ms max=9468ms status={200: 152019, -1: 2}
+[soak-load] t=5153s sent=154028 fail=2 fail_rate=0.0000 avg=61.5ms max=9468ms status={200: 154026, -1: 2}
+[soak-load] t=5219s sent=156213 fail=2 fail_rate=0.0000 avg=60.9ms max=9468ms status={200: 156211, -1: 2}
+[soak-load] t=5284s sent=158265 fail=2 fail_rate=0.0000 avg=60.7ms max=9468ms status={200: 158263, -1: 2}
+[soak-load] t=5350s sent=160369 fail=2 fail_rate=0.0000 avg=60.4ms max=9468ms status={200: 160367, -1: 2}
+[soak-load] t=5416s sent=162299 fail=2 fail_rate=0.0000 avg=60.4ms max=9468ms status={200: 162297, -1: 2}
+[soak-load] t=5479s sent=164149 fail=2 fail_rate=0.0000 avg=60.5ms max=9468ms status={200: 164147, -1: 2}
+[soak-load] t=5545s sent=165700 fail=2 fail_rate=0.0000 avg=61.2ms max=9468ms status={200: 165698, -1: 2}
+[soak-load] t=5611s sent=167579 fail=2 fail_rate=0.0000 avg=61.3ms max=9468ms status={200: 167577, -1: 2}
+[soak-load] t=5677s sent=169745 fail=2 fail_rate=0.0000 avg=60.9ms max=9468ms status={200: 169743, -1: 2}
+[soak-load] t=5742s sent=171685 fail=2 fail_rate=0.0000 avg=60.8ms max=9468ms status={200: 171683, -1: 2}
+[soak-load] t=5808s sent=173851 fail=2 fail_rate=0.0000 avg=60.4ms max=9468ms status={200: 173849, -1: 2}
+[soak-load] t=5871s sent=176010 fail=2 fail_rate=0.0000 avg=60.0ms max=9468ms status={200: 176008, -1: 2}
+[soak-load] t=5936s sent=177980 fail=2 fail_rate=0.0000 avg=60.0ms max=9468ms status={200: 177978, -1: 2}
+[soak-load] t=6002s sent=179963 fail=2 fail_rate=0.0000 avg=59.9ms max=9468ms status={200: 179961, -1: 2}
+[soak-load] t=6067s sent=182143 fail=2 fail_rate=0.0000 avg=59.5ms max=9468ms status={200: 182141, -1: 2}
+[soak-load] t=6133s sent=184231 fail=2 fail_rate=0.0000 avg=59.2ms max=9468ms status={200: 184229, -1: 2}
+[soak-load] t=6199s sent=186260 fail=2 fail_rate=0.0000 avg=59.1ms max=9468ms status={200: 186258, -1: 2}
+[soak-load] t=6266s sent=188411 fail=2 fail_rate=0.0000 avg=58.7ms max=9468ms status={200: 188409, -1: 2}
+[soak-load] t=6328s sent=190076 fail=2 fail_rate=0.0000 avg=59.2ms max=9468ms status={200: 190074, -1: 2}
+[soak-load] t=6395s sent=191790 fail=3 fail_rate=0.0000 avg=59.5ms max=9468ms status={200: 191787, -1: 3}
+[soak-load] t=6460s sent=193598 fail=3 fail_rate=0.0000 avg=59.7ms max=9468ms status={200: 193595, -1: 3}
+[soak-load] t=6526s sent=195394 fail=3 fail_rate=0.0000 avg=60.0ms max=9468ms status={200: 195391, -1: 3}
+[soak-load] t=6592s sent=197129 fail=3 fail_rate=0.0000 avg=60.3ms max=9468ms status={200: 197126, -1: 3}
+[soak-load] t=6657s sent=198845 fail=3 fail_rate=0.0000 avg=60.6ms max=9468ms status={200: 198842, -1: 3}
+[soak-load] t=6723s sent=200477 fail=3 fail_rate=0.0000 avg=61.1ms max=9468ms status={200: 200474, -1: 3}
+[soak-load] t=6786s sent=202341 fail=3 fail_rate=0.0000 avg=61.2ms max=9468ms status={200: 202338, -1: 3}
+[soak-load] t=6852s sent=204468 fail=3 fail_rate=0.0000 avg=60.9ms max=9468ms status={200: 204465, -1: 3}
+[soak-load] t=6918s sent=206613 fail=3 fail_rate=0.0000 avg=60.5ms max=9468ms status={200: 206610, -1: 3}
+[soak-load] t=6984s sent=208678 fail=3 fail_rate=0.0000 avg=60.3ms max=9468ms status={200: 208675, -1: 3}
+[soak-load] t=7050s sent=210720 fail=4 fail_rate=0.0000 avg=60.2ms max=9468ms status={200: 210716, -1: 4}
+[soak-load] t=7116s sent=212762 fail=4 fail_rate=0.0000 avg=60.0ms max=9468ms status={200: 212758, -1: 4}
+[soak-load] t=7183s sent=214838 fail=4 fail_rate=0.0000 avg=59.8ms max=9468ms status={200: 214834, -1: 4}
+[soak-load] t=7246s sent=217012 fail=4 fail_rate=0.0000 avg=59.5ms max=9468ms status={200: 217008, -1: 4}
+[soak-load] DONE {"sent": 217014, "ok": 217010, "fail": 4, "fail_rate": 1.8431990562820832e-05, "latency_avg_ms": 59.47783670785354, "latency_max_ms": 9467.891634999887, "status": {"200": 217010, "-1": 4}, "duration_sec": 7247, "rate_target": 40.0, "rate_actual": 29.94535669932386}

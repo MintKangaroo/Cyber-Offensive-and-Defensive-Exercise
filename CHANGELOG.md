@@ -19,6 +19,10 @@
   access 로그 → siem_api file-tailer → DetectionEngine → `/alerts` **6/6 규칙 발화**(severity·MITRE 정확) 확인.
 - **완성도 · 문서 동기화**: README에 완성도/검증 현황 섹션 추가(70 챌린지·434 유닛·CI 7/7·E2E 6/6·14 실 프로토콜),
   `docs/GAP_ANALYSIS.md`에 Phase-0 갭 11건 해소 현황 배너, `docs/00_INDEX.md`에 설계 시점 문서 안내 추가.
+- **U-6 소크(장시간 메모리 안정성) 검증 + 재사용 하네스**: `loadtest/soak/` 신설(부하 생성기·RSS 샘플러·
+  선형회귀 분석기·오케스트레이터). 코어 4서비스(event_collector·scoring_engine·config_service·siem_api)를
+  대상으로 **2시간 가속 소크**(217,010/217,014 요청 2xx, 목표 40 req/s) 실측 → 전 서비스 RSS 평탄~하락
+  (slope ≤ 0 MiB/h), **재시작 0·OOM 0** → **PASS**(누수 없음). 8h 정식 소크는 `SOAK_DURATION_SEC=28800`로 실행.
 - **Live Fire 방송 오버레이**: OBS/browser-source 전용 `scorebar`·`standings`·LiveCTF
   `bracket` 레이아웃과 transparent/solid/chroma 출력을 추가. 전용 무인증
   `broadcast-overlay.v1` API는 public delayed scoreboard, aggregate 서비스 상태와

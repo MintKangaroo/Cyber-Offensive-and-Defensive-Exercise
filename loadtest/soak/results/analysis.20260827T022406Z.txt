@@ -1,0 +1,57 @@
+{
+  "overall": "PASS",
+  "slope_warn_mib_h": 5.0,
+  "slope_fail_mib_h": 20.0,
+  "containers": {
+    "config_service": {
+      "samples": 103,
+      "first_mib": 26.6,
+      "last_mib": 6.2,
+      "peak_mib": 41.5,
+      "growth_pct": -76.5,
+      "slope_mib_per_h": -13.34,
+      "restart_delta": 0,
+      "verdict": "PASS"
+    },
+    "event_collector": {
+      "samples": 103,
+      "first_mib": 132.6,
+      "last_mib": 115.0,
+      "peak_mib": 143.2,
+      "growth_pct": -13.2,
+      "slope_mib_per_h": -9.67,
+      "restart_delta": 0,
+      "verdict": "PASS"
+    },
+    "scoring_engine": {
+      "samples": 103,
+      "first_mib": 49.5,
+      "last_mib": 45.5,
+      "peak_mib": 54.7,
+      "growth_pct": -8.1,
+      "slope_mib_per_h": -2.45,
+      "restart_delta": 0,
+      "verdict": "PASS"
+    },
+    "siem_api": {
+      "samples": 103,
+      "first_mib": 37.5,
+      "last_mib": 19.1,
+      "peak_mib": 52.4,
+      "growth_pct": -49.1,
+      "slope_mib_per_h": -11.98,
+      "restart_delta": 0,
+      "verdict": "PASS"
+    }
+  }
+}
+
+container                 first     last     peak  growth%    MiB/h restart  verdict
+----------------------------------------------------------------------------------------
+config_service             26.6      6.2     41.5    -76.5   -13.34       0  PASS
+event_collector           132.6    115.0    143.2    -13.2    -9.67       0  PASS
+scoring_engine             49.5     45.5     54.7     -8.1    -2.45       0  PASS
+siem_api                   37.5     19.1     52.4    -49.1   -11.98       0  PASS
+----------------------------------------------------------------------------------------
+OVERALL: PASS
+[soak-analyze] wrote /home/mintkangaroo/Project/Cyber_offensive_Defense_Project/cyber-range-platform/loadtest/soak/results/soak_report.json

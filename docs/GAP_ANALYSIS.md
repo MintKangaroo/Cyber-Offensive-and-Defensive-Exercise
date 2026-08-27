@@ -20,7 +20,8 @@
 > | 10 | 공정성/안티치트 미구현 | ✅ 해소 | rate-limit·lockout·담합 탐지·제출 감사(감사 3.4·SOC) |
 > | 11 | 저장소 위생 미구현 | ✅ 해소 | LICENSE·SECURITY.md·CONTRIBUTING·.env.example·CHANGELOG·git 태그 |
 >
-> 남은 것은 기능 결함이 아니라 **장시간 실측**(U-3 부하 포화·U-5 Zeek 레이스·U-6 OOM 소크)뿐.
+> 남은 것은 기능 결함이 아니라 **장시간 실측**(U-3 부하 포화·U-5 Zeek 레이스)뿐. **U-6 OOM 소크는 해소** —
+> 2시간 가속 소크(`loadtest/soak/`, 217k 요청 2xx)에서 코어 4서비스 RSS 평탄~하락·재시작 0·OOM 0으로 **PASS**(누수 없음).
 
 ---
 
