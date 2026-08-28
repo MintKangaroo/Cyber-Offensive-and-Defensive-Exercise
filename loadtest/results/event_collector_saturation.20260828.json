@@ -7,60 +7,60 @@
   "stages": [
     {
       "rate": 10,
-      "p95_ms": 3.5,
+      "p95_ms": 1.5,
       "err_rate": 0,
       "reqs": 400,
       "slo_ok": true
     },
     {
       "rate": 20,
-      "p95_ms": 3.6,
+      "p95_ms": 1.9,
       "err_rate": 0,
       "reqs": 800,
       "slo_ok": true
     },
     {
       "rate": 30,
-      "p95_ms": 3.6,
+      "p95_ms": 1.9,
       "err_rate": 0,
       "reqs": 1200,
       "slo_ok": true
     },
     {
       "rate": 40,
-      "p95_ms": 3.8,
+      "p95_ms": 2,
       "err_rate": 0,
       "reqs": 1600,
       "slo_ok": true
     },
     {
       "rate": 50,
-      "p95_ms": 5.3,
+      "p95_ms": 2.2,
       "err_rate": 0,
       "reqs": 2000,
       "slo_ok": true
     },
     {
       "rate": 75,
-      "p95_ms": 124.5,
+      "p95_ms": 6.5,
       "err_rate": 0,
       "reqs": 3000,
       "slo_ok": true
     },
     {
       "rate": 100,
-      "p95_ms": 60000.6,
-      "err_rate": 0.1178,
-      "reqs": 968,
+      "p95_ms": 60000.2,
+      "err_rate": 0.0565,
+      "reqs": 1310,
       "slo_ok": false
     },
     {
       "rate": 150,
-      "p95_ms": 2509.2,
+      "p95_ms": 6735.7,
       "err_rate": 0,
-      "reqs": 1297,
+      "reqs": 2247,
       "slo_ok": false
     }
   ],
-  "generated_at": "2026-08-28T12:30:23.355Z"
+  "generated_at": "2026-08-28T12:51:00.103Z"
 }
