@@ -2,45 +2,57 @@
   "test": "event_collector_saturation",
   "target": "POST /events (event_collector, 단일 인스턴스·SQLite WAL)",
   "slo": "p95<500ms AND error_rate<1%",
-  "saturation_eps": 0,
-  "first_break_eps": 200,
+  "saturation_eps": 150,
+  "first_break_eps": 100,
   "stages": [
     {
-      "rate": 200,
-      "p95_ms": 4707.8,
+      "rate": 10,
+      "p95_ms": 5.2,
       "err_rate": 0,
+      "slo_ok": true
+    },
+    {
+      "rate": 20,
+      "p95_ms": 7.2,
+      "err_rate": 0,
+      "slo_ok": true
+    },
+    {
+      "rate": 30,
+      "p95_ms": 4.9,
+      "err_rate": 0,
+      "slo_ok": true
+    },
+    {
+      "rate": 40,
+      "p95_ms": 5.8,
+      "err_rate": 0,
+      "slo_ok": true
+    },
+    {
+      "rate": 50,
+      "p95_ms": 6,
+      "err_rate": 0,
+      "slo_ok": true
+    },
+    {
+      "rate": 75,
+      "p95_ms": 321.3,
+      "err_rate": 0,
+      "slo_ok": true
+    },
+    {
+      "rate": 100,
+      "p95_ms": 60000.6,
+      "err_rate": 0.174,
       "slo_ok": false
     },
     {
-      "rate": 500,
-      "p95_ms": 52469.4,
+      "rate": 150,
+      "p95_ms": 0,
       "err_rate": 0,
-      "slo_ok": false
-    },
-    {
-      "rate": 1000,
-      "p95_ms": 57891.3,
-      "err_rate": 0,
-      "slo_ok": false
-    },
-    {
-      "rate": 1600,
-      "p95_ms": 57964.1,
-      "err_rate": 0,
-      "slo_ok": false
-    },
-    {
-      "rate": 2200,
-      "p95_ms": 57948.8,
-      "err_rate": 0,
-      "slo_ok": false
-    },
-    {
-      "rate": 2800,
-      "p95_ms": 58084,
-      "err_rate": 0,
-      "slo_ok": false
+      "slo_ok": true
     }
   ],
-  "generated_at": "2026-08-28T11:56:27.983Z"
+  "generated_at": "2026-08-28T12:14:01.749Z"
 }
