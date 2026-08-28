@@ -16,15 +16,16 @@
 import http from 'k6/http';
 import exec from 'k6/execution';
 
-// 저-rate 그리드: 초기 측정으로 event_collector의 실 포화점이 ~40 EPS 부근임이 드러났다
-// (nightly의 "200 EPS" ingest는 실제로 ~38 req/s만 달성·80% dropped·p95 2.3s — 200을 이미
-//  한참 넘어섬). 원인은 요청마다 동기 SQLite commit(fsync)을 async 루프에서 직렬 수행하는 것.
-// 따라서 knee를 정밀 측정하려면 수십 EPS 대역을 촘촘히 훑어야 한다.
-const RATES = [10, 20, 30, 40, 50, 75, 100, 150];
+// 그리드 이력:
+//  - 저-rate 초기 측정에서 실 포화점 ~75 EPS·100 EPS 붕괴 발견(원인: 요청마다 동기 SQLite
+//    commit + scoring 포워딩이 이벤트 루프 블록·연결 처닝).
+//  - ingest 쓰기 오프로드(PR #38) + 포워딩 공유 클라이언트·동시성 제한(PR #39) 후 재측정에서
+//    150 EPS까지 p95 ~2ms·0% 에러로 통과 → 천장이 150 위로 이동. 새 knee를 상위 대역에서 짚는다.
+const RATES = [100, 150, 200, 300, 450, 600, 800, 1000];
 const SCEN_SEC = 60;      // rate별 시나리오 지속(정상상태 확보)
 const MEASURE_TAIL = 40;  // 마지막 40초(정상상태)만 측정 — 시작 20s(연결·VU 예열) 제외
 const GAP_SEC = 10;       // rate 시나리오 사이 배수(drain)
-const WARMUP_RATE = 10;   // 콜드스타트 흡수
+const WARMUP_RATE = 50;   // 콜드스타트 흡수
 const WARMUP_SEC = 15;
 const SLO_P95_MS = 500;
 const SLO_ERR = 0.01;
@@ -49,9 +50,10 @@ for (const r of RATES) {
   scenarios[`r${r}`] = {
     executor: 'constant-arrival-rate', rate: r, timeUnit: '1s',
     duration: `${SCEN_SEC}s`,
-    // knee 근처 지연이 수초까지 오르므로 rate를 채우려면 VU가 rate×지연만큼 필요하다.
-    preAllocatedVUs: clamp(Math.ceil(r * 1.5), 10, 250),
-    maxVUs: clamp(Math.ceil(r * 6), 40, 600),
+    // 개선 후 정상 지연은 ~2ms라 VU는 소수면 충분하나, knee에서 지연이 오르면 더 필요하므로
+    // 여유를 둔다(단, 시작 시 전 시나리오 preAlloc 합이 초기화되니 과도하지 않게 클램프).
+    preAllocatedVUs: clamp(Math.ceil(r * 0.1), 20, 150),
+    maxVUs: clamp(Math.ceil(r * 0.6), 60, 800),
     startTime: `${cursor}s`,
     exec: 'ingest',
     tags: { rate: `${r}` },
