@@ -262,6 +262,23 @@ def _lookup_matched_timestamp(matched_event_id: str) -> Optional[float]:
     return row["timestamp"] if row else None
 
 
+# scoring 포워딩 최적화(U-3 100 EPS 절벽 해소): ① 호출마다 httpx.AsyncClient를 새로 만들면
+# 연결 처닝·fd 고갈이 난다 → 연결 풀을 갖춘 공유 클라이언트를 재사용. ② fire-and-forget
+# 포워딩이 scoring 지연 시 무제한 누적되지 않도록 세마포어로 동시성을 제한(초과분은 대기).
+_scoring_client: Optional[httpx.AsyncClient] = None
+_forward_sem = asyncio.Semaphore(int(os.environ.get("FORWARD_MAX_CONCURRENCY", "64")))
+
+
+def _get_scoring_client() -> httpx.AsyncClient:
+    global _scoring_client
+    if _scoring_client is None:
+        _scoring_client = httpx.AsyncClient(
+            timeout=2.0,
+            limits=httpx.Limits(max_connections=64, max_keepalive_connections=32),
+        )
+    return _scoring_client
+
+
 async def _forward_to_scoring_engine(event: Event):
     payload = event.model_dump(mode="json")
     # dwell time 계산을 위해 원 공격 이벤트의 timestamp를 enrichment(04번 3절)
@@ -273,7 +290,8 @@ async def _forward_to_scoring_engine(event: Event):
             # 대응하는 공격 이벤트를 찾지 못함 -> 오탐/치팅 의심 신호(04번 1절 unmatched_detection)
             payload.setdefault("metadata", {})["_unmatched"] = True
     # 감사 3.5: 재시도 후에도 실패하면 예외를 삼키지 않고 DLQ에 스풀한다(무손실).
-    ok, err = await _try_forward_once_with_retries(payload, event)
+    async with _forward_sem:   # 동시 포워딩 상한(scoring 지연 시 무제한 태스크 누적 방지)
+        ok, err = await _try_forward_once_with_retries(payload, event)
     if not ok:
         _spool_to_dlq(event.event_id, payload, err)
 
@@ -281,9 +299,9 @@ async def _forward_to_scoring_engine(event: Event):
 async def _post_scoring(payload: dict) -> tuple[bool, Optional[str]]:
     """scoring /score/ingest 1회 전송. (성공?, 오류문자열) 반환. 200이고 awarded면 scores push."""
     try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            r = await client.post(f"{SCORING_ENGINE_URL}/score/ingest", json=payload,
-                                  headers=service_headers())  # 감사 3.1: S2S 토큰
+        client = _get_scoring_client()  # 공유 커넥션 풀 재사용(호출마다 새 클라이언트 금지)
+        r = await client.post(f"{SCORING_ENGINE_URL}/score/ingest", json=payload,
+                              headers=service_headers())  # 감사 3.1: S2S 토큰
         if r.status_code == 200:
             res = r.json()
             if res.get("awarded"):
