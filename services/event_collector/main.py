@@ -11,6 +11,7 @@ import os
 import sqlite3
 import json
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
 
@@ -82,6 +83,51 @@ def get_db():
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA busy_timeout=5000")
     return conn
+
+
+# --- ingest 쓰기 최적화 (U-3 포화점 ~75 EPS 병목 해소) --------------------------
+# 병목은 fsync 자체가 아니라(이미 WAL+synchronous=NORMAL) ① 요청마다 커넥션 open+PRAGMA
+# ② 동기 SQLite 작업이 async 이벤트 루프를 블록하는 것이었다. 단일 워커 executor에
+# 영속 커넥션을 두고 쓰기를 이벤트 루프 밖에서 직렬 수행한다(커밋-당-이벤트·중복검사
+# 시맨틱은 그대로). 워커가 하나뿐이라 커넥션은 항상 같은 스레드에서만 쓰여 락이 불필요하다.
+_write_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="evt-writer")
+_writer_conn: Optional[sqlite3.Connection] = None
+
+
+def _writer_connection() -> sqlite3.Connection:
+    global _writer_conn
+    if _writer_conn is None:
+        _writer_conn = sqlite3.connect(DB_PATH, timeout=5.0)  # writer 스레드 전용
+        _writer_conn.row_factory = sqlite3.Row
+        _writer_conn.execute("PRAGMA journal_mode=WAL")
+        _writer_conn.execute("PRAGMA synchronous=NORMAL")
+        _writer_conn.execute("PRAGMA busy_timeout=5000")
+    return _writer_conn
+
+
+def _persist_event(event: "Event") -> bool:
+    """중복검사 + INSERT + commit 을 영속 커넥션에서 블로킹 수행. writer executor(단일
+    스레드)에서만 호출되므로 직렬화가 보장돼 별도 락이 필요 없다. 반환: 신규 저장 여부."""
+    conn = _writer_connection()
+    if conn.execute("SELECT 1 FROM events WHERE event_id = ?", (event.event_id,)).fetchone():
+        return False
+    conn.execute(
+        """
+        INSERT INTO events (event_id, event_type, timestamp, actor, team_id,
+                             scenario_id, target_asset, vuln_id, phase,
+                             trace_id, matched_event_id, challenge_id, schema_version, metadata)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            event.event_id, event.event_type.value, event.timestamp, event.actor,
+            event.team_id, event.scenario_id, event.target_asset, event.vuln_id,
+            event.phase.value if event.phase else None,
+            event.trace_id, event.matched_event_id, event.challenge_id, event.schema_version,
+            json.dumps(event.metadata),
+        ),
+    )
+    conn.commit()
+    return True
 
 
 def init_db():
@@ -188,28 +234,11 @@ def health():
 async def ingest_event(event: Event, authorization: str = Header(default="")):
     # 감사 3.1: 내부 S2S(트윈·서비스) 전용. 무토큰 주입 차단(참가자망서 이벤트 위조 방지).
     require_service_token(authorization)
-    conn = get_db()
-    cur = conn.execute("SELECT 1 FROM events WHERE event_id = ?", (event.event_id,))
-    is_duplicate = cur.fetchone() is not None
-
-    if not is_duplicate:
-        conn.execute(
-            """
-            INSERT INTO events (event_id, event_type, timestamp, actor, team_id,
-                                 scenario_id, target_asset, vuln_id, phase,
-                                 trace_id, matched_event_id, challenge_id, schema_version, metadata)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                event.event_id, event.event_type.value, event.timestamp, event.actor,
-                event.team_id, event.scenario_id, event.target_asset, event.vuln_id,
-                event.phase.value if event.phase else None,
-                event.trace_id, event.matched_event_id, event.challenge_id, event.schema_version,
-                json.dumps(event.metadata),
-            ),
-        )
-        conn.commit()
-    conn.close()
+    # 쓰기(중복검사+INSERT+commit)를 단일 writer executor로 오프로드 → 이벤트 루프가
+    # 블록되지 않아 동시 요청·브로드캐스트를 계속 처리(U-3 포화점 병목 해소).
+    loop = asyncio.get_running_loop()
+    is_new = await loop.run_in_executor(_write_executor, _persist_event, event)
+    is_duplicate = not is_new
 
     # Dashboard 실시간 스트림으로 브로드캐스트 (중복이어도 UI 갱신은 상관없음)
     await _broadcast(event)
