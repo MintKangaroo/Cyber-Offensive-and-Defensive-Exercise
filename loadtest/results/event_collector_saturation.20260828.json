@@ -2,65 +2,65 @@
   "test": "event_collector_saturation",
   "target": "POST /events (event_collector, 단일 인스턴스·SQLite WAL)",
   "slo": "p95<500ms AND error_rate<1%",
-  "saturation_eps": 150,
-  "first_break_eps": null,
+  "saturation_eps": 450,
+  "first_break_eps": 600,
   "stages": [
     {
-      "rate": 10,
-      "p95_ms": 2,
-      "err_rate": 0,
-      "reqs": 400,
-      "slo_ok": true
-    },
-    {
-      "rate": 20,
-      "p95_ms": 2.1,
-      "err_rate": 0,
-      "reqs": 800,
-      "slo_ok": true
-    },
-    {
-      "rate": 30,
-      "p95_ms": 2.2,
-      "err_rate": 0,
-      "reqs": 1200,
-      "slo_ok": true
-    },
-    {
-      "rate": 40,
-      "p95_ms": 2.1,
-      "err_rate": 0,
-      "reqs": 1600,
-      "slo_ok": true
-    },
-    {
-      "rate": 50,
-      "p95_ms": 2,
-      "err_rate": 0,
-      "reqs": 2000,
-      "slo_ok": true
-    },
-    {
-      "rate": 75,
-      "p95_ms": 2,
-      "err_rate": 0,
-      "reqs": 3000,
-      "slo_ok": true
-    },
-    {
       "rate": 100,
-      "p95_ms": 2.2,
+      "p95_ms": 1.2,
       "err_rate": 0,
       "reqs": 4000,
       "slo_ok": true
     },
     {
       "rate": 150,
-      "p95_ms": 1.9,
+      "p95_ms": 1.2,
       "err_rate": 0,
       "reqs": 6000,
       "slo_ok": true
+    },
+    {
+      "rate": 200,
+      "p95_ms": 1.2,
+      "err_rate": 0,
+      "reqs": 8000,
+      "slo_ok": true
+    },
+    {
+      "rate": 300,
+      "p95_ms": 485.8,
+      "err_rate": 0,
+      "reqs": 11815,
+      "slo_ok": true
+    },
+    {
+      "rate": 450,
+      "p95_ms": 2.8,
+      "err_rate": 0,
+      "reqs": 18000,
+      "slo_ok": true
+    },
+    {
+      "rate": 600,
+      "p95_ms": 1391.8,
+      "err_rate": 0,
+      "reqs": 13294,
+      "slo_ok": false
+    },
+    {
+      "rate": 800,
+      "p95_ms": 1920.1,
+      "err_rate": 0,
+      "reqs": 12791,
+      "slo_ok": false
+    },
+    {
+      "rate": 1000,
+      "p95_ms": 2599.1,
+      "err_rate": 0,
+      "reqs": 13486,
+      "slo_ok": false
     }
   ],
-  "generated_at": "2026-08-28T13:07:57.552Z"
+  "generated_at": "2026-08-28T13:23:20.799Z"
 }
