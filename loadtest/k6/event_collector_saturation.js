@@ -16,27 +16,36 @@
 import http from 'k6/http';
 import exec from 'k6/execution';
 
-const RATES = [200, 500, 900, 1400, 2000, 2800]; // 플래토 목표 EPS
-const HOLD_SEC = 20;   // 플래토 유지(정상상태 측정 구간)
-const RAMP_SEC = 3;    // 플래토 간 전이(측정 제외 구간)
+const RATES = [200, 500, 1000, 1600, 2400]; // 플래토 목표 EPS
+const HOLD_SEC = 45;      // 플래토 유지(전체)
+const MEASURE_TAIL = 25;  // 플래토의 마지막 MEASURE_TAIL초만 '정상상태'로 측정(앞구간=백로그 배수, 제외)
+const RAMP_SEC = 3;       // 플래토 간 전이(측정 제외)
+const WARMUP_RATE = 100;  // 콜드스타트(첫 SQLite 쓰기·WAL·JIT) 흡수용 예열
+const WARMUP_SEC = 30;
 const SLO_P95_MS = 500;
 const SLO_ERR = 0.01;
 
-// 단일 ramping-arrival-rate 스테이지: 각 rate로 RAMP_SEC 상승 후 HOLD_SEC 유지.
-const stages = [];
+// 스테이지: 예열(WARMUP_RATE 유지) → 각 rate로 RAMP_SEC 상승 후 HOLD_SEC 유지.
+// 예열은 측정에서 제외한다(nightly는 3분 정상부하라 콜드스타트가 안 잡히지만, 램프는
+// 첫 플래토가 콜드 시스템을 때려 warmup 없이는 포화가 아닌 예열 비용을 측정하게 된다).
+const stages = [
+  { target: WARMUP_RATE, duration: `${RAMP_SEC}s` },
+  { target: WARMUP_RATE, duration: `${WARMUP_SEC}s` },
+];
 for (const r of RATES) {
   stages.push({ target: r, duration: `${RAMP_SEC}s` });
   stages.push({ target: r, duration: `${HOLD_SEC}s` });
 }
 
-// 각 플래토의 "유지 구간" 절대 시간창(초). currentTestRunDuration을 이 창에 매핑해
-// 요청을 rate 태그로 분류한다(전이 구간은 'ramp'로 태깅해 SLO 표에서 제외).
+// 각 플래토의 '정상상태 측정창'(마지막 MEASURE_TAIL초) 절대 시간(초).
+// currentTestRunDuration을 이 창에 매핑해 요청을 rate 태그로 분류한다. 예열·전이·플래토
+// 앞구간(백로그 배수)은 어떤 rate 태그도 안 붙어 SLO 표에서 자동 제외된다.
 const HOLD_WINDOWS = [];
 {
-  let t = 0;
+  let t = RAMP_SEC + WARMUP_SEC;         // 예열 종료 시점
   for (const r of RATES) {
-    t += RAMP_SEC;                       // 전이 끝 = 유지 시작
-    HOLD_WINDOWS.push({ rate: r, start: t, end: t + HOLD_SEC });
+    t += RAMP_SEC;                       // 전이 끝 = 플래토 시작
+    HOLD_WINDOWS.push({ rate: r, start: t + (HOLD_SEC - MEASURE_TAIL), end: t + HOLD_SEC });
     t += HOLD_SEC;
   }
 }
@@ -67,7 +76,7 @@ function currentRateTag() {
   for (const w of HOLD_WINDOWS) {
     if (t >= w.start && t < w.end) return `${w.rate}`;
   }
-  return 'ramp'; // 전이 구간 — SLO 판정에서 제외
+  return 'ramp'; // 예열·전이·플래토 앞구간(백로그 배수) — SLO 판정에서 제외
 }
 
 export default function () {
