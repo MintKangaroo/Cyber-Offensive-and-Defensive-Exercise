@@ -16,75 +16,78 @@
 import http from 'k6/http';
 import exec from 'k6/execution';
 
-const RATES = [200, 500, 1000, 1600, 2400]; // 플래토 목표 EPS
-const HOLD_SEC = 45;      // 플래토 유지(전체)
-const MEASURE_TAIL = 25;  // 플래토의 마지막 MEASURE_TAIL초만 '정상상태'로 측정(앞구간=백로그 배수, 제외)
-const RAMP_SEC = 3;       // 플래토 간 전이(측정 제외)
-const WARMUP_RATE = 100;  // 콜드스타트(첫 SQLite 쓰기·WAL·JIT) 흡수용 예열
-const WARMUP_SEC = 30;
+const RATES = [200, 500, 1000, 1600, 2200, 2800]; // 각 rate를 독립 측정
+const SCEN_SEC = 30;      // rate별 시나리오 지속
+const MEASURE_TAIL = 18;  // 그 중 마지막 MEASURE_TAIL초(정상상태)만 측정 — 시작구간(연결·VU 예열) 제외
+const GAP_SEC = 10;       // rate 시나리오 사이 배수(drain) — 이전 부하의 백로그를 비운다
+const WARMUP_RATE = 100;  // 콜드스타트(첫 SQLite 쓰기·WAL·JIT) 흡수
+const WARMUP_SEC = 20;
 const SLO_P95_MS = 500;
 const SLO_ERR = 0.01;
 
-// 스테이지: 예열(WARMUP_RATE 유지) → 각 rate로 RAMP_SEC 상승 후 HOLD_SEC 유지.
-// 예열은 측정에서 제외한다(nightly는 3분 정상부하라 콜드스타트가 안 잡히지만, 램프는
-// 첫 플래토가 콜드 시스템을 때려 warmup 없이는 포화가 아닌 예열 비용을 측정하게 된다).
-const stages = [
-  { target: WARMUP_RATE, duration: `${RAMP_SEC}s` },
-  { target: WARMUP_RATE, duration: `${WARMUP_SEC}s` },
-];
-for (const r of RATES) {
-  stages.push({ target: r, duration: `${RAMP_SEC}s` });
-  stages.push({ target: r, duration: `${HOLD_SEC}s` });
-}
+// 핵심 방법론: 연속 램프(단일 시나리오)는 서버가 초반에 포화되면 백로그가 이후 전 구간을
+// 오염시켜 per-rate 귀속이 무의미해진다(그래서 200 EPS가 1000보다 나쁘게 나왔다). 대신
+// **rate마다 독립 constant-arrival-rate 시나리오**를 두고 사이에 GAP_SEC 배수를 넣어 서버를
+// 비운 뒤 다음 rate를 측정한다. 각 시나리오의 정상상태 tail만 재 SLO를 판정한다.
+// VU 풀은 낮게 잡아(시작 시 전 시나리오 preAllocatedVUs 합이 초기화됨) k6-side thrash를 막는다.
+function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
 
-// 각 플래토의 '정상상태 측정창'(마지막 MEASURE_TAIL초) 절대 시간(초).
-// currentTestRunDuration을 이 창에 매핑해 요청을 rate 태그로 분류한다. 예열·전이·플래토
-// 앞구간(백로그 배수)은 어떤 rate 태그도 안 붙어 SLO 표에서 자동 제외된다.
-const HOLD_WINDOWS = [];
-{
-  let t = RAMP_SEC + WARMUP_SEC;         // 예열 종료 시점
-  for (const r of RATES) {
-    t += RAMP_SEC;                       // 전이 끝 = 플래토 시작
-    HOLD_WINDOWS.push({ rate: r, start: t + (HOLD_SEC - MEASURE_TAIL), end: t + HOLD_SEC });
-    t += HOLD_SEC;
-  }
+const scenarios = {
+  warmup: {
+    executor: 'constant-arrival-rate', rate: WARMUP_RATE, timeUnit: '1s',
+    duration: `${WARMUP_SEC}s`, preAllocatedVUs: 20, maxVUs: 60, startTime: '0s',
+    exec: 'ingest', tags: { rate: 'warmup' },
+  },
+};
+const MEASURE_WINDOWS = [];
+let cursor = WARMUP_SEC + GAP_SEC;        // 예열 후 배수
+for (const r of RATES) {
+  scenarios[`r${r}`] = {
+    executor: 'constant-arrival-rate', rate: r, timeUnit: '1s',
+    duration: `${SCEN_SEC}s`,
+    preAllocatedVUs: clamp(Math.ceil(r * 0.05), 15, 60),
+    maxVUs: clamp(Math.ceil(r * 0.4), 50, 700),
+    startTime: `${cursor}s`,
+    exec: 'ingest',
+    tags: { rate: `${r}` },
+  };
+  // 측정창 = 이 시나리오의 마지막 MEASURE_TAIL초(정상상태)
+  MEASURE_WINDOWS.push({ rate: r, start: cursor + (SCEN_SEC - MEASURE_TAIL), end: cursor + SCEN_SEC });
+  cursor += SCEN_SEC + GAP_SEC;
 }
 
 const thresholds = {};
 for (const r of RATES) {
-  thresholds[`http_req_duration{rate:${r}}`] = [`p(95)<${SLO_P95_MS}`];
-  thresholds[`http_req_failed{rate:${r}}`] = [`rate<${SLO_ERR}`];
+  // rate 태그(전 구간) 대신 정상상태 창만 SLO 판정하도록 별도 서브메트릭 rate_ss 를 쓴다.
+  thresholds[`http_req_duration{rate_ss:${r}}`] = [`p(95)<${SLO_P95_MS}`];
+  thresholds[`http_req_failed{rate_ss:${r}}`] = [`rate<${SLO_ERR}`];
 }
 
 export const options = {
-  discardResponseBodies: true,          // k6 메모리·CPU 절약(응답 본문 불필요)
-  scenarios: {
-    ramp: {
-      executor: 'ramping-arrival-rate',
-      startRate: 0,
-      timeUnit: '1s',
-      stages,
-      preAllocatedVUs: 50,
-      maxVUs: 600,                       // 서버가 느려지면 여기서 막혀 rate가 떨어진다(=실 포화 신호)
-    },
-  },
+  discardResponseBodies: true,          // k6 메모리·CPU 절약
+  scenarios,
   thresholds,
 };
 
-function currentRateTag() {
-  const t = exec.instance.currentTestRunDuration / 1000; // 초
-  for (const w of HOLD_WINDOWS) {
+// 정상상태 창 안에서 발생한 요청에만 rate_ss 태그를 추가로 붙인다(SLO 판정 대상).
+// 시나리오 tags.rate 는 전 구간에 붙지만, rate_ss 는 tail 창에서만 붙는다.
+function steadyStateTag() {
+  const t = exec.instance.currentTestRunDuration / 1000;
+  for (const w of MEASURE_WINDOWS) {
     if (t >= w.start && t < w.end) return `${w.rate}`;
   }
-  return 'ramp'; // 예열·전이·플래토 앞구간(백로그 배수) — SLO 판정에서 제외
+  return '';
 }
 
-export default function () {
+export function ingest() {
+  // rate_ss: 정상상태 창 안이면 rate, 아니면 빈 문자열(SLO 판정 대상에서 제외).
+  const ss = steadyStateTag();
+  const tags = ss ? { rate_ss: ss } : {};
   http.post('http://localhost:8010/events', JSON.stringify({
     event_id: `${__VU}-${__ITER}-${Date.now()}`,
     event_type: 'red_attack_started', actor: 'red', target_asset: 'ground_station',
     vuln_id: 'GS-001', phase: 'initial_access', team_id: `team_${__VU % 16}`,
-  }), { headers: { 'Content-Type': 'application/json' }, tags: { rate: currentRateTag() } });
+  }), { headers: { 'Content-Type': 'application/json' }, tags });
 }
 
 function round(x, d = 1) {
@@ -98,8 +101,8 @@ export function handleSummary(data) {
   let saturation = 0;        // SLO를 마지막으로 지킨 EPS(포화 직전 수용 한계)
   let firstBreak = null;     // SLO가 처음 깨진 EPS
   for (const r of RATES) {
-    const dur = data.metrics[`http_req_duration{rate:${r}}`];
-    const fail = data.metrics[`http_req_failed{rate:${r}}`];
+    const dur = data.metrics[`http_req_duration{rate_ss:${r}}`];
+    const fail = data.metrics[`http_req_failed{rate_ss:${r}}`];
     const p95 = dur && dur.values ? dur.values['p(95)'] : null;
     const errRate = fail && fail.values ? fail.values.rate : null;
     const durOk = dur && dur.thresholds ? Object.values(dur.thresholds).every((t) => t.ok) : false;
