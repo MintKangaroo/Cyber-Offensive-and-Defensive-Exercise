@@ -17,9 +17,9 @@ import http from 'k6/http';
 import exec from 'k6/execution';
 
 const RATES = [200, 500, 1000, 1600, 2200, 2800]; // 각 rate를 독립 측정
-const SCEN_SEC = 30;      // rate별 시나리오 지속
-const MEASURE_TAIL = 18;  // 그 중 마지막 MEASURE_TAIL초(정상상태)만 측정 — 시작구간(연결·VU 예열) 제외
-const GAP_SEC = 10;       // rate 시나리오 사이 배수(drain) — 이전 부하의 백로그를 비운다
+const SCEN_SEC = 90;      // rate별 시나리오 지속 — nightly(3분 정상부하) 수준의 정상상태 확보
+const MEASURE_TAIL = 60;  // 그 중 마지막 60초(완전 정상상태)만 측정 — 시작 30s(연결·VU 예열·백로그 배수) 제외
+const GAP_SEC = 12;       // rate 시나리오 사이 배수(drain) — 이전 부하의 백로그를 비운다
 const WARMUP_RATE = 100;  // 콜드스타트(첫 SQLite 쓰기·WAL·JIT) 흡수
 const WARMUP_SEC = 20;
 const SLO_P95_MS = 500;
@@ -45,8 +45,8 @@ for (const r of RATES) {
   scenarios[`r${r}`] = {
     executor: 'constant-arrival-rate', rate: r, timeUnit: '1s',
     duration: `${SCEN_SEC}s`,
-    preAllocatedVUs: clamp(Math.ceil(r * 0.05), 15, 60),
-    maxVUs: clamp(Math.ceil(r * 0.4), 50, 700),
+    preAllocatedVUs: clamp(Math.ceil(r * 0.08), 20, 120),
+    maxVUs: clamp(Math.ceil(r * 0.5), 60, 900),
     startTime: `${cursor}s`,
     exec: 'ingest',
     tags: { rate: `${r}` },
