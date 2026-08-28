@@ -33,18 +33,29 @@ nightly 는 *고정* 부하에서 임계 통과 여부만 본다("이 부하는 
 
 ### 실측 결과 (2026-08-28, 2-core GitHub 러너)
 
-| EPS | p95 | 판정 |
-|---|---|---|
-| 10–50 | ~5–7 ms | OK (여유) |
-| 75 | ~320 ms | OK (knee — 지연 급상승) |
-| 100 | 타임아웃·17% 실패 | **BREAK (붕괴)** |
+**개선 전** — 수용 한계 **75 EPS**, 붕괴 100 EPS(60s 타임아웃·17% 실패). 원인:
+- ① `/events` 가 요청마다 커넥션 open+PRAGMA + 동기 SQLite 작업을 async 이벤트 루프에서
+  수행해 요청을 직렬화(fsync 자체는 이미 WAL+synchronous=NORMAL 로 완화돼 있었음).
+- ② scoring 포워딩이 호출마다 `httpx.AsyncClient` 를 새로 만들어 연결 처닝, fire-and-forget
+  으로 무제한 태스크 누적(100 EPS 절벽의 실주범).
 
-- **수용 한계 ≈ 75 EPS**, **붕괴 100 EPS**. 안전 운영선은 **~50 EPS**(p95 한 자리 ms).
-- **근본 원인**: `/events` 가 요청마다 **동기 SQLite `commit()`(fsync)** 을 async 이벤트 루프에서
-  직렬 수행한다(`services/event_collector/main.py`). fsync 지연이 루프를 막아 초당 수십 커밋으로
-  제한된다.
-- **주의**: nightly `event_collector_ingest.js`(목표 200 EPS)는 실제로 **~38 req/s 만 달성·나머지
-  dropped·p95 ~2.3s** 였다 — 200 EPS 는 이미 포화를 한참 넘어선 값이고, 워크플로의 `|| echo`
-  때문에 임계 실패가 green 으로 가려져 왔다. nightly 기준선의 "~200 EPS" 목표는 과대평가였다.
-- **대회 규모 함의**: 단일 event_collector 로는 지속 **~50–75 EPS** 가 한계. 그 이상(팀·섹터 증가)
-  이면 **배치/비동기 커밋** 또는 **수평 확장**이 필요하다. 개선 여지가 큰 후속 항목.
+**개선 후** — 수용 한계 **450 EPS**(≈6배), 붕괴 600 EPS. 개선 커밋:
+- **PR #38** — ingest 쓰기(중복검사+INSERT+commit)를 단일 워커 executor의 영속 커넥션으로
+  오프로드(`run_in_executor`) → 이벤트 루프 비블록. 75 EPS p95 124ms→~2ms.
+- **PR #39** — scoring 포워딩에 연결 풀 공유 `httpx.AsyncClient` 재사용 + 세마포어(기본 64,
+  `FORWARD_MAX_CONCURRENCY`)로 동시성 제한. 100 EPS 절벽 제거.
+
+| EPS | 개선 전 p95 | 개선 후 p95 |
+|---|---|---|
+| 75 | ~124 ms | ~2 ms |
+| 100 | 붕괴 | ~1 ms |
+| 300 | — | ~490 ms |
+| 450 | — | ~3 ms (수용 한계) |
+| 600 | — | **BREAK** |
+
+- 안전 운영선 **~300 EPS**, 수용 한계 **450 EPS**. 그 위(≥600 EPS)의 다음 병목은 scoring_engine
+  또는 SQLite 단일 writer 한계로 추정(후속 여지).
+- **주의**: nightly `event_collector_ingest.js`(목표 200 EPS)는 개선 전 실제로 **~38 req/s 만
+  달성·대부분 dropped·p95 ~2.3s** 였고 워크플로의 `|| echo` 가 임계 실패를 green 으로 가려왔다.
+  개선 후엔 200 EPS 가 p95 ~1ms 로 여유롭게 통과한다. → 후속: nightly 임계 실패를 실제 실패로
+  노출(게이트에 이빨 달기).
