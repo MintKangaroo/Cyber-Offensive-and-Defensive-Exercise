@@ -2,50 +2,80 @@
 // =================================================
 // nightly k6(event_collector_ingest.js)는 *고정* 200 EPS에서 임계 통과 여부만 본다.
 // 그건 "이 부하는 견디는가?"만 답할 뿐, "어디서 무너지는가?"(=포화점)는 알려주지 않는다.
-// 이 스크립트는 event_collector /events 에 EPS를 단계적으로 올리며(각 단계 독립 측정)
+// 이 스크립트는 event_collector /events 에 EPS를 플래토 단위로 올리며(각 플래토 독립 측정)
 // SLO(p95<500ms AND 실패<1%)를 마지막으로 지킨 EPS(=saturation_eps)와 처음 깨진 EPS
 // (=first_break_eps)를 자동 산출한다. 결과는 loadtest/results/ 에 커밋되어 회귀 추적된다.
+//
+// 설계 주의(중요): VU 풀은 **단일 ramping-arrival-rate 시나리오 하나**만 쓴다. 초기 버전은
+// 플래토마다 별도 시나리오를 둬 preAllocatedVUs가 시작 시 전부 초기화(합 수천 VU)되면서
+// k6 프로세스 자체가 러너 CPU를 잠식 → 지연이 서버가 아닌 k6-side thrash를 반영했다.
+// 단일 풀(50~600)을 램프 내내 재사용하면 그 왜곡이 사라진다.
 //
 // 인증: nightly 워크플로와 동일하게 SERVICE_TOKEN 미설정 + RBAC_ALLOW_INSECURE_DEV=true
 // 이면 토큰 없이 dev-mode ingest 가 통과한다(event_collector_ingest.js 와 동일 전제).
 import http from 'k6/http';
+import exec from 'k6/execution';
 
-// 각 단계의 목표 EPS. 100 → 2400 까지 비선형 증가로 무릎(knee)을 촘촘히 훑는다.
-const RATES = [100, 200, 400, 700, 1000, 1400, 1800, 2400];
-const STAGE_SEC = 25;   // 단계별 지속(정상상태 도달에 충분하되 CI 예산 내)
-const GAP_SEC = 3;      // 단계 간 여유(큐 배수·측정 분리)
-const SLO_P95_MS = 500; // 포화 판정 지연 상한
-const SLO_ERR = 0.01;   // 포화 판정 실패율 상한(1%)
+const RATES = [200, 500, 900, 1400, 2000, 2800]; // 플래토 목표 EPS
+const HOLD_SEC = 20;   // 플래토 유지(정상상태 측정 구간)
+const RAMP_SEC = 3;    // 플래토 간 전이(측정 제외 구간)
+const SLO_P95_MS = 500;
+const SLO_ERR = 0.01;
 
-const scenarios = {};
-const thresholds = {};
-let start = 0;
+// 단일 ramping-arrival-rate 스테이지: 각 rate로 RAMP_SEC 상승 후 HOLD_SEC 유지.
+const stages = [];
 for (const r of RATES) {
-  scenarios[`r${r}`] = {
-    executor: 'constant-arrival-rate',
-    rate: r,
-    timeUnit: '1s',
-    duration: `${STAGE_SEC}s`,
-    preAllocatedVUs: Math.min(1500, Math.max(50, Math.ceil(r * 0.6))),
-    maxVUs: Math.min(3000, r * 3),
-    startTime: `${start}s`,
-    tags: { rate: `${r}` },   // 이 단계의 모든 메트릭에 rate 태그 부여
-    exec: 'ingest',
-  };
-  // 태그별 서브메트릭을 만들기 위해 임계를 정의(abortOnFail 없음 — 전 곡선을 다 본다).
-  thresholds[`http_req_duration{rate:${r}}`] = [`p(95)<${SLO_P95_MS}`];
-  thresholds[`http_req_failed{rate:${r}}`] = [`rate<${SLO_ERR}`];
-  start += STAGE_SEC + GAP_SEC;
+  stages.push({ target: r, duration: `${RAMP_SEC}s` });
+  stages.push({ target: r, duration: `${HOLD_SEC}s` });
 }
 
-export const options = { scenarios, thresholds };
+// 각 플래토의 "유지 구간" 절대 시간창(초). currentTestRunDuration을 이 창에 매핑해
+// 요청을 rate 태그로 분류한다(전이 구간은 'ramp'로 태깅해 SLO 표에서 제외).
+const HOLD_WINDOWS = [];
+{
+  let t = 0;
+  for (const r of RATES) {
+    t += RAMP_SEC;                       // 전이 끝 = 유지 시작
+    HOLD_WINDOWS.push({ rate: r, start: t, end: t + HOLD_SEC });
+    t += HOLD_SEC;
+  }
+}
 
-export function ingest() {
+const thresholds = {};
+for (const r of RATES) {
+  thresholds[`http_req_duration{rate:${r}}`] = [`p(95)<${SLO_P95_MS}`];
+  thresholds[`http_req_failed{rate:${r}}`] = [`rate<${SLO_ERR}`];
+}
+
+export const options = {
+  discardResponseBodies: true,          // k6 메모리·CPU 절약(응답 본문 불필요)
+  scenarios: {
+    ramp: {
+      executor: 'ramping-arrival-rate',
+      startRate: 0,
+      timeUnit: '1s',
+      stages,
+      preAllocatedVUs: 50,
+      maxVUs: 600,                       // 서버가 느려지면 여기서 막혀 rate가 떨어진다(=실 포화 신호)
+    },
+  },
+  thresholds,
+};
+
+function currentRateTag() {
+  const t = exec.instance.currentTestRunDuration / 1000; // 초
+  for (const w of HOLD_WINDOWS) {
+    if (t >= w.start && t < w.end) return `${w.rate}`;
+  }
+  return 'ramp'; // 전이 구간 — SLO 판정에서 제외
+}
+
+export default function () {
   http.post('http://localhost:8010/events', JSON.stringify({
     event_id: `${__VU}-${__ITER}-${Date.now()}`,
     event_type: 'red_attack_started', actor: 'red', target_asset: 'ground_station',
     vuln_id: 'GS-001', phase: 'initial_access', team_id: `team_${__VU % 16}`,
-  }), { headers: { 'Content-Type': 'application/json' } });
+  }), { headers: { 'Content-Type': 'application/json' }, tags: { rate: currentRateTag() } });
 }
 
 function round(x, d = 1) {
