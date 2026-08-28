@@ -7,40 +7,34 @@
   "stages": [
     {
       "rate": 200,
-      "p95_ms": 60000.8,
-      "err_rate": 0.3411,
+      "p95_ms": 60001,
+      "err_rate": 0.7355,
       "slo_ok": false
     },
     {
       "rate": 500,
-      "p95_ms": 4102.5,
-      "err_rate": 0,
-      "slo_ok": false
-    },
-    {
-      "rate": 900,
       "p95_ms": 60000.8,
-      "err_rate": 0.3835,
+      "err_rate": 0.3441,
       "slo_ok": false
     },
     {
-      "rate": 1400,
-      "p95_ms": 4822.7,
+      "rate": 1000,
+      "p95_ms": 17168.1,
       "err_rate": 0,
       "slo_ok": false
     },
     {
-      "rate": 2000,
-      "p95_ms": 5221.1,
+      "rate": 1600,
+      "p95_ms": 13165.5,
       "err_rate": 0,
       "slo_ok": false
     },
     {
-      "rate": 2800,
-      "p95_ms": 5990.8,
+      "rate": 2400,
+      "p95_ms": 11461.5,
       "err_rate": 0,
       "slo_ok": false
     }
   ],
-  "generated_at": "2026-08-28T11:16:39.050Z"
+  "generated_at": "2026-08-28T11:28:22.752Z"
 }
