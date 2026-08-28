@@ -16,12 +16,16 @@
 import http from 'k6/http';
 import exec from 'k6/execution';
 
-const RATES = [200, 500, 1000, 1600, 2200, 2800]; // 각 rate를 독립 측정
-const SCEN_SEC = 90;      // rate별 시나리오 지속 — nightly(3분 정상부하) 수준의 정상상태 확보
-const MEASURE_TAIL = 60;  // 그 중 마지막 60초(완전 정상상태)만 측정 — 시작 30s(연결·VU 예열·백로그 배수) 제외
-const GAP_SEC = 12;       // rate 시나리오 사이 배수(drain) — 이전 부하의 백로그를 비운다
-const WARMUP_RATE = 100;  // 콜드스타트(첫 SQLite 쓰기·WAL·JIT) 흡수
-const WARMUP_SEC = 20;
+// 저-rate 그리드: 초기 측정으로 event_collector의 실 포화점이 ~40 EPS 부근임이 드러났다
+// (nightly의 "200 EPS" ingest는 실제로 ~38 req/s만 달성·80% dropped·p95 2.3s — 200을 이미
+//  한참 넘어섬). 원인은 요청마다 동기 SQLite commit(fsync)을 async 루프에서 직렬 수행하는 것.
+// 따라서 knee를 정밀 측정하려면 수십 EPS 대역을 촘촘히 훑어야 한다.
+const RATES = [10, 20, 30, 40, 50, 75, 100, 150];
+const SCEN_SEC = 60;      // rate별 시나리오 지속(정상상태 확보)
+const MEASURE_TAIL = 40;  // 마지막 40초(정상상태)만 측정 — 시작 20s(연결·VU 예열) 제외
+const GAP_SEC = 10;       // rate 시나리오 사이 배수(drain)
+const WARMUP_RATE = 10;   // 콜드스타트 흡수
+const WARMUP_SEC = 15;
 const SLO_P95_MS = 500;
 const SLO_ERR = 0.01;
 
@@ -45,8 +49,9 @@ for (const r of RATES) {
   scenarios[`r${r}`] = {
     executor: 'constant-arrival-rate', rate: r, timeUnit: '1s',
     duration: `${SCEN_SEC}s`,
-    preAllocatedVUs: clamp(Math.ceil(r * 0.08), 20, 120),
-    maxVUs: clamp(Math.ceil(r * 0.5), 60, 900),
+    // knee 근처 지연이 수초까지 오르므로 rate를 채우려면 VU가 rate×지연만큼 필요하다.
+    preAllocatedVUs: clamp(Math.ceil(r * 1.5), 10, 250),
+    maxVUs: clamp(Math.ceil(r * 6), 40, 600),
     startTime: `${cursor}s`,
     exec: 'ingest',
     tags: { rate: `${r}` },
