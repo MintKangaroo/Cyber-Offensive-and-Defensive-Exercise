@@ -66,6 +66,8 @@ for (const r of RATES) {
   // rate 태그(전 구간) 대신 정상상태 창만 SLO 판정하도록 별도 서브메트릭 rate_ss 를 쓴다.
   thresholds[`http_req_duration{rate_ss:${r}}`] = [`p(95)<${SLO_P95_MS}`];
   thresholds[`http_req_failed{rate_ss:${r}}`] = [`rate<${SLO_ERR}`];
+  // 완료 요청 수 서브메트릭 강제(포화 붕괴 후 후속 rate가 샘플 기아로 vacuous OK 되는 것 방지).
+  thresholds[`http_reqs{rate_ss:${r}}`] = ['count>=0'];
 }
 
 export const options = {
@@ -105,17 +107,24 @@ export function handleSummary(data) {
   const rows = [];
   let saturation = 0;        // SLO를 마지막으로 지킨 EPS(포화 직전 수용 한계)
   let firstBreak = null;     // SLO가 처음 깨진 EPS
+  let broken = false;        // 첫 붕괴 이후엔 수용 한계를 더 올리지 않는다(연속 정상 구간만 인정)
   for (const r of RATES) {
     const dur = data.metrics[`http_req_duration{rate_ss:${r}}`];
     const fail = data.metrics[`http_req_failed{rate_ss:${r}}`];
+    const reqs = data.metrics[`http_reqs{rate_ss:${r}}`];
     const p95 = dur && dur.values ? dur.values['p(95)'] : null;
     const errRate = fail && fail.values ? fail.values.rate : null;
+    const count = reqs && reqs.values ? reqs.values.count : 0;
     const durOk = dur && dur.thresholds ? Object.values(dur.thresholds).every((t) => t.ok) : false;
     const failOk = fail && fail.thresholds ? Object.values(fail.thresholds).every((t) => t.ok) : false;
-    const ok = durOk && failOk;
-    rows.push({ rate: r, p95_ms: round(p95), err_rate: round(errRate, 4), slo_ok: ok });
+    // 샘플 가드: 정상상태 창에서 기대 처리량의 최소 30%는 완료돼야 유효 측정으로 본다.
+    // (포화 붕괴 후 후속 rate가 백로그 기아로 완료 0건→p95 0으로 vacuous OK 되는 것 방지.)
+    const enoughSamples = count >= r * MEASURE_TAIL * 0.3;
+    const ok = durOk && failOk && enoughSamples;
+    rows.push({ rate: r, p95_ms: round(p95), err_rate: round(errRate, 4), reqs: count, slo_ok: ok });
+    if (broken) continue;    // 이미 붕괴 — 수용 한계 갱신·firstBreak 재설정 안 함
     if (ok) saturation = r;
-    else if (firstBreak === null) firstBreak = r;
+    else { broken = true; firstBreak = r; }
   }
 
   const result = {
@@ -132,12 +141,13 @@ export function handleSummary(data) {
     '',
     '=== event_collector 부하 포화점 (U-3) ===',
     `SLO: ${result.slo}`,
-    'EPS      p95(ms)   err%     SLO',
+    'EPS      p95(ms)   err%     reqs     SLO',
     ...rows.map((x) => {
       const eps = String(x.rate).padEnd(8);
       const p95 = (x.p95_ms === null ? '-' : String(x.p95_ms)).padEnd(9);
       const err = (x.err_rate === null ? '-' : (x.err_rate * 100).toFixed(2)).padEnd(8);
-      return `${eps} ${p95} ${err} ${x.slo_ok ? 'OK' : 'BREAK'}`;
+      const rq = String(x.reqs).padEnd(8);
+      return `${eps} ${p95} ${err} ${rq} ${x.slo_ok ? 'OK' : 'BREAK'}`;
     }),
     `수용 한계(saturation): ${saturation} EPS`,
     `포화점(first break):   ${firstBreak === null ? '측정 범위 내 없음(전 단계 통과)' : firstBreak + ' EPS'}`,
