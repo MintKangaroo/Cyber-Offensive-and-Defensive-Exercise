@@ -1,0 +1,71 @@
+name: Saturation Test (weekly)
+
+# 감사 U-3 「부하 포화점」 — event_collector 에 EPS를 램프시켜 SLO 붕괴 지점(수용 한계)을
+# 자동 측정한다. nightly(고정 부하 회귀)와 분리해 주간 1회 + 수동 실행으로 돌린다.
+on:
+  schedule:
+    - cron: "0 17 * * 0"   # 매주 일요일 02:00 KST (UTC 일 17:00)
+  workflow_dispatch:
+
+permissions:
+  contents: write   # 포화점 결과를 loadtest/results/ 에 커밋
+
+jobs:
+  saturation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # 부하 스크립트는 토큰 없이 ingest 하므로 dev 우회 + CHALLENGE_SECRET 더미.
+    env:
+      RBAC_ALLOW_INSECURE_DEV: "true"
+      CHALLENGE_SECRET: ci-saturation-secret
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update && sudo apt-get install -y k6
+
+      - name: Start stack (event_collector + deps)
+        run: |
+          docker compose up -d --build \
+            event_collector scoring_engine config_service ingest_proxy
+
+      - name: Wait for core health
+        run: |
+          for i in $(seq 1 40); do
+            curl -sf http://localhost:8010/health >/dev/null 2>&1 && exit 0
+            sleep 3
+          done
+          echo "event_collector not healthy"; exit 1
+
+      - name: Run saturation ramp
+        run: |
+          mkdir -p loadtest/results
+          STAMP=$(date -u +%Y%m%d)
+          # 램프 자체는 SLO 붕괴를 기대하므로 k6 비정상 종료를 실패로 보지 않는다
+          # (포화점은 handleSummary가 결과 JSON으로 산출한다).
+          STAMP="$STAMP" k6 run loadtest/k6/event_collector_saturation.js || echo "ramp finished (SLO breach expected at knee)"
+          echo "=== 산출된 포화점 ==="
+          cat loadtest/results/event_collector_saturation.latest.json
+
+      - name: Upload results (artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: saturation-results
+          path: loadtest/results/event_collector_saturation.*.json
+
+      - name: Commit results to loadtest/results/
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add loadtest/results/event_collector_saturation.*.json || true
+          git commit -m "chore(loadtest): 주간 포화점 측정 결과 갱신 [skip ci]" || echo "no changes"
+          git push || echo "push skipped"
+
+      - name: Teardown
+        if: always()
+        run: docker compose down -v
