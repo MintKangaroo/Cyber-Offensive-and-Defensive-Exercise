@@ -13,23 +13,33 @@
 
 ## 완성도 · 검증 현황
 
-![status](https://img.shields.io/badge/status-operational-2aa25c) ![challenges](https://img.shields.io/badge/challenges-70%2F70-2aa25c) ![tests](https://img.shields.io/badge/unit-434%20passed-2aa25c) ![ci](https://img.shields.io/badge/CI-7%2F7-2aa25c)
+![status](https://img.shields.io/badge/status-operational-2aa25c) ![challenges](https://img.shields.io/badge/challenges-70%2F70-2aa25c) ![tests](https://img.shields.io/badge/unit-455%20passed-2aa25c) ![ci](https://img.shields.io/badge/CI-7%2F7-2aa25c)
 
 **운영 준비 완료(operational).** 4주차 전면 보안 감사(Showstopper 11건 · 35개 항목)를 전량 리메디에이션했고,
-남은 항목은 새 기능이 아니라 장시간 부하/소크 실측(nightly·소크 위임)뿐입니다.
+감사 §6 미검증 10건과 경쟁표준 갭(DEF CON/CCE G-1~G-14)까지 전부 해소했습니다. 남은 항목은
+새 기능이 아니라 8시간 정식 소크 실측(선택, 2시간 가속은 PASS)뿐입니다.
 
 | 검증 축 | 결과 |
 |---|---|
 | 챌린지 자동 QA | **70 / 70** 통과 |
-| 백엔드 유닛 테스트 | **434 passed** |
+| 백엔드 유닛 테스트 | **455 passed** |
 | CI 파이프라인 | **7 / 7** green (unit·integration·challenges·clean-install·dashboard·secret-scan·supply-chain) |
 | 트윈→SIEM 라이브 탐지 E2E | **6 / 6** 규칙 발화 (실 도커 스택) |
 | 실 ICS 프로토콜 | **14종** (11개 섹터 트윈 전부 실 프로토콜 구사) |
-| 라이브 실측 실결함 수정 | **7건** (정적 분석이 못 잡은 런타임 결함) |
+| 감사 §6 미검증 항목 | **10 / 10** 해소 (라이브 실측 + 결정론적 테스트) |
+| 라이브 실측 실결함 수정 | **8건** (정적 분석이 못 잡은 런타임 결함) |
 
 > ICS 챌린지 13종은 전부 HTTP 목업 → **실 프로토콜**(라이브 서버 익스플로잇 또는 실 pcap 포렌식)로 재저작 완료.
 > 감사 §7 「대외 공개 최소조건」 충족. 상세 이력은 [`CHANGELOG.md`](CHANGELOG.md), 갭 해소 현황은
 > [`docs/GAP_ANALYSIS.md`](docs/GAP_ANALYSIS.md) 상단 배너 참고.
+
+**최근 개선 (2026-08)**
+- **네트워크 계층 배경 트래픽(G-11)** — `traffic_generator`가 트윈 양성 엔드포인트로 실 HTTP를 흘려
+  공격과 동일한 SIEM 파이프라인에 노이즈를 생성(ground truth 라벨 → AAR 오탐률 채점). 탐지 훈련 현실화.
+- **부하 포화점 실측·개선(U-3)** — 램프 스트레스 하네스로 event_collector 포화점을 측정, 병목(요청당
+  동기 SQLite 쓰기 · scoring 포워딩 연결 처닝)을 고쳐 **75 → 450 EPS(약 6배)**. nightly 부하 게이트도
+  임계 실패를 실제 실패로 노출하도록 이빨을 달았다. 상세는 [`loadtest/results/BASELINE.md`](loadtest/results/BASELINE.md).
+- **Zeek 헤더 레이스(U-5)** — `#fields` 헤더 유실 레이스를 여러 startup 타이밍에 대한 결정론적 테스트로 고정.
 
 ## 처음 시작하기
 
