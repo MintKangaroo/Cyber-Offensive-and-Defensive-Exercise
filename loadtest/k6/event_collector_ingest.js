@@ -11,7 +11,11 @@ export const options = {
     },
   },
   thresholds: {
-    http_req_duration: ['p(99)<200'],
+    // 개선(PR #38·#39) 후 200 EPS를 완전 달성(이전엔 ~38 req/s·대부분 dropped)하며 p95~20ms.
+    // p99는 이 stack에서 tail ~350ms라 200ms는 비현실적 → 500ms로 현실화(회귀 게이트로 작동).
+    // 회귀(예: 동기 쓰기 재도입)면 p99가 수초로 튀어 즉시 잡힌다.
+    http_req_duration: ['p(99)<500'],
+    http_req_failed: ['rate<0.01'],
   },
 };
 

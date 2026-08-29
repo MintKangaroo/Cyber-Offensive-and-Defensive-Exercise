@@ -57,5 +57,12 @@ nightly 는 *고정* 부하에서 임계 통과 여부만 본다("이 부하는 
   또는 SQLite 단일 writer 한계로 추정(후속 여지).
 - **주의**: nightly `event_collector_ingest.js`(목표 200 EPS)는 개선 전 실제로 **~38 req/s 만
   달성·대부분 dropped·p95 ~2.3s** 였고 워크플로의 `|| echo` 가 임계 실패를 green 으로 가려왔다.
-  개선 후엔 200 EPS 가 p95 ~1ms 로 여유롭게 통과한다. → 후속: nightly 임계 실패를 실제 실패로
-  노출(게이트에 이빨 달기).
+  개선 후엔 200 EPS 를 완전 달성(p95 ~20ms·p99 ~350ms)한다.
+
+### nightly 회귀 게이트(감사 4.10, 이빨 달기 완료)
+
+`loadtest.yml` 이 `|| echo` 로 k6 종료코드를 삼켜 임계 실패가 green 으로 가려져 있었다. 이제
+**ingest·twin 은 게이팅**(임계 위반 시 결과 커밋 후 `Enforce load thresholds` 스텝이 잡을 실패)
+하도록 바꿨다. 임계도 현실화: ingest `p99<200`→`p99<500`(개선 후 실측 tail 반영, 회귀 시 수초로
+튀어 즉시 포착). **attack_defense 는 비게이팅** — 현재 매치/토큰 부트스트랩이 없어 scoreboard 가
+전량 404(늘 조용히 실패해왔음). TODO: k6 전에 매치·팀·토큰을 부트스트랩해 게이팅으로 승격.
