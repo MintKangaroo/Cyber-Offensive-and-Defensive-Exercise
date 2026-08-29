@@ -42,18 +42,27 @@ jobs:
           echo "stack not healthy"; exit 1
 
       - name: Run k6 (3종, summary export)
+        id: k6
         run: |
           mkdir -p loadtest/results
           STAMP=$(date -u +%Y%m%d)
+          fail=0
+          # ingest·twin 은 게이팅: 임계 위반 시 회귀로 보고 잡의 실패로 승격(아래 Enforce 스텝).
           for s in event_collector_ingest twin_attack_load; do
-            k6 run --summary-export "loadtest/results/${s}.${STAMP}.json" "loadtest/k6/${s}.js" || echo "k6 $s finished with non-zero"
+            if ! k6 run --summary-export "loadtest/results/${s}.${STAMP}.json" "loadtest/k6/${s}.js"; then
+              echo "::warning::k6 $s 임계 위반(회귀 후보)"; fail=1
+            fi
           done
+          # attack_defense 는 매치/토큰 부트스트랩이 없어 현재 scoreboard 가 전량 실패한다.
+          # 게이트에서 제외(데이터 수집만). TODO: k6 전에 매치·팀·토큰 부트스트랩 후 게이팅으로 승격.
           DURATION=90s SCOREBOARD_VUS=12 SUBMISSIONS_PER_SECOND=10 \
-            k6 run --summary-export "loadtest/results/attack_defense.${STAMP}.json" loadtest/k6/attack_defense.js || true
+            k6 run --summary-export "loadtest/results/attack_defense.${STAMP}.json" loadtest/k6/attack_defense.js \
+            || echo "::notice::attack_defense 비게이팅(매치 부트스트랩 필요)"
           # 최신 결과를 latest 심볼릭 파일로도 저장(기준선 비교 편의)
           for s in event_collector_ingest twin_attack_load attack_defense; do
             cp "loadtest/results/${s}.${STAMP}.json" "loadtest/results/${s}.latest.json" 2>/dev/null || true
           done
+          echo "gate_fail=$fail" >> "$GITHUB_OUTPUT"
 
       - name: Upload results (artifact)
         if: always()
@@ -70,6 +79,16 @@ jobs:
           git add loadtest/results/*.json || true
           git commit -m "chore(loadtest): nightly k6 결과 갱신 [skip ci]" || echo "no changes"
           git push || echo "push skipped"
+
+      # 게이트에 이빨 달기: 결과 커밋 후, ingest/twin 임계 위반이면 잡을 실패시킨다.
+      # (이전엔 `|| echo` 로 k6 종료코드를 삼켜 임계 실패가 green 으로 가려졌다.)
+      - name: Enforce load thresholds (gate)
+        if: always()
+        run: |
+          if [ "${{ steps.k6.outputs.gate_fail }}" = "1" ]; then
+            echo "부하 회귀 임계 위반 — 게이트 실패 (ingest·twin)"; exit 1
+          fi
+          echo "부하 게이트 통과 (ingest·twin)"
 
       - name: Teardown
         if: always()
