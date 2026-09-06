@@ -13,10 +13,17 @@ jobs:
   k6:
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    # 부하 스크립트는 토큰 없이 ingest 하므로 dev 우회 + CHALLENGE_SECRET 더미.
+    # ingest·twin 부하는 토큰 없이 흘리므로 dev 우회 + CHALLENGE_SECRET 더미.
+    # A/D 부하는 실 JWT 를 요구한다 → AUTH_JWT_SECRET 로 매치/팀/경쟁자 토큰을 부트스트랩한다.
+    # (이 시크릿은 auth·attack_defense 컨테이너에만 도달; event_collector ingest 경로는
+    #  SERVICE_TOKEN 기반이라 영향 없음 — dev 우회 유지.)
     env:
       RBAC_ALLOW_INSECURE_DEV: "true"
       CHALLENGE_SECRET: ci-loadtest-secret
+      AUTH_JWT_SECRET: ci-loadtest-jwt-secret
+      # 부하 프로파일은 rate limiter 가 아니라 제출/채점 경로 처리량을 측정한다 →
+      # 팀당 분당 제출 상한을 대폭 올려 429 로 막히지 않게 한다(429 는 k6 에서 기대 상태).
+      MAX_FLAG_SUBMISSIONS_PER_MINUTE: "100000"
     steps:
       - uses: actions/checkout@v4
 
@@ -36,10 +43,19 @@ jobs:
       - name: Wait for core health
         run: |
           for i in $(seq 1 40); do
-            curl -sf http://localhost:8010/health >/dev/null 2>&1 && curl -sf http://localhost:8020/health >/dev/null 2>&1 && exit 0
+            curl -sf http://localhost:8010/health >/dev/null 2>&1 \
+              && curl -sf http://localhost:8020/health >/dev/null 2>&1 \
+              && curl -sf http://localhost:8100/health >/dev/null 2>&1 \
+              && exit 0
             sleep 3
           done
           echo "stack not healthy"; exit 1
+
+      - name: Bootstrap A/D match·teams·tokens
+        run: |
+          mkdir -p loadtest/results
+          AD_API=http://localhost:8100 MATCH_ID=ad-load AD_TEAMS=12 \
+            python3 loadtest/k6/bootstrap_ad.py
 
       - name: Run k6 (3종, summary export)
         id: k6
@@ -53,11 +69,12 @@ jobs:
               echo "::warning::k6 $s 임계 위반(회귀 후보)"; fail=1
             fi
           done
-          # attack_defense 는 매치/토큰 부트스트랩이 없어 현재 scoreboard 가 전량 실패한다.
-          # 게이트에서 제외(데이터 수집만). TODO: k6 전에 매치·팀·토큰 부트스트랩 후 게이팅으로 승격.
-          DURATION=90s SCOREBOARD_VUS=12 SUBMISSIONS_PER_SECOND=10 \
+          # attack_defense 는 이제 부트스트랩(매치·팀·competitor 토큰)이 선행되므로 게이팅한다.
+          # 토큰은 파일에서만 읽어 로그 노출을 피한다(k6 env 로만 전달).
+          COMPETITOR_TOKENS="$(cat loadtest/results/ad_competitor_tokens.txt)" \
+          MATCH_ID=ad-load DURATION=90s SCOREBOARD_VUS=12 SUBMISSIONS_PER_SECOND=10 \
             k6 run --summary-export "loadtest/results/attack_defense.${STAMP}.json" loadtest/k6/attack_defense.js \
-            || echo "::notice::attack_defense 비게이팅(매치 부트스트랩 필요)"
+            || { echo "::warning::k6 attack_defense 임계 위반(회귀 후보)"; fail=1; }
           # 최신 결과를 latest 심볼릭 파일로도 저장(기준선 비교 편의)
           for s in event_collector_ingest twin_attack_load attack_defense; do
             cp "loadtest/results/${s}.${STAMP}.json" "loadtest/results/${s}.latest.json" 2>/dev/null || true
@@ -86,9 +103,9 @@ jobs:
         if: always()
         run: |
           if [ "${{ steps.k6.outputs.gate_fail }}" = "1" ]; then
-            echo "부하 회귀 임계 위반 — 게이트 실패 (ingest·twin)"; exit 1
+            echo "부하 회귀 임계 위반 — 게이트 실패 (ingest·twin·attack_defense)"; exit 1
           fi
-          echo "부하 게이트 통과 (ingest·twin)"
+          echo "부하 게이트 통과 (ingest·twin·attack_defense)"
 
       - name: Teardown
         if: always()
