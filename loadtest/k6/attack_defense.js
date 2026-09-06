@@ -1,6 +1,11 @@
 import http from "k6/http";
 import { check, sleep } from "k6";
 
+// 429(rate limit)는 부하 하에서 정상적으로 기대되는 응답이다. 기본값이면 k6 가 status>=400 을
+// 실패로 세어 http_req_failed 임계(rate<0.02)를 깨뜨리므로, 200·429 를 '기대 상태'로 지정해
+// 임계가 진짜 오류(404·5xx·타임아웃)에만 반응하도록 한다.
+http.setResponseCallback(http.expectedStatuses(200, 429));
+
 // Full profile: 12 teams, 2 services, 100 short rounds. Match/team bootstrap is
 // performed before k6; no exploit is executed here.
 export const options = {
