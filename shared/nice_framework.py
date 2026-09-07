@@ -34,6 +34,7 @@ CATEGORY_ROLES: dict[str, list[str]] = {
     "forensics": ["IN-FOR-002", "PR-CIR-001"],
     "detection": ["PR-CDA-001", "AN-TWA-001"],
     "reversing": ["AN-EXP-001"],
+    "pwn": ["AN-EXP-001", "PR-VAM-001"],
     "ics": ["PR-CDA-001", "PR-INF-001", "OM-ADM-001"],
     "ai": ["AN-TWA-001", "AN-EXP-001"],
     "crypto": ["AN-EXP-001", "SP-DEV-001"],
