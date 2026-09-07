@@ -1,0 +1,39 @@
+challenge:
+  id: "WEB-020"
+  title: "KEPCO 스마트미터 설정 병합 - 프로토타입 오염"
+  category: "web"
+  difficulty: "hard"
+  points: { red: 200, blue: 200 }
+  asset: "power_grid"
+  mitre: [T1190, T1068]
+
+  description: |
+    한전(KEPCO) 스마트미터 관리 API 가 설정 JSON 을 재귀 병합하는데 __proto__ 키를 걸러내지
+    않는다. Object.prototype 을 오염시켜 권한 검사를 우회하고 관리자 전용 그리드 마스터
+    토큰(flag)을 얻어라. (Node.js 고유 취약점 — 프로토타입 오염)
+
+  red_task:
+    goal: "설정 병합 API 에 __proto__.isAdmin 을 심어 프로토타입을 오염하고 GET /api/admin/flag 획득"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 15, text: "POST /api/config/merge 는 JSON 을 재귀 병합한다. 관리자 판정은 빈 객체의 isAdmin." }
+      - { cost: 30, text: "JS 재귀 병합의 고전 결함 — __proto__ 를 통해 Object.prototype 에 값을 심을 수 있다." }
+      - { cost: 45, text: '{"__proto__":{"isAdmin":true}} 를 병합한 뒤 /api/admin/flag.' }
+
+  blue_task:
+    goal: "병합에서 __proto__/constructor/prototype 키를 걸러 프로토타입 오염 차단"
+    success_criteria: |
+      (1) 병합 요청 바디에 __proto__ 등 위험 키 포함 관측
+      (2) 패치(PATCH_WEB_020=true) 후 오염이 반영되지 않아 /api/admin/flag 는 403
+    points_breakdown: { detection: 60, patch: 140 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용 Node/Express. 더미 설정 저장소. 프로토타입 오염은 프로세스 내부에 한정."

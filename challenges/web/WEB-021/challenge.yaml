@@ -1,0 +1,41 @@
+challenge:
+  id: "WEB-021"
+  title: "국가 재난문자(CBS) 포털 - 웹 캐시 포이즈닝"
+  category: "web"
+  difficulty: "hard"
+  points: { red: 150, blue: 150 }
+  asset: "cbs_portal"
+  mitre: [T1190, T1557]
+
+  description: |
+    국가 재난문자(CBS) 관제 포털의 상태 페이지가 공유 캐시에 '경로만' 키로 저장되는데, 응답은
+    언키드 헤더 X-Forwarded-Host 를 자산 로더 호스트로 반영한다. 캐시가 빈 시점에 악성
+    X-Forwarded-Host 로 /status 를 채워 캐시를 오염시키면, 헤더 없는 일반 사용자에게도 오염된
+    본문이 제공된다. 관제 검증기(/admin/verify)가 오염을 감지하면 비상 토큰(flag)을 발급한다.
+    (인프라 테마 신규 취약점 유형 확장 — 웹 캐시 포이즈닝)
+
+  red_task:
+    goal: "언키드 X-Forwarded-Host 로 /status 캐시를 오염시키고 /admin/verify 에서 flag 를 얻어라"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "/status 는 X-Cache HIT/MISS 를 준다. 응답 본문의 자산 호스트는 무엇으로 정해지나?" }
+      - { cost: 20, text: "X-Forwarded-Host 는 응답에 반영되지만 캐시 키엔 없다(언키드). 캐시가 빈(MISS) 때 채워라." }
+      - { cost: 30, text: "X-Forwarded-Host: evil 로 /status 요청(MISS) → 헤더 없이 /status(HIT, 오염) → /admin/verify." }
+
+  blue_task:
+    goal: "언키드 헤더를 캐시 키에 포함(Vary)하거나 응답 반영 제거"
+    success_criteria: |
+      (1) 동일 경로에 X-Forwarded-Host 가 다른 값으로 오고 HIT 응답에 외부 호스트가 반영되는 패턴
+      (2) 패치(PATCH_WEB_021=true) 후 헤더가 캐시 키에 포함돼 일반 사용자는 정상 호스트만 수신
+    points_breakdown: { detection: 50, patch: 100 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용 인메모리 캐시(TTL 10초). 실제 외부 호스트로의 요청은 발생하지 않음(본문 반영만)."
