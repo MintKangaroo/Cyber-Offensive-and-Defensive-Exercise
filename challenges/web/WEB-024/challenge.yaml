@@ -1,0 +1,40 @@
+challenge:
+  id: "WEB-024"
+  title: "상수도 요금 고지 시스템 - 2차 SQL 인젝션"
+  category: "web"
+  difficulty: "hard"
+  points: { red: 200, blue: 200 }
+  asset: "water_billing"
+  mitre: [T1190]
+
+  description: |
+    상수도 요금 고지 시스템은 가입 시 username 을 안전하게(바인딩) 저장하지만, 나중에 요금 리포트
+    생성이 그 저장값을 문자열 결합으로 SQL 에 재사용한다(second-order). 저장 시점엔 무해해 보이는
+    페이로드가 리포트 시점에 실행돼 비밀 테이블의 비상 정산 토큰(flag)을 유출한다.
+    (신규 취약점 유형 — 2차 SQL 인젝션)
+
+  red_task:
+    goal: "username 에 UNION 페이로드를 저장한 뒤 요금 리포트 생성을 트리거해 secrets.value(flag)를 조회"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 15, text: "가입 자체는 바인딩이라 무해하다. 저장한 값이 '다른 쿼리'에서 어떻게 쓰이는지 보라." }
+      - { cost: 30, text: "리포트 생성은 저장된 username 을 문자열로 SQL 에 넣는다. UNION SELECT 로 다른 테이블을." }
+      - { cost: 45, text: "username=\"zz' UNION SELECT value FROM secrets-- -\" 로 가입 후 report/generate." }
+
+  blue_task:
+    goal: "재사용 지점도 파라미터 바인딩으로 전환해 2차 주입 차단"
+    success_criteria: |
+      (1) 저장 필드에 SQL 메타문자 포함 + 리포트에서 예상 밖 컬럼 반환 패턴
+      (2) 패치(PATCH_WEB_024=true) 후 저장값이 데이터로만 취급돼 주입 불가
+    points_breakdown: { detection: 60, patch: 140 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용 인메모리 sqlite. secrets 테이블에만 플래그. 더미 요금 데이터."

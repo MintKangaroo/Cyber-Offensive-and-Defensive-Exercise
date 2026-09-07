@@ -1,0 +1,40 @@
+challenge:
+  id: "WEB-023"
+  title: "한수원 원전 통합인증 - JWT kid 경로 주입"
+  category: "web"
+  difficulty: "hard"
+  points: { red: 200, blue: 200 }
+  asset: "nuclear_ot"
+  mitre: [T1078, T1552.004]
+
+  description: |
+    원전 관제 통합인증이 JWT 헤더의 kid(키 식별자)로 서명 키 파일(keys/<kid>)을 로드하는데
+    kid 를 정규화하지 않아 경로 탐색이 가능하다. kid 를 예측 가능한 파일(빈 키)로 지정해 토큰을
+    위조하고 관제 마스터 토큰(flag)을 얻어라. (신규 취약점 유형 — JWT kid 주입; WEB-002 alg=none,
+    WEB-015 RS/HS 혼동과 구분)
+
+  red_task:
+    goal: "kid 경로 탐색으로 빈 키(/dev/null)를 로드시켜 HS256 role=admin 토큰을 위조하라"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 15, text: "토큰 헤더의 kid 가 키 파일 경로에 그대로 쓰인다. 경로를 벗어나면?" }
+      - { cost: 30, text: "kid 를 ../../../../dev/null 로 하면 키 내용이 빈 바이트가 된다." }
+      - { cost: 45, text: "빈 키로 HS256 서명한 {role:admin} 토큰(헤더 kid=위 경로)을 admin 엔드포인트에 제출." }
+
+  blue_task:
+    goal: "kid 를 basename+허용목록으로 제한해 경로 주입 차단"
+    success_criteria: |
+      (1) kid 에 경로 구분자/.. 가 포함된 토큰 검증 시도 관측
+      (2) 패치(PATCH_WEB_023=true) 후 허용목록 밖 kid 는 401
+    points_breakdown: { detection: 60, patch: 140 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용. 정상 키는 랜덤(미상), 빈 키 경로 주입만으로 위조 가능함을 학습."

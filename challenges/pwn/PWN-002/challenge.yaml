@@ -1,0 +1,40 @@
+challenge:
+  id: "PWN-002"
+  title: "가스공사 밸브 제어 콘솔 - 전역 버퍼 오버플로우(인증 우회)"
+  category: "pwn"
+  difficulty: "easy"
+  points: { red: 180, blue: 180 }
+  asset: "gas_corp"
+  mitre: [T1203, T1068]
+
+  description: |
+    가스공사 밸브 제어 인증 콘솔(원격 TCP)이 전역 구조체의 이름 버퍼(name[64])에 크기 검증 없이
+    입력을 받아, 바로 뒤에 있는 authed 필드를 덮어쓸 수 있다. authed 를 0이 아닌 값으로 만들어
+    관리자 인증을 우회하고 비상 밸브 토큰(flag)을 출력시켜라.
+    (신규 pwn 유형 — 전역(.bss) 버퍼 오버플로우; PWN-000 스택오버플로우·PWN-001 포맷스트링과 구분)
+
+  red_task:
+    goal: "운영자 이름 등록에서 name[64] 를 넘겨 인접 authed 를 덮어쓴 뒤 관리자 패널에서 flag 획득"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "이름 등록은 64바이트 버퍼에 200바이트까지 읽는다. 바로 뒤엔 무엇이 있나?" }
+      - { cost: 20, text: "전역 구조체에서 name 다음이 authed. 64바이트 뒤 8바이트가 authed 다." }
+      - { cost: 30, text: "'A'*64 + (0이 아닌 8바이트)로 authed 를 세운 뒤 관리자 패널(메뉴 2). read 가 뒤 입력을 삼키니 단계별 전송." }
+
+  blue_task:
+    goal: "버퍼 크기만큼만 읽도록 경계 검사 추가"
+    success_criteria: |
+      (1) 이름 입력이 버퍼(64)를 크게 초과하는 요청 관측
+      (2) 패치 후 오버플로우로 authed 를 덮을 수 없어 관리자 패널 거부
+    points_breakdown: { detection: 60, patch: 120 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["valve"]
+  safety:
+    profile: "hardened"
+    notes: "원격 바이너리. cap_drop/pids_limit/mem_limit, 연결당 30초 타임아웃, 아웃바운드 없음."
