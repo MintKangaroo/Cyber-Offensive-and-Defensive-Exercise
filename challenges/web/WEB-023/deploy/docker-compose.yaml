@@ -1,0 +1,13 @@
+services:
+  web023_deploy:
+    build:
+      context: .
+    container_name: web023_deploy
+    ports:
+      - "8126:8126"
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web023-dev-secret}
+      - PATCH_WEB_023=false
+    mem_limit: 128m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
