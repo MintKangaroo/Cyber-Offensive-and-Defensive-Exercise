@@ -1,0 +1,40 @@
+challenge:
+  id: "WEB-018"
+  title: "국가 병원 EMR 응급포털 - NoSQL 인젝션(인증우회)"
+  category: "web"
+  difficulty: "medium"
+  points: { red: 150, blue: 150 }
+  asset: "hospital_ot"
+  mitre: [T1190, T1078]
+
+  description: |
+    국가 병원 EMR 응급 포털의 로그인 조회가 문서 저장소(Mongo 계열) 시맨틱으로 자격증명을
+    매칭하는데, password/username 을 문자열이 아닌 연산자 객체로도 받아 질의에 그대로 넣는다.
+    연산자 주입(NoSQLi)으로 관리자 인증을 우회하고 응급 대응 문서(flag)를 열람하라.
+    (인프라 테마 신규 취약점 유형 확장 — NoSQL 인젝션)
+
+  red_task:
+    goal: "password 를 연산자 객체로 주입해 admin 로그인을 우회하고 GET /api/records/emergency 열람"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "로그인 JSON 의 password 가 반드시 문자열이어야 할까? 객체를 넣어보라." }
+      - { cost: 20, text: "Mongo 연산자 $ne 는 '같지 않음'. 임의 비밀번호와 매칭시킬 수 있다." }
+      - { cost: 30, text: '{"username":"admin","password":{"$ne":""}} 로 로그인 → admin 토큰.' }
+
+  blue_task:
+    goal: "자격증명 필드를 문자열로만 강제해 연산자 주입 차단"
+    success_criteria: |
+      (1) 로그인 바디에 연산자 객체가 포함된 요청 관측
+      (2) 패치(PATCH_WEB_018=true) 후 객체형 자격증명은 400 으로 거부
+    points_breakdown: { detection: 50, patch: 100 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용. 실제 DB 없이 문서 매칭 시맨틱만 재현. admin 비밀번호는 랜덤(정상 로그인 불가)."

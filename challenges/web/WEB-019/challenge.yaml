@@ -1,0 +1,40 @@
+challenge:
+  id: "WEB-019"
+  title: "스마트시티 통합관제 GraphQL - Introspection + IDOR"
+  category: "web"
+  difficulty: "medium"
+  points: { red: 150, blue: 150 }
+  asset: "datacenter_bms"
+  mitre: [T1190, T1213]
+
+  description: |
+    스마트시티 통합관제 GraphQL API 가 introspection 을 켜둬 스키마(숨은 쿼리/필드)를 노출하고,
+    citizen(id) 조회에 인가가 없다. introspection 으로 쿼리 구조를 파악한 뒤, 공개 목록에 없는
+    관제실 제한 계정(id 0)을 IDOR 로 조회해 note 에 담긴 비상 대응 토큰(flag)을 읽어라.
+    (인프라 테마 신규 취약점 유형 확장 — GraphQL introspection/IDOR)
+
+  red_task:
+    goal: "introspection 으로 citizen(id) 쿼리를 발견하고 IDOR 로 제한 계정(id 0)의 note 를 읽어라"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "POST /graphql 에 { __schema { queryType { fields { name args { name } } } } } 로 스키마를 열람." }
+      - { cost: 20, text: "citizens 목록엔 없지만 citizen(id) 로 단건 조회가 가능하다. 공개되지 않은 id 를 시도." }
+      - { cost: 30, text: 'citizen(id:"0"){ name note } — 관제실 계정의 note 가 flag.' }
+
+  blue_task:
+    goal: "introspection 비활성화 + 객체 단위 인가로 제한 계정 노출 차단"
+    success_criteria: |
+      (1) __schema introspection·공개 범위 밖 id 조회 관측
+      (2) 패치(PATCH_WEB_019=true) 후 introspection 거부 + citizen(id:0) 은 null
+    points_breakdown: { detection: 50, patch: 100 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용. 더미 시민 데이터. 제한 계정 note 에만 플래그."

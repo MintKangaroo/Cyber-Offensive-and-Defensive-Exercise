@@ -1,0 +1,40 @@
+challenge:
+  id: "WEB-017"
+  title: "공항 안내방송 템플릿 - 서버측 템플릿 인젝션(SSTI)"
+  category: "web"
+  difficulty: "hard"
+  points: { red: 200, blue: 200 }
+  asset: "airport_ot"
+  mitre: [T1190, T1059]
+
+  description: |
+    한국공항공사 운영관제의 안내방송 편집기가 사용자 템플릿을 Jinja2 로 그대로 렌더링한다.
+    서버측 템플릿 인젝션(SSTI)으로 파이썬 객체 그래프를 타고 임의 코드를 실행해 서버의 비상
+    대응 토큰(/app/flag.txt)을 읽어라.
+    (인프라 테마 신규 취약점 유형 확장 — SSTI)
+
+  red_task:
+    goal: "안내 템플릿 미리보기의 SSTI 로 임의 명령을 실행해 /app/flag.txt 를 읽어라"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "template 필드에 {{7*7}} 를 넣어보라. 49 가 나오면 템플릿이 렌더된다." }
+      - { cost: 25, text: "Jinja2 객체 그래프로 os 모듈에 접근할 수 있다(cycler/lipsum 등의 __globals__)." }
+      - { cost: 40, text: "{{ cycler.__init__.__globals__.os.popen('cat /app/flag.txt').read() }}" }
+
+  blue_task:
+    goal: "사용자 입력을 템플릿으로 렌더하지 않도록(데이터 치환/샌드박스) 패치"
+    success_criteria: |
+      (1) 미리보기 입력에 템플릿/객체그래프 토큰이 포함된 요청 관측
+      (2) 패치(PATCH_WEB_017=true) 후 {{...}} 가 계산되지 않고 문자 그대로 처리
+    points_breakdown: { detection: 60, patch: 140 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "hardened"
+    notes: "실제 코드 실행이 발생. cap_drop/no-new-privileges/mem_limit 하드닝, 더미 데이터."
