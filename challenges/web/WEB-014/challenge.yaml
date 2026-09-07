@@ -1,0 +1,40 @@
+challenge:
+  id: "WEB-014"
+  title: "K-water 수자원 관제 리포트 - 외부 엔티티 주입(XXE)"
+  category: "web"
+  difficulty: "medium"
+  points: { red: 150, blue: 150 }
+  asset: "kwater"
+  mitre: [T1190, T1005]
+
+  description: |
+    국가 상수도/수자원 관제센터가 현장 계측 리포트를 XML 로 업로드받아 파싱한다. XML 파서가
+    외부 엔티티를 해석하도록 설정돼 있어, DTD 에 SYSTEM 엔티티를 심어 서버 로컬 파일(비상
+    대응 토큰)을 읽어낼 수 있다. 리포트 XML 로 XXE 를 수행해 flag 를 탈취하라.
+    (인프라 테마 신규 취약점 유형 확장 — XXE)
+
+  red_task:
+    goal: "리포트 XML 의 DTD 에 SYSTEM 외부 엔티티를 심어 /app/flag.txt 를 응답으로 반영시켜라"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "POST /api/report/import 는 XML 을 받아 title/site/level 을 파싱해 되돌려준다." }
+      - { cost: 20, text: "DOCTYPE 에 외부 엔티티를 정의하고 title 에 그 엔티티를 참조하면 값이 반영된다." }
+      - { cost: 35, text: '<!DOCTYPE report [<!ENTITY xxe SYSTEM "file:///app/flag.txt">]> 후 <title>&xxe;</title>.' }
+
+  blue_task:
+    goal: "XML 파서의 외부 엔티티/DTD 해석을 비활성화해 XXE 차단"
+    success_criteria: |
+      (1) DOCTYPE/ENTITY/SYSTEM 이 포함된 업로드 관측
+      (2) 패치(PATCH_WEB_014=true) 후 외부 엔티티가 해석되지 않아 파일 노출 불가
+    points_breakdown: { detection: 50, patch: 100 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용. no_network=True 로 XXE-SSRF 는 막고 로컬 파일 읽기만 시연. 더미 데이터."

@@ -1,0 +1,15 @@
+services:
+  web016_deploy:
+    build:
+      context: .
+    container_name: web016_deploy
+    ports:
+      - "8116:8116"
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web016-dev-secret}
+      - PATCH_WEB_016=false
+    mem_limit: 128m
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]

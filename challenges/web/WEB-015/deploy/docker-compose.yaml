@@ -1,0 +1,15 @@
+services:
+  web015_deploy:
+    build:
+      context: .
+    container_name: web015_deploy
+    ports:
+      - "8115:8115"
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web015-dev-secret}
+      - PATCH_WEB_015=false
+    mem_limit: 160m
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]

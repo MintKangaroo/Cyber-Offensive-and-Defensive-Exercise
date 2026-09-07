@@ -13,7 +13,7 @@
 
 ## 완성도 · 검증 현황
 
-![status](https://img.shields.io/badge/status-operational-2aa25c) ![challenges](https://img.shields.io/badge/challenges-74%2F74-2aa25c) ![tests](https://img.shields.io/badge/unit-557%20passed-2aa25c) ![ci](https://img.shields.io/badge/CI-7%2F7-2aa25c)
+![status](https://img.shields.io/badge/status-operational-2aa25c) ![challenges](https://img.shields.io/badge/challenges-77%2F77-2aa25c) ![tests](https://img.shields.io/badge/unit-557%20passed-2aa25c) ![ci](https://img.shields.io/badge/CI-7%2F7-2aa25c)
 
 **운영 준비 완료(operational).** 4주차 전면 보안 감사(Showstopper 11건 · 35개 항목)를 전량 리메디에이션했고,
 감사 §6 미검증 10건과 경쟁표준 갭(DEF CON/CCE G-1~G-14)까지 전부 해소했습니다. 남은 항목은
@@ -733,7 +733,7 @@ docker compose down
 
 **소개 · 구조**
 - [무엇을 하는 플랫폼인가](#무엇을-하는-플랫폼인가) · [아키텍처](#아키텍처) · [주요 화면](#주요-화면-스크린샷) · [핵심 기능](#핵심-기능)
-- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (74종)](#챌린지-카탈로그-74종)
+- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (77종)](#챌린지-카탈로그-77종)
 
 **시작 · 품질 · 접근제어**
 - [처음 시작하기](#처음-시작하기) · [경기 운영 방법](#경기-운영-방법) · [빠른 시작](#빠른-시작)
@@ -1043,7 +1043,7 @@ patched/vulnerable 상태를 한 번에 판정합니다.
 
 ---
 
-## 챌린지 카탈로그 (74종)
+## 챌린지 카탈로그 (77종)
 
 web·pwn·forensics·network·reversing·detection·ai·ICS/OT 8개 분야가 모두 **easy → medium → hard → insane** 난이도 곡선을 갖추고 있습니다.
 표기: `점수(Red/Blue)`. 팀마다 플래그·정답이 HMAC으로 달라 답 공유가 불가능합니다.
@@ -1061,7 +1061,7 @@ web·pwn·forensics·network·reversing·detection·ai·ICS/OT 8개 분야가 �
 > 개별 기동: `cd challenges/<cat>/<ID>/deploy && CHALLENGE_SECRET=<secret> docker compose up -d --build`
 
 <details open>
-<summary><b>🌐 Web (11)</b></summary>
+<summary><b>🌐 Web (14)</b></summary>
 
 | ID | 제목 | 난이도 | ATT&CK | 점수 |
 |---|---|---|---|---|
@@ -1073,7 +1073,10 @@ web·pwn·forensics·network·reversing·detection·ai·ICS/OT 8개 분야가 �
 | WEB-004 | 파일 다운로드 경로 순회 | medium | T1083 | 120/50 |
 | WEB-012 | 시흥무역항 화물 통제 — 클라이언트 로직 자동화 · **CCE형 국가기반시설** | medium | T1059.007 | 150/150 |
 | WEB-013 | 철도관제센터 신호 피드 — SSRF · **CCE형 국가기반시설** | medium | T1190,T1090 | 150/150 |
+| WEB-014 | K-water 수자원 관제 리포트 — XXE · **인프라 확장** | medium | T1190,T1005 | 150/150 |
 | WEB-007 | 그림인 척 — Upload Filter Bypass | medium | T1190,T1505.003 | 150/150 |
+| WEB-015 | 전력거래소 급전 관제 — JWT 알고리즘 혼동(RS→HS) · **인프라 확장** | hard | T1078,T1552.004 | 200/200 |
+| WEB-016 | 재난 긴급 에너지 바우처 — 레이스 컨디션(TOCTOU) · **인프라 확장** | hard | T1499,T1068 | 180/180 |
 | WEB-005 | 복원의 대가 — Historian 역직렬화 RCE | hard | T1059,T1203 | 250/250 |
 | WEB-009 | WAF 우회 + 블라인드 SQL 인젝션 | insane | T1190 | 300/150 |
 </details>
