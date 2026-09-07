@@ -19,7 +19,7 @@ beginner-defense:
 	python3 -m scripts.beginner_defense
 
 attack-defense-demo:
-	$(COMPOSE) up -d --build auth attack_defense ad_registry ad_team_01_notes ad_team_01_vault ad_team_02_notes ad_team_02_vault ad_team_03_notes ad_team_03_vault
+	$(COMPOSE) up -d --build auth attack_defense ad_registry ad_team_01_notes ad_team_01_vault ad_team_02_notes ad_team_02_vault ad_team_03_notes ad_team_03_vault ad_team_01_grid ad_team_02_grid ad_team_03_grid
 	python3 -m scripts.bootstrap_attack_defense_demo
 
 attack-defense-test:

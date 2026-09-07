@@ -238,6 +238,17 @@ class HttpWorkflowChecker:
                         f"{instance['endpoint']}/api/files", params={"path": path}, headers=auth
                     )
                     return got.status_code == 200 and got.json().get("content") == marker
+                if checker_type == "grid_scada":
+                    created = client.post(
+                        f"{instance['endpoint']}/api/points",
+                        json={"label": f"pt-{nonce}", "value": marker}, headers=auth,
+                    )
+                    if created.status_code != 201:
+                        return False
+                    got = client.get(
+                        f"{instance['endpoint']}/api/points/{created.json()['id']}", headers=auth
+                    )
+                    return got.status_code == 200 and got.json().get("value") == marker
                 raise RuntimeError("unknown checker type")
         return self._request("benign_workflow", run)
 

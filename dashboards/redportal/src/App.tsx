@@ -11,6 +11,17 @@ const MODE_KEY = "redportal_mode";
 type PortalMode = "beginner" | "advanced";
 
 function storedMode(): PortalMode {
+  // URL ?mode=advanced|beginner 가 있으면 그것을 우선 적용하고 저장한다(저장된 값 덮어씀).
+  // 링크 하나로 고급(워크벤치) 모드를 바로 열 수 있게 한다.
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get("mode");
+    if (fromUrl === "advanced" || fromUrl === "beginner") {
+      localStorage.setItem(MODE_KEY, fromUrl);
+      return fromUrl;
+    }
+  } catch {
+    /* window/localStorage 미가용 시 무시 */
+  }
   return localStorage.getItem(MODE_KEY) === "advanced" ? "advanced" : "beginner";
 }
 

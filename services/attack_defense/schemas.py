@@ -31,7 +31,7 @@ class ServiceCreateRequest(BaseModel):
     base_image: str = Field(min_length=3, max_length=300)
     base_image_digest: str | None = Field(default=None, max_length=80)
     internal_port: int = Field(ge=1, le=65535)
-    checker_type: str = Field(pattern=r"^(vulnerable_notes|file_vault)$")
+    checker_type: str = Field(pattern=r"^(vulnerable_notes|file_vault|grid_scada)$")
     config: dict[str, Any] = Field(default_factory=dict)
 
 
