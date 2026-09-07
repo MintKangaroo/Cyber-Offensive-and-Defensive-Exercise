@@ -1,0 +1,41 @@
+challenge:
+  id: "PWN-000"
+  title: "LNG 경보센터 - 경보 버퍼 스택 오버플로우(ret2win)"
+  category: "pwn"
+  difficulty: "medium"
+  points: { red: 200, blue: 200 }
+  asset: "lng_terminal"
+  mitre: [T1203, T1068]
+
+  description: |
+    국가 LNG 인수기지 경보센터 제어 콘솔(원격 TCP 서비스)이다. "경보 메시지 설정" 메뉴가
+    입력 길이를 검증하지 않아 스택 버퍼를 넘겨 저장된 복귀주소를 덮어쓸 수 있다. 바이너리
+    안에는 정상 메뉴로는 절대 호출되지 않는 emergency_override() 가 있고, 이 함수가 서버의
+    안전 인터록 해제 토큰(flag)을 출력한다. 복귀주소를 이 함수로 돌려 토큰을 탈취하라.
+    (실제 2025 사이버공격방어대회 본선 "LNG경보센터" 포너블 문제를 재구성한 훈련 문제)
+
+  red_task:
+    goal: "경보 메시지 버퍼 오버플로우로 복귀주소를 emergency_override 로 덮어써(ret2win) flag 를 출력시켜라"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 20, text: "제공된 정적 바이너리(no-PIE)를 objdump 해서 emergency_override 의 주소와 버퍼→복귀주소 오프셋을 구하라." }
+      - { cost: 35, text: "버퍼 64 + 저장된 rbp 8 = 72바이트 뒤가 복귀주소다." }
+      - { cost: 50, text: "emergency_override 가 printf 를 호출하므로 16바이트 스택정렬이 필요하다. 복귀주소 앞에 ret 가젯 하나를 끼워 정렬을 맞춰라." }
+
+  blue_task:
+    goal: "고정 크기 버퍼에 대한 무검증 입력을 제거하고 경계 검사로 오버플로우를 차단"
+    success_criteria: |
+      (1) 비정상적으로 긴 경보 메시지 입력에서 크래시/제어흐름 이탈 관측
+      (2) 패치(입력 길이 제한/스택 보호) 후 오버플로우 페이로드로 emergency_override 에 도달 불가
+    points_breakdown: { detection: 60, patch: 140 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["lng"]
+  safety:
+    profile: "hardened"
+    notes: "실제 메모리 손상이 발생하는 원격 바이너리. cap_drop/pids_limit/mem_limit 로 하드닝, 연결당 60초 타임아웃. 아웃바운드 없음."

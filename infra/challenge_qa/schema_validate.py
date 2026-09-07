@@ -12,7 +12,7 @@ import yaml
 
 REQUIRED_TOP = ["id", "title", "category", "difficulty", "points"]
 VALID_DIFFICULTY = {"easy", "medium", "hard", "insane"}
-VALID_CATEGORY = {"web", "forensics", "detection", "ai", "reversing", "network", "ics"}
+VALID_CATEGORY = {"web", "forensics", "detection", "ai", "reversing", "network", "ics", "pwn"}
 
 
 def find_challenge_dir(challenge_id: str, challenges_root: Path) -> Path | None:
