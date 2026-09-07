@@ -81,8 +81,14 @@ def bootstrap(start: bool = True) -> dict:
         "team-02": "http://ad_team_02_vault:9000",
         "team-03": "http://ad_team_03_vault:9000",
     }
+    endpoint_grid = {
+        "team-01": "http://ad_team_01_grid:9000",
+        "team-02": "http://ad_team_02_grid:9000",
+        "team-03": "http://ad_team_03_grid:9000",
+    }
     management_notes = {k: v.replace(":9000", ":9001") for k, v in endpoint_notes.items()}
     management_vault = {k: v.replace(":9000", ":9001") for k, v in endpoint_vault.items()}
+    management_grid = {k: v.replace(":9000", ":9001") for k, v in endpoint_grid.items()}
     call("POST", f"/api/attack-defense/matches/{MATCH_ID}/services", {
         "id": "service-vulnerable-notes", "slug": "vulnerable-notes",
         "name": "Vulnerable Notes", "base_image": "cyber-range/ad-vulnerable-notes:base",
@@ -118,6 +124,25 @@ def bootstrap(start: bool = True) -> dict:
             "runtime_id_by_team": {
                 "team-01": "ad_team_01_vault", "team-02": "ad_team_02_vault",
                 "team-03": "ad_team_03_vault",
+            },
+        },
+    })
+    call("POST", f"/api/attack-defense/matches/{MATCH_ID}/services", {
+        "id": "service-grid-scada", "slug": "grid-scada",
+        "name": "Grid SCADA HMI", "base_image": "cyber-range/ad-grid-scada:base",
+        "base_image_digest": _local_image_digest(
+            "cyber-range/ad-grid-scada:base"
+        ),
+        "internal_port": 9000, "checker_type": "grid_scada",
+        "config": {
+            "endpoint_by_team": endpoint_grid,
+            "management_endpoint_by_team": management_grid,
+            "public_port_by_team": {
+                "team-01": 9301, "team-02": 9302, "team-03": 9303,
+            },
+            "runtime_id_by_team": {
+                "team-01": "ad_team_01_grid", "team-02": "ad_team_02_grid",
+                "team-03": "ad_team_03_grid",
             },
         },
     })

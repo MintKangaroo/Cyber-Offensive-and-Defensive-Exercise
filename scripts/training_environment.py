@@ -71,7 +71,7 @@ DASHBOARDS = (
 )
 
 A_D_BUILD_SERVICES = (
-    "attack_defense", "ad_team_01_notes", "ad_team_01_vault",
+    "attack_defense", "ad_team_01_notes", "ad_team_01_vault", "ad_team_01_grid",
 )
 
 

@@ -642,6 +642,61 @@ services:
           subpath: attack_defense
     networks: [ad_team_access, ad_game_attack]
 
+  # 국가기반시설 A/D 타깃: 전력망 SCADA HMI(팀별 인스턴스). 취약점=제어포인트 인가 누락.
+  ad_team_01_grid:
+    depends_on:
+      siem_logs_init:
+        condition: service_completed_successfully
+    <<: *ad-service-security
+    image: ${AD_IMAGE_AD_TEAM_01_GRID:-cyber-range/ad-grid-scada:base}
+    build: { context: ., dockerfile: services/attack_defense/demo_services/grid_scada/Dockerfile }
+    ports: ["9301:9000"]
+    environment: *ad-service-env
+    volumes:
+      - ad_team_01_grid_data:/data
+      - type: volume
+        source: siem_logs
+        target: /var/log/siem/attack_defense
+        volume:
+          subpath: attack_defense
+    networks: [ad_team_access, ad_game_attack]
+
+  ad_team_02_grid:
+    depends_on:
+      siem_logs_init:
+        condition: service_completed_successfully
+    <<: *ad-service-security
+    image: ${AD_IMAGE_AD_TEAM_02_GRID:-cyber-range/ad-grid-scada:base}
+    build: { context: ., dockerfile: services/attack_defense/demo_services/grid_scada/Dockerfile }
+    ports: ["9302:9000"]
+    environment: *ad-service-env
+    volumes:
+      - ad_team_02_grid_data:/data
+      - type: volume
+        source: siem_logs
+        target: /var/log/siem/attack_defense
+        volume:
+          subpath: attack_defense
+    networks: [ad_team_access, ad_game_attack]
+
+  ad_team_03_grid:
+    depends_on:
+      siem_logs_init:
+        condition: service_completed_successfully
+    <<: *ad-service-security
+    image: ${AD_IMAGE_AD_TEAM_03_GRID:-cyber-range/ad-grid-scada:base}
+    build: { context: ., dockerfile: services/attack_defense/demo_services/grid_scada/Dockerfile }
+    ports: ["9303:9000"]
+    environment: *ad-service-env
+    volumes:
+      - ad_team_03_grid_data:/data
+      - type: volume
+        source: siem_logs
+        target: /var/log/siem/attack_defense
+        volume:
+          subpath: attack_defense
+    networks: [ad_team_access, ad_game_attack]
+
   # Fixed management-only sandbox. The trusted host runtime runner starts this
   # profile with a digest-pinned candidate image; no port is published.
   ad_patch_sandbox:
@@ -1678,4 +1733,7 @@ volumes:
   ad_team_02_vault_data: {}
   ad_team_03_notes_data: {}
   ad_team_03_vault_data: {}
+  ad_team_01_grid_data: {}
+  ad_team_02_grid_data: {}
+  ad_team_03_grid_data: {}
   siem_logs:
