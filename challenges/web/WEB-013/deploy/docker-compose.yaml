@@ -1,0 +1,15 @@
+services:
+  web013_deploy:
+    build:
+      context: .
+    container_name: web013_deploy
+    ports:
+      - "8113:8113"
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web013-dev-secret}
+      - PATCH_WEB_013=false
+    mem_limit: 128m
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
