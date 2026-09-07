@@ -45,6 +45,8 @@ services:
       - DATA_DIR=/data
       - SERVICE_TOKEN=${SERVICE_TOKEN:-}          # 감사 3.1: ingest 토큰 게이트
       - RBAC_ALLOW_INSECURE_DEV=${RBAC_ALLOW_INSECURE_DEV:-}
+      # 그룹 커밋 배치 상한(이벤트당 커밋→배치 커밋). 1=배치 비활성(이벤트당 커밋).
+      - INGEST_BATCH_MAX_SIZE=${INGEST_BATCH_MAX_SIZE:-256}
     ports: ["8010:8010"]
     # 격리된 트윈들이 이벤트를 보낼 수 있도록 각 twin_* internal 네트워크에도 연결.
     networks: [range_control]

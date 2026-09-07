@@ -22,24 +22,33 @@ from contextlib import asynccontextmanager
 
 
 def _hooks(app):
-    """app 에 startup hook 목록을 부착하고(최초 1회), 그때 lifespan 을 지연 설치해 반환."""
-    hooks = getattr(app.state, "_startup_hooks", None)
-    if hooks is not None:
-        return hooks
+    """app 에 startup/shutdown hook 목록을 부착하고(최초 1회), 그때 lifespan 을 지연 설치.
+    반환: (startup_hooks, shutdown_hooks) 튜플."""
+    startup = getattr(app.state, "_startup_hooks", None)
+    if startup is not None:
+        return startup, app.state._shutdown_hooks
 
-    hooks = []
-    app.state._startup_hooks = hooks
+    startup = []
+    shutdown = []
+    app.state._startup_hooks = startup
+    app.state._shutdown_hooks = shutdown
     prev = app.router.lifespan_context   # 기존(기본 또는 사용자) lifespan 보존
 
     @asynccontextmanager
     async def _lifespan(a):
-        for hook in list(hooks):
+        for hook in list(startup):
             await hook()
         async with prev(a):
             yield
+        # 종료 시퀀스: 등록 역순으로 실행(배선의 역순 해제). 하나가 실패해도 나머지는 진행.
+        for hook in reversed(list(shutdown)):
+            try:
+                await hook()
+            except Exception:
+                pass
 
     app.router.lifespan_context = _lifespan
-    return hooks
+    return startup, shutdown
 
 
 def on_startup(app):
@@ -48,6 +57,18 @@ def on_startup(app):
     데코된 async 함수(인자 없음)를 app 의 startup 시퀀스에 등록한다. 데코레이터 자체는
     함수를 그대로 돌려주므로 필요하면 직접 호출도 가능하다."""
     def deco(func):
-        _hooks(app).append(func)
+        _hooks(app)[0].append(func)
+        return func
+    return deco
+
+
+def on_shutdown(app):
+    """`@app.on_event("shutdown")` 의 lifespan 기반 대체 데코레이터.
+
+    데코된 async 함수(인자 없음)를 app 종료 시퀀스에 등록한다(등록 역순 실행). 백그라운드
+    태스크 취소·커넥션 정리 등 정상 종료(graceful shutdown)에 쓴다 — 취소하지 않으면
+    무한 루프 태스크가 lifespan 종료를 지연시켜 컨테이너 stop 이 SIGKILL 까지 매달린다."""
+    def deco(func):
+        _hooks(app)[1].append(func)
         return func
     return deco
