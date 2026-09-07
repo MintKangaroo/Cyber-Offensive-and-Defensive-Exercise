@@ -23,13 +23,18 @@ services:
   # 감사 2.5/4.3 fix: siem_logs 섹터 subpath는 디렉터리가 미리 있어야 마운트되고, 비root
   # 서비스(팀 서비스 uid65532 등)가 쓰려면 권한이 필요하다. 이 init이 전 섹터 디렉터리를
   # 생성+개방(777)한 뒤 종료하며, siem_logs를 쓰는 모든 서비스가 이를 먼저 기다린다.
+  # 혼합 권한 모델: siem_logs 는 서로 다른 uid 로 쓰는 서비스가 공유한다(팀 서비스 uid65532,
+  # 컨트롤플레인 root 등) → 기본은 777. 단 하드닝 오버레이 대상 3개 트윈(ground/power/defense)
+  # 섹터는 uid1000 소유·750 으로 좁혀, 그 트윈들을 user:1000(비root)로 돌릴 수 있게 한다
+  # (world-writable 제거 = 섹터 격리 강화). root(siem_api 등)는 750 도 읽으므로 인제스트 불변.
+  # chown -R 로 기존 파일까지 소유 이전(base 런에서 root가 만든 로그가 있어도 정합).
   siem_logs_init:
     image: alpine:3.20
     command:
       - sh
       - -c
       - >-
-        mkdir -p /v/ground_station /v/power_plant /v/defense_network /v/refinery_plant /v/smart_factory /v/water_utility /v/lng_terminal /v/railway_signaling /v/airport_ot /v/datacenter_bms /v/hospital_ot /v/cloud_native /v/attack_defense && chmod 777 /v /v/*
+        mkdir -p /v/ground_station /v/power_plant /v/defense_network /v/refinery_plant /v/smart_factory /v/water_utility /v/lng_terminal /v/railway_signaling /v/airport_ot /v/datacenter_bms /v/hospital_ot /v/cloud_native /v/attack_defense && chmod 777 /v /v/* && chown -R 1000:1000 /v/ground_station /v/power_plant /v/defense_network && chmod 750 /v/ground_station /v/power_plant /v/defense_network
     volumes:
       - siem_logs:/v
     restart: "no"
