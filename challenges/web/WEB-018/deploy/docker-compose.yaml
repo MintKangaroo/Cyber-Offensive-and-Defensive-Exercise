@@ -1,0 +1,15 @@
+services:
+  web018_deploy:
+    build:
+      context: .
+    container_name: web018_deploy
+    ports:
+      - "8118:8118"
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web018-dev-secret}
+      - PATCH_WEB_018=false
+    mem_limit: 128m
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]

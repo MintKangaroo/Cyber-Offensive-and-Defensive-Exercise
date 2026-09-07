@@ -1,0 +1,13 @@
+services:
+  web017_deploy:
+    build:
+      context: .
+    container_name: web017_deploy
+    ports:
+      - "8117:8117"
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web017-dev-secret}
+      - PATCH_WEB_017=false
+    mem_limit: 160m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]

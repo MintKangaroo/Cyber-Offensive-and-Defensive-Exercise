@@ -1,0 +1,40 @@
+challenge:
+  id: "PWN-001"
+  title: "정수처리장 로그 콘솔 - 포맷 스트링 정보 유출"
+  category: "pwn"
+  difficulty: "medium"
+  points: { red: 180, blue: 180 }
+  asset: "water_utility"
+  mitre: [T1203, T1005]
+
+  description: |
+    국가 정수처리장(K-water) 운영 로그 콘솔(원격 TCP)이 로그 메시지를 printf 로 그대로
+    출력한다. 포맷 스트링 취약점으로 스택을 읽어, 지역변수로 올라온 비상 대응 토큰(flag)
+    포인터를 %N$s 로 역참조해 유출하라.
+    (인프라 테마 신규 취약점 유형 확장 — 포맷 스트링; PWN-000 스택오버플로우와 구분)
+
+  red_task:
+    goal: "로그 메시지의 포맷 스트링 취약점으로 스택의 flag 포인터를 %N$s 로 유출하라"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 15, text: "로그 메시지에 %p 를 여러 개 넣어보라. 스택 값이 그대로 출력된다(포맷 스트링)." }
+      - { cost: 30, text: "flag 는 스택의 포인터다. %N$s 로 N 번째 인자를 문자열로 역참조하라." }
+      - { cost: 45, text: "N 을 1..40 스캔하면 flag{ 가 나오는 오프셋을 찾는다(연결마다 새 프로세스)." }
+
+  blue_task:
+    goal: "포맷 문자열을 상수로 고정(printf(\"%s\", buf))하고 -Werror=format-security 강제"
+    success_criteria: |
+      (1) 로그 입력에 포맷 지정자(%p/%s/%N$)가 포함된 요청 관측
+      (2) 패치 후 포맷 지정자가 문자 그대로 출력되고 스택 유출 불가
+    points_breakdown: { detection: 60, patch: 120 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["ptp"]
+  safety:
+    profile: "hardened"
+    notes: "원격 바이너리. cap_drop/pids_limit/mem_limit, 연결당 30초 타임아웃, 아웃바운드 없음."

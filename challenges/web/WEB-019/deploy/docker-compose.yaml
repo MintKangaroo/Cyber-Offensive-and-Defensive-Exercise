@@ -1,0 +1,15 @@
+services:
+  web019_deploy:
+    build:
+      context: .
+    container_name: web019_deploy
+    ports:
+      - "8119:8119"
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web019-dev-secret}
+      - PATCH_WEB_019=false
+    mem_limit: 160m
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
