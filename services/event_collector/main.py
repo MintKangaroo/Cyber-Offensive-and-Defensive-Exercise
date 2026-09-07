@@ -24,7 +24,7 @@ from starlette.websockets import WebSocketState
 import sys
 sys.path.append(str(Path(__file__).parent.parent.parent))  # repo root (shared/ 위치)
 from shared.event_schema import Event  # noqa: E402
-from shared.lifespan import on_startup  # noqa: E402
+from shared.lifespan import on_startup, on_shutdown  # noqa: E402
 
 APP_DIR = Path(__file__).parent
 DB_PATH = Path(os.environ.get("DATA_DIR", str(APP_DIR))) / "events.db"  # 볼륨 마운트로 영속(P0-3)
@@ -85,13 +85,31 @@ def get_db():
     return conn
 
 
-# --- ingest 쓰기 최적화 (U-3 포화점 ~75 EPS 병목 해소) --------------------------
-# 병목은 fsync 자체가 아니라(이미 WAL+synchronous=NORMAL) ① 요청마다 커넥션 open+PRAGMA
-# ② 동기 SQLite 작업이 async 이벤트 루프를 블록하는 것이었다. 단일 워커 executor에
-# 영속 커넥션을 두고 쓰기를 이벤트 루프 밖에서 직렬 수행한다(커밋-당-이벤트·중복검사
-# 시맨틱은 그대로). 워커가 하나뿐이라 커넥션은 항상 같은 스레드에서만 쓰여 락이 불필요하다.
+# --- ingest 쓰기 최적화 (U-3 포화점 병목 해소 → 그룹 커밋) -----------------------
+# 1차(75→450 EPS): 요청마다 커넥션 open+PRAGMA 하던 것을 단일 워커 executor의 영속
+# 커넥션으로 옮기고 async 루프 블로킹을 제거했다. 워커가 하나뿐이라 커넥션은 항상 같은
+# 스레드에서만 쓰여 락이 불필요하다.
+# 2차(≥600 EPS 병목): 남은 천장은 "이벤트당 commit". 단일 writer가 초당 낼 수 있는 커밋
+# 수가 유한하므로, 이벤트마다 트랜잭션을 열고 fsync 하면 그 커밋 레이트가 곧 처리량 상한이
+# 된다. → **그룹 커밋**: 큐에 쌓인 이벤트를 한 트랜잭션(INSERT 여러 건 + commit 1회)으로
+# 모은다. 저부하에선 큐가 비어 배치 크기 1(추가 지연 0), 고부하에선 writer가 커밋하는 동안
+# 쌓인 이벤트를 다음 배치로 한꺼번에 흘려 커밋 1회에 N건을 처리한다(자기조정 group commit).
+# 내구성·중복검사·응답 시맨틱은 그대로: 각 요청은 자기 이벤트가 포함된 배치가 commit 된
+# 뒤에야 stored 결과를 받는다.
 _write_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="evt-writer")
 _writer_conn: Optional[sqlite3.Connection] = None
+_INGEST_BATCH_MAX = int(os.environ.get("INGEST_BATCH_MAX_SIZE", "256"))
+# (event, Future[bool]) 큐 — 배치 라이터 루프가 소비. startup 에서 러닝 루프에 바인딩되게
+# 생성한다(모듈 로드 시점에 만들면 uvicorn 이 만드는 실제 서빙 루프와 다른 루프에 묶일 수
+# 있어 put/get 이 어긋난다).
+_ingest_queue: "Optional[asyncio.Queue[tuple[Event, asyncio.Future]]]" = None
+
+
+def _get_ingest_queue() -> "asyncio.Queue[tuple[Event, asyncio.Future]]":
+    global _ingest_queue
+    if _ingest_queue is None:
+        _ingest_queue = asyncio.Queue()
+    return _ingest_queue
 
 
 def _writer_connection() -> sqlite3.Connection:
@@ -105,29 +123,79 @@ def _writer_connection() -> sqlite3.Connection:
     return _writer_conn
 
 
-def _persist_event(event: "Event") -> bool:
-    """중복검사 + INSERT + commit 을 영속 커넥션에서 블로킹 수행. writer executor(단일
-    스레드)에서만 호출되므로 직렬화가 보장돼 별도 락이 필요 없다. 반환: 신규 저장 여부."""
+def _persist_batch(events: "list[Event]") -> "list[bool]":
+    """이벤트 배치를 단일 트랜잭션(INSERT OR IGNORE 여러 건 + commit 1회)으로 저장한다.
+    writer executor(단일 스레드)에서만 호출되므로 직렬화가 보장돼 락이 불필요하다.
+    반환: 입력 순서에 정렬된 신규 저장 여부 리스트.
+
+    중복검사는 `INSERT OR IGNORE`(PRIMARY KEY event_id 충돌 시 무시)로 SQLite(C) 안에서
+    한 번에 처리한다 — 이벤트당 SELECT+INSERT 2회 왕복을 1회로 줄여 단일 writer 스레드의
+    CPU 부담을 낮춘다(0.75 CPU 캡·고 EPS에서 병목 완화). 같은 배치 안의 중복 event_id 도
+    같은 커넥션의 미커밋 INSERT 가 제약검사에 보이므로 두 번째는 무시된다(별도 seen 집합 불필요).
+    신규 저장 여부는 각 INSERT 직후 cursor.rowcount(삽입=1, 무시=0)로 판정한다.
+
+    배치 전체가 한 트랜잭션이라 commit 실패 시 전부 롤백되고 예외가 호출측(각 요청)으로
+    전파된다 — 기존 커밋-당-이벤트와 동일하게 부분 성공을 만들지 않는다."""
     conn = _writer_connection()
-    if conn.execute("SELECT 1 FROM events WHERE event_id = ?", (event.event_id,)).fetchone():
-        return False
-    conn.execute(
-        """
-        INSERT INTO events (event_id, event_type, timestamp, actor, team_id,
-                             scenario_id, target_asset, vuln_id, phase,
-                             trace_id, matched_event_id, challenge_id, schema_version, metadata)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            event.event_id, event.event_type.value, event.timestamp, event.actor,
-            event.team_id, event.scenario_id, event.target_asset, event.vuln_id,
-            event.phase.value if event.phase else None,
-            event.trace_id, event.matched_event_id, event.challenge_id, event.schema_version,
-            json.dumps(event.metadata),
-        ),
-    )
-    conn.commit()
-    return True
+    results: list[bool] = []
+    wrote = False
+    for event in events:
+        cur = conn.execute(
+            """
+            INSERT OR IGNORE INTO events (event_id, event_type, timestamp, actor, team_id,
+                                 scenario_id, target_asset, vuln_id, phase,
+                                 trace_id, matched_event_id, challenge_id, schema_version, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event.event_id, event.event_type.value, event.timestamp, event.actor,
+                event.team_id, event.scenario_id, event.target_asset, event.vuln_id,
+                event.phase.value if event.phase else None,
+                event.trace_id, event.matched_event_id, event.challenge_id,
+                event.schema_version, json.dumps(event.metadata),
+            ),
+        )
+        is_new = cur.rowcount == 1   # OR IGNORE 로 충돌 무시 시 rowcount=0
+        wrote = wrote or is_new
+        results.append(is_new)
+    if wrote:
+        conn.commit()  # 배치당 커밋 1회 = 그룹 커밋
+    return results
+
+
+async def _batch_writer_loop():
+    """ingest 큐를 소비해 그룹 커밋으로 흘리는 배치 라이터.
+
+    첫 항목을 블로킹 대기한 뒤, 큐에 이미 쌓인 것들을 get_nowait 로 배치 상한까지 흡수한다.
+    저부하: 큐가 비어 배치=1(지연 0). 고부하: writer 가 이전 배치를 commit 하는 동안 새
+    이벤트가 큐에 쌓이므로 다음 배치가 커져 커밋 1회에 N건 → 처리량이 커밋 레이트에 묶이지
+    않는다. 인위적 타이머 지연 없이 부하에 따라 배치 크기가 자기조정된다."""
+    loop = asyncio.get_running_loop()
+    queue = _get_ingest_queue()
+    while True:
+        first = await queue.get()
+        batch = [first]
+        while len(batch) < _INGEST_BATCH_MAX:
+            try:
+                batch.append(queue.get_nowait())
+            except asyncio.QueueEmpty:
+                break
+        events = [e for e, _ in batch]
+        try:
+            results = await loop.run_in_executor(_write_executor, _persist_batch, events)
+        except Exception as exc:  # 커밋 실패 등 → 배치 전 요청에 예외 전파(부분성공 없음)
+            for _, fut in batch:
+                if not fut.done():
+                    fut.set_exception(exc)
+            continue
+        _METRICS["ingest_batches"] += 1
+        _METRICS["ingest_committed"] += sum(1 for r in results if r)
+        _METRICS["ingest_batch_max_observed"] = max(
+            _METRICS["ingest_batch_max_observed"], len(batch)
+        )
+        for (_, fut), is_new in zip(batch, results):
+            if not fut.done():
+                fut.set_result(is_new)
 
 
 def init_db():
@@ -184,6 +252,9 @@ _METRICS = {
     "dlq_spooled": 0,        # 즉시 전달 최종 실패 → DLQ 적재
     "dlq_redelivered": 0,    # DLQ에서 재전달 성공
     "dlq_drop": 0,           # (예약) 영구 실패로 폐기
+    "ingest_batches": 0,          # 그룹 커밋 배치 수(=커밋 횟수)
+    "ingest_committed": 0,        # 배치로 신규 저장된 이벤트 수
+    "ingest_batch_max_observed": 0,  # 관측된 최대 배치 크기(그룹 커밋 효과 지표)
 }
 _FORWARD_ATTEMPTS = int(os.environ.get("SCORING_FORWARD_ATTEMPTS", "3"))
 _DLQ_DRAIN_INTERVAL = float(os.environ.get("SCORING_DLQ_DRAIN_SEC", "10"))
@@ -207,10 +278,38 @@ def _prune_old_events() -> int:
 init_db()
 
 
+_background_tasks: "list[asyncio.Task]" = []
+
+
 @on_startup(app)
 async def startup():
+    # 그룹 커밋 배치 라이터 기동(ingest 큐 소비 → 배치 커밋).
+    _background_tasks.append(asyncio.create_task(_batch_writer_loop()))
     # 감사 3.5: DLQ 드레인 루프 기동(scoring 복구 시 스풀 이벤트 재전달).
-    asyncio.create_task(_dlq_drain_loop())
+    _background_tasks.append(asyncio.create_task(_dlq_drain_loop()))
+
+
+@on_shutdown(app)
+async def shutdown():
+    # 무한 루프 백그라운드 태스크 + 진행 중 포워딩 태스크를 취소해 lifespan 종료가 매달리지
+    # 않게 한다(미취소 시 컨테이너 stop 이 graceful timeout→SIGKILL 까지 지연).
+    pending = list(_background_tasks) + list(_forward_tasks)
+    for task in pending:
+        task.cancel()
+    for task in pending:
+        try:
+            await task
+        except BaseException:  # CancelledError 포함 — 취소 정리 중 예외는 무시
+            pass
+    _background_tasks.clear()
+    # 공유 httpx 클라이언트(연결 풀)를 닫는다 — 미닫으면 종료가 지연된다.
+    global _scoring_client
+    if _scoring_client is not None:
+        try:
+            await _scoring_client.aclose()
+        except Exception:
+            pass
+        _scoring_client = None
 
 
 @app.get("/metrics")
@@ -234,10 +333,12 @@ def health():
 async def ingest_event(event: Event, authorization: str = Header(default="")):
     # 감사 3.1: 내부 S2S(트윈·서비스) 전용. 무토큰 주입 차단(참가자망서 이벤트 위조 방지).
     require_service_token(authorization)
-    # 쓰기(중복검사+INSERT+commit)를 단일 writer executor로 오프로드 → 이벤트 루프가
-    # 블록되지 않아 동시 요청·브로드캐스트를 계속 처리(U-3 포화점 병목 해소).
+    # 쓰기를 배치 라이터 큐로 넘긴다 → 이벤트 루프는 블록되지 않고, 자기 이벤트가 포함된
+    # 배치가 commit 되면 future 로 stored 결과를 받는다(그룹 커밋으로 ≥600 EPS 병목 해소).
     loop = asyncio.get_running_loop()
-    is_new = await loop.run_in_executor(_write_executor, _persist_event, event)
+    fut: asyncio.Future = loop.create_future()
+    await _get_ingest_queue().put((event, fut))
+    is_new = await fut
     is_duplicate = not is_new
 
     # Dashboard 실시간 스트림으로 브로드캐스트 (중복이어도 UI 갱신은 상관없음)
@@ -249,7 +350,9 @@ async def ingest_event(event: Event, authorization: str = Header(default="")):
 
     # Scoring Engine에 전달 (신규 이벤트일 때만; 실패해도 이벤트 저장은 이미 완료됨)
     if not is_duplicate:
-        asyncio.create_task(_forward_to_scoring_engine(event))
+        task = asyncio.create_task(_forward_to_scoring_engine(event))
+        _forward_tasks.add(task)               # 종료 시 취소할 수 있게 추적
+        task.add_done_callback(_forward_tasks.discard)
 
     return {"stored": not is_duplicate, "duplicate": is_duplicate, "event_id": event.event_id}
 
@@ -267,6 +370,9 @@ def _lookup_matched_timestamp(matched_event_id: str) -> Optional[float]:
 # 포워딩이 scoring 지연 시 무제한 누적되지 않도록 세마포어로 동시성을 제한(초과분은 대기).
 _scoring_client: Optional[httpx.AsyncClient] = None
 _forward_sem = asyncio.Semaphore(int(os.environ.get("FORWARD_MAX_CONCURRENCY", "64")))
+# fire-and-forget 포워딩 태스크를 추적해 종료 시 취소한다(미취소·미닫힌 httpx 클라이언트가
+# lifespan 종료를 지연시켜 컨테이너 stop 이 매달리는 것을 막는다).
+_forward_tasks: "set[asyncio.Task]" = set()
 
 
 def _get_scoring_client() -> httpx.AsyncClient:
