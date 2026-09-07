@@ -1,0 +1,40 @@
+challenge:
+  id: "WEB-013"
+  title: "철도관제센터 신호 피드 - 서버측 요청 위조(SSRF)"
+  category: "web"
+  difficulty: "medium"
+  points: { red: 150, blue: 150 }
+  asset: "railway_control"
+  mitre: [T1190, T1090]
+
+  description: |
+    국가 철도 관제센터가 외부 "신호 피드" URL 을 서버가 대신 가져와 보여준다. 이 수집 기능이
+    목적지를 검증하지 않아, 서버만 접근 가능한 내부 엔드포인트를 대신 호출하게 만들 수 있다.
+    내부 전용 비상 관제 토큰(flag)을 SSRF 로 끌어내라.
+    (실제 CCE/코드게이트류 본선의 SSRF 결함을 국가 철도 기반시설 테마로 재구성)
+
+  red_task:
+    goal: "신호 피드 수집기(POST /api/signal/fetch)의 SSRF 로 내부 /internal/flag 를 서버가 대신 호출하게 해 flag 를 얻어라"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "fetch 는 서버가 대신 URL 을 가져온다. 대상이 외부여야 할 이유가 있는가?" }
+      - { cost: 20, text: "GET /internal/flag 를 직접 부르면 403(루프백 전용). 서버가 대신 부르게 하라." }
+      - { cost: 30, text: "url=http://127.0.0.1:8113/internal/flag 로 fetch 요청." }
+
+  blue_task:
+    goal: "fetch 목적지의 루프백/사설 대역을 차단해 SSRF 를 막기"
+    success_criteria: |
+      (1) fetch 파라미터가 내부/루프백을 가리키는 요청 관측
+      (2) 패치(PATCH_WEB_013=true) 후 내부 대상 fetch 는 400 으로 거부, 외부 정상 피드는 동작
+    points_breakdown: { detection: 50, patch: 100 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용. 내부 엔드포인트는 루프백 전용. 아웃바운드 fetch 는 타임아웃/리다이렉트 비활성."
