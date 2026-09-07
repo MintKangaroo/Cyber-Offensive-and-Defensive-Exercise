@@ -1,0 +1,40 @@
+challenge:
+  id: "WEB-016"
+  title: "재난 긴급 에너지 바우처 - 레이스 컨디션(TOCTOU 이중 청구)"
+  category: "web"
+  difficulty: "hard"
+  points: { red: 180, blue: 180 }
+  asset: "disaster_safety"
+  mitre: [T1499, T1068]
+
+  description: |
+    재난안전 긴급 에너지 바우처는 계정당 1장만 상환할 수 있다. 그러나 상환 처리가 '잔량 확인 →
+    차감' 사이에 시간 간격이 있어 원자적이지 않다. 동시에 여러 상환 요청을 보내 한도(1장)를
+    초과 상환(이중 청구)하면 비상 정산 토큰(flag)이 발급된다.
+    (인프라 테마 신규 취약점 유형 확장 — 레이스 컨디션/TOCTOU)
+
+  red_task:
+    goal: "바우처 발급 후 상환 요청을 동시 다발로 보내 한도를 초과 상환(레이스)해 flag 를 얻어라"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "/api/voucher/issue 로 계정을 만들면 잔량이 1이다. 순차 상환은 1번만 된다." }
+      - { cost: 20, text: "상환은 확인과 차감 사이에 지연이 있다. 순차가 아니라 '동시에' 여러 번 보내라." }
+      - { cost: 30, text: "스레드로 redeem 요청 여러 개를 동시에 발사(배리어 동기화)하면 redeemed>1 이 되며 flag." }
+
+  blue_task:
+    goal: "확인-차감을 원자화(락/조건부 업데이트)해 이중 청구 차단"
+    success_criteria: |
+      (1) 동일 계정 상환 요청이 짧은 창에 병렬 도착하는 패턴 관측
+      (2) 패치(PATCH_WEB_016=true) 후 동시 요청에도 상환은 1회만 성공
+    points_breakdown: { detection: 60, patch: 120 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용. 인메모리 계정, 더미 바우처. 레이스 윈도우는 학습용으로 확대(RACE_WINDOW_SEC)."

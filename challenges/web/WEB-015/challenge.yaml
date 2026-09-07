@@ -1,0 +1,40 @@
+challenge:
+  id: "WEB-015"
+  title: "전력거래소 급전 관제 - JWT 알고리즘 혼동(RS256→HS256)"
+  category: "web"
+  difficulty: "hard"
+  points: { red: 200, blue: 200 }
+  asset: "kpx"
+  mitre: [T1078, T1552.004]
+
+  description: |
+    국가 전력거래소(KPX) 급전 관제 API 는 RS256(비대칭)으로 서명한 JWT 를 발급하고 공개키를
+    공개한다. 그런데 토큰 검증이 RS256 과 HS256 을 모두 허용하면서 검증 키로 공개키를 그대로
+    사용한다. 공개키를 HMAC 비밀키로 악용해 관리자 토큰을 위조하라(알고리즘 혼동).
+    (인프라 테마 신규 취약점 유형 확장 — JWT RS/HS 알고리즘 혼동; WEB-002 alg=none 과 구분)
+
+  red_task:
+    goal: "공개키를 HMAC 키로 써 HS256 role=admin 토큰을 위조하고 GET /api/admin/flag 를 호출하라"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 15, text: "GET /api/auth/pubkey 로 공개키를 얻을 수 있고, 검증이 HS256 도 허용한다." }
+      - { cost: 30, text: "HS256 서명의 '비밀키'로 RSA 공개키 PEM 을 그대로 넣어 토큰을 만들면 검증을 통과한다." }
+      - { cost: 45, text: "jwt.encode({'role':'admin',...}, public_key_pem, algorithm='HS256')." }
+
+  blue_task:
+    goal: "검증 알고리즘을 RS256 으로 고정해 혼동 공격 차단"
+    success_criteria: |
+      (1) 발급(RS256)과 다른 alg(HS256) 토큰이 관리자 접근을 시도하는 흔적 관측
+      (2) 패치(PATCH_WEB_015=true) 후 HS256 위조 토큰은 401 로 거부
+    points_breakdown: { detection: 60, patch: 140 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용. 기동 시 RSA 키페어 생성. 공개키만 노출, 개인키는 미노출."

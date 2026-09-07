@@ -1,0 +1,13 @@
+services:
+  web014_deploy:
+    build:
+      context: .
+    container_name: web014_deploy
+    ports:
+      - "8114:8114"
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web014-dev-secret}
+      - PATCH_WEB_014=false
+    mem_limit: 128m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
