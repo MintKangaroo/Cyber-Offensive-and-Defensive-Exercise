@@ -1,0 +1,40 @@
+challenge:
+  id: "WEB-022"
+  title: "에너지 사용량 신고 CSV - 수식 인젝션(CSV Injection)"
+  category: "web"
+  difficulty: "easy"
+  points: { red: 120, blue: 120 }
+  asset: "energy_report"
+  mitre: [T1190, T1005]
+
+  description: |
+    에너지 사용량 신고 포털은 신고 라벨을 CSV 로 내보내고, 감사 뷰어가 그 CSV 를 열어 각 셀을
+    평가한다. 라벨이 수식(=로 시작)이면 실행되는데, 시트에는 일반 사용자가 접근할 수 없는 숨은
+    감사 셀(비상 토큰)이 있다. 수식 인젝션으로 그 셀을 참조해 flag 를 유출하라.
+    (인프라 테마 신규 취약점 유형 확장 — CSV/수식 인젝션)
+
+  red_task:
+    goal: "신고 라벨에 수식을 넣어 내보낸 CSV 를 여는 뷰어가 숨은 감사 셀(AUDIT_TOKEN)을 참조하게 하라"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "/api/report/export 는 라벨을 그대로 CSV 로 내보낸다. /api/report/open 은 그걸 '연다'." }
+      - { cost: 20, text: "= 로 시작하는 셀은 수식으로 평가된다. 숨은 셀 이름은 AUDIT_TOKEN." }
+      - { cost: 25, text: 'label 을 "=AUDIT_TOKEN" 으로 제출한 뒤 /api/report/open.' }
+
+  blue_task:
+    goal: "내보내기 시 위험 접두(=,+,-,@)를 이스케이프해 수식 실행 차단"
+    success_criteria: |
+      (1) 신고 필드가 =,+,-,@ 로 시작하는 요청 관측
+      (2) 패치(PATCH_WEB_022=true) 후 수식이 텍스트로 처리되어 셀 참조 불가
+    points_breakdown: { detection: 40, patch: 80 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용. 서버측 축소판 수식 평가기(=NAME 셀 참조만). 실제 명령 실행 없음."
