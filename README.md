@@ -13,7 +13,7 @@
 
 ## 완성도 · 검증 현황
 
-![status](https://img.shields.io/badge/status-operational-2aa25c) ![challenges](https://img.shields.io/badge/challenges-74%2F74-2aa25c) ![tests](https://img.shields.io/badge/unit-455%20passed-2aa25c) ![ci](https://img.shields.io/badge/CI-7%2F7-2aa25c)
+![status](https://img.shields.io/badge/status-operational-2aa25c) ![challenges](https://img.shields.io/badge/challenges-74%2F74-2aa25c) ![tests](https://img.shields.io/badge/unit-557%20passed-2aa25c) ![ci](https://img.shields.io/badge/CI-7%2F7-2aa25c)
 
 **운영 준비 완료(operational).** 4주차 전면 보안 감사(Showstopper 11건 · 35개 항목)를 전량 리메디에이션했고,
 감사 §6 미검증 10건과 경쟁표준 갭(DEF CON/CCE G-1~G-14)까지 전부 해소했습니다. 남은 항목은
@@ -1047,6 +1047,18 @@ patched/vulnerable 상태를 한 번에 판정합니다.
 
 web·pwn·forensics·network·reversing·detection·ai·ICS/OT 8개 분야가 모두 **easy → medium → hard → insane** 난이도 곡선을 갖추고 있습니다.
 표기: `점수(Red/Blue)`. 팀마다 플래그·정답이 HMAC으로 달라 답 공유가 불가능합니다.
+
+> **🇰🇷 CCE형 국가기반시설 Jeopardy** — 사이버공격방어대회(CCE) 본선 스타일의 국가기반시설 테마
+> 문제 세트입니다(실제 CCE 본선 write-up 참고). 서비스형(도커 배포)이라 실제로 공격해 플래그를 땁니다.
+>
+> | ID | 시설 | 취약점 | 난이도 | 포트 |
+> |---|---|---|---|---|
+> | WEB-011 | 한국석유공사 유가포털 | 권한 상승(Mass Assignment) | easy | 8111 |
+> | WEB-012 | 시흥무역항 화물 통제 | 클라이언트 로직 자동화(제한시간) | medium | 8112 |
+> | WEB-013 | 철도관제센터 신호 피드 | SSRF(내부 엔드포인트 탈취) | medium | 8113 |
+> | PWN-000 | LNG 경보센터 | 스택 오버플로우 ret2win(원격 바이너리) | medium | 9010 |
+>
+> 개별 기동: `cd challenges/<cat>/<ID>/deploy && CHALLENGE_SECRET=<secret> docker compose up -d --build`
 
 <details open>
 <summary><b>🌐 Web (11)</b></summary>
