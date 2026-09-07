@@ -1,0 +1,40 @@
+challenge:
+  id: "WEB-012"
+  title: "시흥무역항 화물 통제 - 클라이언트 로직 자동화"
+  category: "web"
+  difficulty: "medium"
+  points: { red: 150, blue: 150 }
+  asset: "trade_port"
+  mitre: [T1059.007]
+
+  description: |
+    국가 물류 기반시설인 시흥무역항의 화물 통관 게이트는 3단계 검증을 순서대로 통과해야
+    열린다. 각 단계의 계산 규칙은 통관 페이지(클라이언트)에 노출돼 있지만, START 후 짧은
+    제한시간 안에 3단계를 모두 통과해야 하므로 손이 아니라 규칙을 자동화해 풀어야 한다.
+    (실제 2025 사이버공격방어대회 본선 "시흥무역항"의 클라이언트 JS 다단계 로직 클리어를 재구성)
+
+  red_task:
+    goal: "3단계(하노이 최소이동·부호교대합·롤링체크섬)를 제한시간 안에 자동으로 통과해 flag 를 획득하라"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "GET / 페이지에 각 스테이지의 계산 규칙이 그대로 적혀 있다." }
+      - { cost: 20, text: "start 응답의 challenge.type 에 따라 답을 계산해 submit. 다음 challenge 가 응답에 들어온다." }
+      - { cost: 30, text: "제한시간(기본 10초) 때문에 수동은 불가 — start→submit×3 를 스크립트로 연속 호출하라." }
+
+  blue_task:
+    goal: "검증 규칙의 클라이언트 노출을 줄이고 파라미터 서명·레이트리밋으로 우회를 차단"
+    success_criteria: |
+      (1) 짧은 시간 내 다수 stage 통과 시도(자동화) 관측
+      (2) 강화(규칙 서버화/서명/레이트리밋) 후 재생·병렬 우회가 어려워짐
+    points_breakdown: { detection: 50, patch: 100 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용 더미 통관 로직. 순수 계산 자동화 문제(메모리/파일 손상 없음)."

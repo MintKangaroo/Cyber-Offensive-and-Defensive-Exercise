@@ -1,0 +1,15 @@
+services:
+  web012_deploy:
+    build:
+      context: .
+    container_name: web012_deploy
+    ports:
+      - "8112:8112"
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web012-dev-secret}
+      - STAGE_TIMEOUT=10
+    mem_limit: 128m
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
