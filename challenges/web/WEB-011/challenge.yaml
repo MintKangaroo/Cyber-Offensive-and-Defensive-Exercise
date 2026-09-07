@@ -1,0 +1,41 @@
+challenge:
+  id: "WEB-011"
+  title: "한국석유공사 유가알림 포털 - 권한 상승(Mass Assignment)"
+  category: "web"
+  difficulty: "easy"
+  points: { red: 100, blue: 100 }
+  asset: "oil_corp"
+  mitre: [T1078, T1068]
+
+  description: |
+    국가 에너지 기반시설인 한국석유공사의 디젤 유가 알림 포털이다. 일반 가입자는
+    유가 알림만 볼 수 있고, 내부 운영 문서(비상 대응 플래그)는 관리자만 열람할 수 있다.
+    회원가입 처리 로직이 클라이언트가 보낸 필드를 어디까지 신뢰하는지 확인하라.
+    (실제 2025 사이버공격방어대회 본선 "석유공사" 문제의 권한 상승 결함을 재구성한 훈련 문제)
+
+  red_task:
+    goal: "일반 가입 API로 관리자 권한을 얻어 GET /api/admin/flag 에서 플래그를 읽어라"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "POST /api/auth/register 가 받는 JSON 필드를 전부 나열해보라. 서버가 무시하지 않는 필드가 있는가?" }
+      - { cost: 20, text: "가입 요청 본문에 역할/권한을 지정하는 필드를 직접 넣어보라(mass assignment)." }
+      - { cost: 35, text: "is_admin:true 로 가입 → 로그인 → 그 토큰으로 /api/admin/flag 요청." }
+
+  blue_task:
+    goal: "가입 시 클라이언트가 보낸 권한 필드를 신뢰하지 말고 서버가 강제하도록 패치"
+    success_criteria: |
+      (1) SIEM/access-log 에 일반 가입 요청이 관리자 권한으로 승격된 흔적(privilege escalation) 관측
+      (2) 패치(PATCH_WEB_011=true) 후 is_admin 필드는 무시되어 항상 일반 사용자로 가입되고,
+          /api/admin/flag 는 401/403 으로 거부됨
+    points_breakdown: { detection: 30, patch: 70 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용 더미 서비스. 실제 유가/개인정보 아님. 취약점은 서버측 인가 부재(권한 필드 신뢰)."

@@ -1,0 +1,15 @@
+services:
+  web011_deploy:
+    build:
+      context: .
+    container_name: web011_deploy
+    ports:
+      - "8111:8111"
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web011-dev-secret}
+      - PATCH_WEB_011=false
+    mem_limit: 128m
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
