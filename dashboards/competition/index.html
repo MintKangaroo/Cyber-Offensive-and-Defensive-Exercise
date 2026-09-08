@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>대회 세트 관제 — Competition Dashboard</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#121722; --panel2:#0f141d; --line:#232c3b;
+    --fg:#e6edf3; --muted:#8b97a7; --accent:#4da3ff; --accent2:#2aa25c;
+    --warn:#f0b429; --crit:#fb7185;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif}
+  header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
+    padding:14px 18px;border-bottom:1px solid var(--line);background:var(--panel2)}
+  header h1{font-size:16px;margin:0;letter-spacing:.5px}
+  header .sub{color:var(--muted);font-size:11px;font-family:ui-monospace,monospace}
+  main{max-width:1200px;margin:0 auto;padding:16px 18px;display:grid;gap:16px}
+  .row{display:grid;gap:16px;grid-template-columns:1fr}
+  @media(min-width:900px){.row.two{grid-template-columns:1.1fr .9fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .card h2{font-size:12px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin:0 0 10px}
+  select,button{background:var(--panel2);color:var(--fg);border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;font-size:13px}
+  button{cursor:pointer} button:hover{border-color:var(--accent)}
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .timer{font-family:ui-monospace,monospace;font-size:34px;font-weight:700;letter-spacing:2px}
+  .timer.live{color:var(--accent2)} .timer.ending{color:var(--warn)} .timer.over{color:var(--crit)}
+  .meta{display:flex;flex-wrap:wrap;gap:8px 18px;color:var(--muted);font-size:12px;margin-top:6px}
+  .meta b{color:var(--fg)}
+  .cat{margin:9px 0}
+  .cat .lab{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px}
+  .cat .lab .n{color:var(--muted)}
+  .bar{height:10px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  td.num{text-align:right;font-family:ui-monospace,monospace}
+  tr.me{background:rgba(77,163,255,.08)}
+  .rank{color:var(--muted);width:34px}
+  .pill{display:inline-block;padding:1px 7px;border:1px solid var(--line);border-radius:20px;
+    font-size:11px;color:var(--muted);margin-left:6px}
+  .diff{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .diff span{font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid var(--line);color:var(--muted)}
+  .err{color:var(--crit);font-size:12px;font-family:ui-monospace,monospace}
+  .desc{color:var(--muted);font-size:12px;white-space:pre-wrap;margin-top:8px}
+  .foot{color:var(--muted);font-size:11px;text-align:center;padding:14px}
+  code{font-family:ui-monospace,monospace;color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>🏁 대회 세트 관제 · Competition Dashboard</h1>
+    <div class="sub" id="apibase"></div>
+  </div>
+  <div class="controls">
+    <select id="setSel" aria-label="대회 세트 선택"></select>
+    <select id="teamSel" aria-label="팀 선택(진행률)"><option value="">팀 선택(진행률)</option></select>
+    <button id="startBtn" title="이 브라우저 기준 대회 시작시각을 지금으로 설정">▶ 라운드 시작</button>
+    <button id="resetBtn" title="시작시각 초기화">⟲</button>
+  </div>
+</header>
+
+<main>
+  <div id="err" class="err"></div>
+
+  <div class="row two">
+    <div class="card">
+      <h2>라운드 타이머</h2>
+      <div class="timer" id="timer">--:--:--</div>
+      <div class="meta" id="setmeta"></div>
+      <div class="diff" id="diffbar"></div>
+      <div class="desc" id="setdesc"></div>
+    </div>
+    <div class="card">
+      <h2>분야별 진행률 <span class="pill" id="progScope">전체 문제</span></h2>
+      <div id="cats"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>실시간 스코어보드 <span class="pill" id="sbmeta"></span></h2>
+    <table>
+      <thead><tr><th class="rank">#</th><th>팀</th><th class="num">solved</th><th class="num">points</th><th class="num">최근 solve</th></tr></thead>
+      <tbody id="sbbody"><tr><td colspan="5" style="color:var(--muted)">세트를 선택하세요.</td></tr></tbody>
+    </table>
+  </div>
+</main>
+
+<div class="foot">Cyber Range · 세트 데이터는 challenge_portal <code>/portal/competitions</code> 에서 실시간 조회 · 5초 폴링</div>
+
+<script>
+(function(){
+  "use strict";
+  var HOST = location.hostname || "localhost";
+  var PORTAL_PORT = 8060; // challenge_portal published 포트 (docker-compose.yml)
+  var PORTAL = "http://" + HOST + ":" + PORTAL_PORT;
+  document.getElementById("apibase").textContent = PORTAL;
+
+  var el = function(id){ return document.getElementById(id); };
+  var qs = new URLSearchParams(location.search);
+  var state = { setId:null, set:null, team:"", pollTimer:null, tickTimer:null };
+
+  function setErr(m){ el("err").textContent = m || ""; }
+
+  function fmtDur(sec){
+    if(sec === null || sec === undefined || isNaN(sec)) return "--:--:--";
+    var neg = sec < 0; sec = Math.abs(Math.floor(sec));
+    var h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+    var p = function(n){ return (n<10?"0":"")+n; };
+    return (neg?"-":"") + p(h)+":"+p(m)+":"+p(s);
+  }
+
+  // 대회 시작시각: ?start=<epoch초> 우선, 없으면 세트별 localStorage
+  function startKey(){ return "cr_comp_start:" + (state.setId||""); }
+  function getStart(){
+    var q = qs.get("start");
+    if(q && !isNaN(+q)) return +q;
+    try{ var v = localStorage.getItem(startKey()); return v ? +v : null; }catch(e){ return null; }
+  }
+  function setStart(ts){
+    try{ if(ts===null) localStorage.removeItem(startKey()); else localStorage.setItem(startKey(), String(ts)); }catch(e){}
+  }
+
+  function getJSON(url){
+    return fetch(url, {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("HTTP "+r.status+" @ "+url);
+      return r.json();
+    });
+  }
+
+  function renderTimer(){
+    var t = el("timer");
+    var start = getStart();
+    var dur = state.set && state.set.duration_hours;
+    if(!start || !dur){ t.textContent = dur ? (dur+"h (미시작)") : "--:--:--"; t.className="timer"; return; }
+    var endsAt = start + dur*3600;
+    var remain = endsAt - Date.now()/1000;
+    t.textContent = fmtDur(remain);
+    t.className = "timer " + (remain <= 0 ? "over" : (remain < 600 ? "ending" : "live"));
+  }
+
+  function renderSetMeta(){
+    var s = state.set; if(!s) return;
+    el("setmeta").innerHTML =
+      "문제 <b>"+s.count+"</b>개 · 총점 <b>"+s.total_points+"</b> · 지속 <b>"+(s.duration_hours||"–")+"</b>h";
+    el("setdesc").textContent = (s.description||"").trim();
+    var order = ["easy","medium","hard","insane"];
+    var db = s.by_difficulty||{};
+    el("diffbar").innerHTML = order.map(function(d){
+      return "<span>"+d+": "+(db[d]||0)+"</span>";
+    }).join("");
+  }
+
+  // 분야별 진행률: 팀 선택 시 그 팀의 카테고리별 solved/total, 미선택 시 총 문제수만 표시(진행 0)
+  function renderCats(){
+    var s = state.set; if(!s){ el("cats").innerHTML=""; return; }
+    var totals = s.by_category || {};
+    var solvedByCat = {};
+    if(state.team && s.challenges){
+      s.challenges.forEach(function(c){
+        if(c.solved) solvedByCat[c.category] = (solvedByCat[c.category]||0)+1;
+      });
+    }
+    el("progScope").textContent = state.team ? ("팀 "+state.team) : "전체 문제";
+    var cats = Object.keys(totals).sort();
+    el("cats").innerHTML = cats.map(function(cat){
+      var tot = totals[cat], sol = solvedByCat[cat]||0;
+      var pct = tot ? Math.round(sol/tot*100) : 0;
+      return '<div class="cat"><div class="lab"><span>'+cat+
+        '</span><span class="n">'+sol+' / '+tot+'</span></div>'+
+        '<div class="bar"><i style="width:'+pct+'%"></i></div></div>';
+    }).join("");
+  }
+
+  function renderScoreboard(rows){
+    var body = el("sbbody");
+    el("sbmeta").textContent = rows.length + " teams";
+    if(!rows.length){ body.innerHTML = '<tr><td colspan="5" style="color:var(--muted)">아직 solve 없음.</td></tr>'; return; }
+    body.innerHTML = rows.map(function(r,i){
+      var last = r.last_solve ? new Date(r.last_solve*1000).toLocaleTimeString() : "–";
+      var me = (r.team_id === state.team) ? " class=me" : "";
+      return "<tr"+me+"><td class=rank>"+(i+1)+"</td><td>"+escapeHtml(r.team_id)+
+        "</td><td class=num>"+r.solved+"</td><td class=num>"+r.points+"</td><td class=num>"+last+"</td></tr>";
+    }).join("");
+  }
+
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g,function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+
+  function loadCompetitions(){
+    return getJSON(PORTAL+"/portal/competitions").then(function(d){
+      var sel = el("setSel"); var comps = d.competitions||[];
+      if(!comps.length){ sel.innerHTML = '<option>세트 없음</option>'; return; }
+      sel.innerHTML = comps.map(function(c){
+        return '<option value="'+c.id+'">'+escapeHtml(c.name)+' ('+c.count+')</option>';
+      }).join("");
+      var initial = qs.get("set") || comps[0].id;
+      sel.value = initial;
+      selectSet(sel.value);
+    });
+  }
+
+  function selectSet(id){
+    state.setId = id; state.team = ""; el("teamSel").value = "";
+    return getJSON(PORTAL+"/portal/competitions/"+encodeURIComponent(id)).then(function(s){
+      state.set = s; renderSetMeta(); renderCats(); renderTimer();
+      refreshScoreboard();
+    }).catch(function(e){ setErr(e.message); });
+  }
+
+  // 팀 선택 시 그 팀 기준으로 세트 상세 재조회(solved 플래그 채움)
+  function selectTeam(t){
+    state.team = t;
+    if(!state.setId){ return; }
+    var url = PORTAL+"/portal/competitions/"+encodeURIComponent(state.setId);
+    if(t) url += "?team_id="+encodeURIComponent(t);
+    getJSON(url).then(function(s){ state.set = s; renderCats(); }).catch(function(e){ setErr(e.message); });
+  }
+
+  function refreshScoreboard(){
+    if(!state.setId) return;
+    getJSON(PORTAL+"/portal/competitions/"+encodeURIComponent(state.setId)+"/scoreboard")
+      .then(function(d){
+        setErr("");
+        var rows = d.scoreboard || [];
+        renderScoreboard(rows);
+        // 팀 드롭다운 갱신(현재 선택 유지)
+        var sel = el("teamSel"); var cur = sel.value;
+        var opts = ['<option value="">팀 선택(진행률)</option>'].concat(rows.map(function(r){
+          return '<option value="'+escapeHtml(r.team_id)+'">'+escapeHtml(r.team_id)+'</option>';
+        }));
+        sel.innerHTML = opts.join(""); sel.value = cur;
+      }).catch(function(e){ setErr(e.message); });
+  }
+
+  // 이벤트
+  el("setSel").addEventListener("change", function(e){ selectSet(e.target.value); });
+  el("teamSel").addEventListener("change", function(e){ selectTeam(e.target.value); });
+  el("startBtn").addEventListener("click", function(){ setStart(Math.floor(Date.now()/1000)); renderTimer(); });
+  el("resetBtn").addEventListener("click", function(){ setStart(null); renderTimer(); });
+
+  // 폴링·틱
+  state.pollTimer = setInterval(refreshScoreboard, 5000);
+  state.tickTimer = setInterval(renderTimer, 1000);
+
+  loadCompetitions().catch(function(e){ setErr("포털 연결 실패: "+e.message+" (challenge_portal :"+PORTAL_PORT+" 기동 확인)"); });
+})();
+</script>
+</body>
+</html>
