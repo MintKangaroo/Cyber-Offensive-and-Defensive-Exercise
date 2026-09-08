@@ -1,0 +1,41 @@
+challenge:
+  id: "CRY-004"
+  title: "원전 계측문서 게이트웨이 - RSA 공통 모듈러스 공격"
+  category: "crypto"
+  difficulty: "medium"
+  points: { red: 200, blue: 200 }
+  asset: "khnp-metering-gateway"
+  mitre: [T1040]
+
+  description: |
+    한국수력원자력(KHNP) 계측문서 게이트웨이가 같은 계측문서(flag)를 부서 A/B 두 채널로
+    배포한다. 그런데 두 부서가 '같은 모듈러스 N'을 공유하고 공개지수만 다르게(e1, e2, 서로소)
+    같은 평문을 암호화한다. 공통 모듈러스 + 서로소 지수 + 동일 평문이면 확장 유클리드로
+    u·e1 + v·e2 = 1 을 구해 m = c1^u · c2^v mod N 으로 개인키 없이 평문을 복구할 수 있다.
+    두 암호문과 공개키로 계측문서의 override_token(flag)을 복구하라.
+
+  red_task:
+    goal: "공통 모듈러스 N·서로소 지수 e1,e2·동일 평문의 두 암호문으로 확장 유클리드 기반 평문 복구"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "부서 A/B 의 N 이 같고 e 만 다르다. 같은 평문을 두 지수로 암호화하면?" }
+      - { cost: 20, text: "gcd(e1,e2)=1 이면 확장유클리드로 u·e1+v·e2=1. m = c1^u · c2^v mod N." }
+      - { cost: 30, text: "u 또는 v 가 음수면 해당 c 를 N 에 대해 모듈러 역원으로 바꿔 양의 지수로. 복구된 정수를 바이트로." }
+
+  blue_task:
+    goal: "부서마다 서로 다른 모듈러스를 써서 공통 모듈러스 공격 차단"
+    success_criteria: |
+      (1) 두 채널의 공개 모듈러스가 동일한지 점검
+      (2) 패치 후 N 이 서로 달라 확장유클리드 기반 복구가 불가
+    points_breakdown: { detection: 60, patch: 140 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["khnp-metering-gateway"]
+  safety:
+    profile: "hardened"
+    notes: "HTTP 서비스형. read_only/tmpfs/cap_drop/mem_limit. 취약은 의도된 키 오용이며 실제 배포키 아님."

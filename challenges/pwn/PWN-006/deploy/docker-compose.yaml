@@ -1,0 +1,12 @@
+services:
+  pwn006_deploy:
+    build: { context: . }
+    container_name: pwn006_deploy
+    ports: ["9016:9016"]
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-pwn006-dev-secret}
+      - PORT=9016
+    mem_limit: 128m
+    pids_limit: 64
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
