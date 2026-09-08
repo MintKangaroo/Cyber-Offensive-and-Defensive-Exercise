@@ -229,10 +229,19 @@ class GameEngine:
             # 감사 4.7: 다운타임 보정. tick이 오래 멈췄으면(엔진 크래시/재기동) 그 공백만큼
             # ends_at을 뒤로 밀어 라운드 잔여시간을 보존한다. 정상 tick 간격의 여유(check_interval
             # 의 2배 또는 30초)를 넘는 gap만 다운타임으로 간주해 한 번 보정한다.
+            # 단, 보정은 '한 라운드 이내'의 짧은 중단에만 적용한다. gap이 라운드 지속시간을
+            # 넘으면 라운드는 다운타임 동안 이미 만료된 것이므로 보정하지 않는다 — 아래
+            # now>=ends_at 경로로 finalize 되어 새 라운드+새 플래그가 발급된다. (영구 볼륨의
+            # 매치를 오래 방치했다 재기동할 때 라운드가 미래로 무한 연장되고 플래그 valid_until
+            # 이 만료된 채 고착돼 flag 제출이 거부되던 회귀를 막는다.)
             last_check = float(round_row["last_check_at"] or 0)
             downtime_threshold = max(self.settings.check_interval_seconds * 2, 30)
             gap = now - last_check
-            if last_check > 0 and gap > downtime_threshold:
+            if (
+                last_check > 0
+                and gap > downtime_threshold
+                and gap <= float(match["round_duration_seconds"])
+            ):
                 extended = self.repo.extend_round_end(round_row["id"], gap, now)
                 if extended is not None:
                     round_row = extended
