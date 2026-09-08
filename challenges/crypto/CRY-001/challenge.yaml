@@ -1,0 +1,39 @@
+challenge:
+  id: "CRY-001"
+  title: "전력망 원격검침 세션 - AES-CBC 패딩 오라클"
+  category: "crypto"
+  difficulty: "hard"
+  points: { red: 200, blue: 200 }
+  asset: "grid_metering"
+  mitre: [T1040]
+
+  description: |
+    전력망 원격검침 세션 토큰이 AES-CBC 로 암호화된다. 검증 엔드포인트가 패딩 유효/무효를 응답으로
+    구분해줘(패딩 오라클), 제공된 관리자 세션 암호문을 키 없이 복호할 수 있다. 평문에 담긴 비상
+    검침 토큰(flag)을 패딩 오라클 공격으로 복원하라. (crypto 카테고리 보강)
+
+  red_task:
+    goal: "GET /api/session/challenge 의 암호문을 verify 패딩 오라클로 복호해 flag 를 복원하라"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 15, text: "verify 는 패딩이 맞으면 200, 틀리면 400 'bad padding' 을 준다(오라클)." }
+      - { cost: 30, text: "CBC 패딩 오라클: 이전 블록 바이트를 조작해 D_K(블록) 중간값을 한 바이트씩 복구." }
+      - { cost: 45, text: "블록별로 pad=1..16 를 맞춰가며 intermediate=guess^pad, plaintext=intermediate^prev." }
+
+  blue_task:
+    goal: "인증 암호(AES-GCM)로 전환해 패딩 오라클 제거"
+    success_criteria: |
+      (1) 마지막 블록만 바꿔가며 대량 verify 요청하는 오라클 질의 관측
+      (2) 패치(PATCH_CRY_001=true) 후 검증 실패가 단일 오류로 처리돼 오라클 소멸
+    points_breakdown: { detection: 60, patch: 140 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용. 키/IV 는 CHALLENGE_SECRET 파생. 오라클 복호로만 flag 복원."

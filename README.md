@@ -13,7 +13,7 @@
 
 ## 완성도 · 검증 현황
 
-![status](https://img.shields.io/badge/status-operational-2aa25c) ![challenges](https://img.shields.io/badge/challenges-91%2F91-2aa25c) ![tests](https://img.shields.io/badge/unit-563%20passed-2aa25c) ![ci](https://img.shields.io/badge/CI-7%2F7-2aa25c)
+![status](https://img.shields.io/badge/status-operational-2aa25c) ![challenges](https://img.shields.io/badge/challenges-94%2F94-2aa25c) ![tests](https://img.shields.io/badge/unit-563%20passed-2aa25c) ![ci](https://img.shields.io/badge/CI-7%2F7-2aa25c)
 
 **운영 준비 완료(operational).** 4주차 전면 보안 감사(Showstopper 11건 · 35개 항목)를 전량 리메디에이션했고,
 감사 §6 미검증 10건과 경쟁표준 갭(DEF CON/CCE G-1~G-14)까지 전부 해소했습니다. 남은 항목은
@@ -733,7 +733,7 @@ docker compose down
 
 **소개 · 구조**
 - [무엇을 하는 플랫폼인가](#무엇을-하는-플랫폼인가) · [아키텍처](#아키텍처) · [주요 화면](#주요-화면-스크린샷) · [핵심 기능](#핵심-기능)
-- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (91종)](#챌린지-카탈로그-91종)
+- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (94종)](#챌린지-카탈로그-94종)
 
 **시작 · 품질 · 접근제어**
 - [처음 시작하기](#처음-시작하기) · [경기 운영 방법](#경기-운영-방법) · [빠른 시작](#빠른-시작)
@@ -1043,7 +1043,7 @@ patched/vulnerable 상태를 한 번에 판정합니다.
 
 ---
 
-## 챌린지 카탈로그 (91종)
+## 챌린지 카탈로그 (94종)
 
 web·pwn·crypto·forensics·network·reversing·detection·ai·ICS/OT 9개 분야가 모두 **easy → medium → hard → insane** 난이도 곡선을 갖추고 있습니다.
 표기: `점수(Red/Blue)`. 팀마다 플래그·정답이 HMAC으로 달라 답 공유가 불가능합니다.
@@ -1057,6 +1057,9 @@ web·pwn·crypto·forensics·network·reversing·detection·ai·ICS/OT 9개 분�
 > | WEB-012 | 시흥무역항 화물 통제 | 클라이언트 로직 자동화(제한시간) | medium | 8112 |
 > | WEB-013 | 철도관제센터 신호 피드 | SSRF(내부 엔드포인트 탈취) | medium | 8113 |
 > | PWN-000 | LNG 경보센터 | 스택 오버플로우 ret2win(원격 바이너리) | medium | 9010 |
+> | PWN-004 | 상수도 유량 계측 콘솔 | 정수 오버플로우(길이 절단)→스택 BOF→ret2win | medium | 9014 |
+> | CRY-001 | 전력망 원격검침 세션 | AES-CBC 패딩 오라클 | hard | 8133 |
+> | CRY-002 | 재난 통신 암호화 | AES-CTR 논스 재사용 | medium | 8134 |
 >
 > 개별 기동: `cd challenges/<cat>/<ID>/deploy && CHALLENGE_SECRET=<secret> docker compose up -d --build`
 
@@ -1106,11 +1109,25 @@ web·pwn·crypto·forensics·network·reversing·detection·ai·ICS/OT 9개 분�
 </details>
 
 <details>
-<summary><b>💥 Pwn (4) — 원격 바이너리 포너블</b></summary>
+<summary><b>💥 Pwn (5) — 원격 바이너리 포너블</b></summary>
 
 | ID | 제목 | 난이도 | ATT&CK | 점수 |
 |---|---|---|---|---|
 | PWN-000 | LNG 경보센터 — 경보 버퍼 스택 오버플로우(ret2win) · **CCE형 국가기반시설** | medium | T1203,T1068 | 200/200 |
+| PWN-001 | 정수처리장 로그 콘솔 — 포맷 스트링 정보 유출 | medium | T1203 | 180/180 |
+| PWN-002 | 가스공사 밸브 제어 콘솔 — 전역(BSS) 버퍼 오버플로우(인증 우회) | medium | T1203 | 180/180 |
+| PWN-003 | 스마트그리드 SCADA 세션 콘솔 — 힙 오버플로우(인접 청크 오염) | medium | T1203,T1068 | 200/200 |
+| PWN-004 | 상수도 유량 계측 콘솔 — 정수 오버플로우(길이 절단)→스택 BOF→ret2win · **CCE형 국가기반시설** | medium | T1203,T1068 | 200/200 |
+</details>
+
+<details>
+<summary><b>🔐 Crypto (3) — 암호 오라클/키 오용</b></summary>
+
+| ID | 제목 | 난이도 | ATT&CK | 점수 |
+|---|---|---|---|---|
+| CRY-000 | 국가 재난망 토큰 오라클 — AES-ECB Byte-at-a-Time | hard | T1040 | 200/200 |
+| CRY-001 | 전력망 원격검침 세션 — AES-CBC 패딩 오라클 · **CCE형 국가기반시설** | hard | T1040 | 200/200 |
+| CRY-002 | 재난 통신 암호화 — AES-CTR 논스 재사용 · **CCE형 국가기반시설** | medium | T1040 | 150/150 |
 </details>
 
 <details>
