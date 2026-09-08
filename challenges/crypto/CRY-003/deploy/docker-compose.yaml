@@ -1,0 +1,13 @@
+services:
+  cry003_deploy:
+    build: { context: . }
+    container_name: cry003_deploy
+    ports: ["8135:8135"]
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-cry003-dev-secret}
+      - PATCH_CRY_003=false
+    mem_limit: 160m
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
