@@ -1,0 +1,13 @@
+services:
+  web026_deploy:
+    build:
+      context: .
+    container_name: web026_deploy
+    ports:
+      - "8132:8132"
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web026-dev-secret}
+      - PATCH_WEB_026=false
+    mem_limit: 160m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]

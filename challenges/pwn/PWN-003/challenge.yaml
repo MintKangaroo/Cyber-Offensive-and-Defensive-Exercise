@@ -1,0 +1,40 @@
+challenge:
+  id: "PWN-003"
+  title: "스마트그리드 SCADA 세션 콘솔 - 힙 버퍼 오버플로우(인접 청크 오염)"
+  category: "pwn"
+  difficulty: "medium"
+  points: { red: 200, blue: 200 }
+  asset: "smartgrid"
+  mitre: [T1203, T1068]
+
+  description: |
+    스마트그리드 SCADA 세션 관리 콘솔(원격 TCP)이 라벨 버퍼(heap)와 세션 구조체(heap)를 연달아
+    할당한다. 라벨 입력에 크기 검증이 없어 인접한 세션 구조체의 authed 필드를 덮어쓸 수 있다.
+    힙 오버플로우로 authed 를 세워 관리자 인증을 우회하고 그리드 마스터 토큰(flag)을 얻어라.
+    (신규 pwn 유형 — 힙 청크 간 오버플로우; PWN-000 스택 ret2win·PWN-001 포맷스트링·PWN-002 전역 BOF 와 구분)
+
+  red_task:
+    goal: "라벨(heap chunk) 오버플로우로 인접 세션 구조체의 authed 를 덮어써 관리자 패널에서 flag 획득"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "라벨은 malloc(64) 인데 256바이트까지 읽는다. 라벨 바로 뒤엔 무엇이 malloc 됐나?" }
+      - { cost: 20, text: "연속 malloc 은 힙에서 인접한다. 세션 구조체의 첫 필드가 authed 다." }
+      - { cost: 30, text: "라벨을 0x01 로 충분히(≈176B) 채워 인접 청크의 authed 를 덮은 뒤 관리자 패널. read 가 뒤 입력을 삼키니 단계별 전송." }
+
+  blue_task:
+    goal: "버퍼 크기만큼만 읽도록 경계 검사 추가"
+    success_criteria: |
+      (1) 라벨 입력이 버퍼(64)를 크게 초과하는 요청 관측
+      (2) 패치 후 오버플로우로 authed 를 덮을 수 없어 관리자 패널 거부
+    points_breakdown: { detection: 60, patch: 140 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["scada"]
+  safety:
+    profile: "hardened"
+    notes: "원격 바이너리. free 미수행으로 메타데이터 오염이 크래시로 이어지지 않음. cap_drop/pids_limit/mem_limit, 30초 타임아웃."
