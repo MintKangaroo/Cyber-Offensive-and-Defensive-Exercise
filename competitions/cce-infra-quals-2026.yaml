@@ -1,0 +1,46 @@
+# CCE형 국가기반시설 예선 세트 (2026) — easy·medium 위주 넓은 분야 커버리지.
+# 포털이 competitions/*.yaml 을 자동 로드. 점수는 각 challenge.yaml 의 points.red 사용.
+# (detection/DET-* 은 blue 트랙으로 SIEM 이 별도 채점 → red 세트 미포함)
+competition:
+  id: "cce-infra-quals-2026"
+  name: "CCE형 국가기반시설 예선 2026"
+  description: |
+    본선 진출을 가리는 예선 세트. easy·medium 중심으로 8개 분야를 넓게 커버하고, 맛보기용
+    insane 1문제를 둔다. 입문~중급 참가자가 폭넓게 득점할 수 있도록 균형을 맞췄다.
+  duration_hours: 6
+  challenges:
+    # web (7)
+    - WEB-000   # 노출된 디버그 설정 (easy)
+    - WEB-011   # 석유공사 권한상승 (easy)
+    - WEB-022   # 에너지신고 CSV 수식 인젝션 (easy)
+    - WEB-001   # 명령 주입 (medium)
+    - WEB-003   # Mission Plan IDOR (medium)
+    - WEB-013   # 철도관제 SSRF (medium)
+    - WEB-018   # 병원 EMR NoSQLi (medium)
+    # pwn (2)
+    - PWN-002   # 가스공사 밸브 전역 BOF (easy)
+    - PWN-001   # 정수처리장 포맷스트링 (medium)
+    # reversing (3)
+    - REV-000   # XOR decode (easy)
+    - REV-001   # 난독화 라이선스 (medium)
+    - REV-002   # 반복키 XOR (medium)
+    # forensics (4)
+    - FOR-000   # 평문 자격증명 카빙 (easy)
+    - FOR-001   # 명령 이력 포렌식 (easy)
+    - FOR-002   # 침해 재구성 (medium)
+    - FOR-003   # 세션 하이재킹 흔적 (medium)
+    # network (4)
+    - NET-000   # 평문 프로토콜 스니핑 (easy)
+    - NET-004   # ARP 스푸핑 탐지 (easy)
+    - NET-001   # DNS 터널링 (medium)
+    - NET-002   # Lateral Pivot (medium)
+    # ics (3)
+    - ICS-001   # (easy)
+    - ICS-000   # Modbus (medium)
+    - ICS-002   # (medium)
+    # ai (3)
+    - AI-000    # (easy)
+    - AI-002    # (easy)
+    - AI-001    # (medium)
+    # insane 맛보기 (1)
+    - WEB-009   # WAF 우회 + 블라인드 SQLi (insane)

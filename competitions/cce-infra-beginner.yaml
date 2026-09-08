@@ -1,0 +1,24 @@
+# CCE형 국가기반시설 입문 세트 — easy 중심(+medium 소수). 처음 접하는 참가자용.
+competition:
+  id: "cce-infra-beginner"
+  name: "CCE형 국가기반시설 입문"
+  description: |
+    사이버공방 입문자를 위한 저난이도 세트. easy 문제를 중심으로 분야 감을 잡고, 완만한
+    medium 3문제로 다음 단계를 준비한다.
+  duration_hours: 4
+  challenges:
+    # easy (10)
+    - WEB-000   # 노출된 디버그 설정
+    - WEB-011   # 석유공사 권한상승
+    - WEB-022   # 에너지신고 CSV 수식 인젝션
+    - PWN-002   # 가스공사 밸브 전역 BOF
+    - REV-000   # XOR decode
+    - FOR-000   # 평문 자격증명 카빙
+    - NET-000   # 평문 프로토콜 스니핑
+    - ICS-001   # ICS 입문
+    - AI-000    # AI 입문
+    - AI-002    # AI 입문
+    # gentle medium (3)
+    - WEB-001   # 명령 주입
+    - NET-001   # DNS 터널링
+    - FOR-002   # 침해 재구성
