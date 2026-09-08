@@ -1,0 +1,43 @@
+challenge:
+  id: "PWN-005"
+  title: "위성 TLE 관제 콘솔 - Use-After-Free 함수포인터 하이재킹"
+  category: "pwn"
+  difficulty: "medium"
+  points: { red: 220, blue: 220 }
+  asset: "sat"
+  mitre: [T1203, T1068]
+
+  description: |
+    위성 TLE(Two-Line Element) 관제 콘솔(원격 TCP)이 위성 객체를 힙에 할당하는데, 객체의 첫
+    필드가 함수 포인터(action)다. 등록해제(delete)가 free() 후 슬롯 포인터를 비우지 않아
+    dangling 포인터가 남는다(Use-After-Free). 같은 크기의 관제 메모를 malloc 하면 tcache 가
+    방금 free 된 위성 청크를 그대로 돌려주므로, 메모 앞 8바이트로 action 포인터를 덮을 수 있다.
+    덮은 뒤 그 위성을 실행하면 하이재킹된 함수(admin_override)가 호출되어 /flag 가 노출된다.
+    (실제 CCE 본선 write-up 의 위성 관리 UAF 를 재구성 — PWN-003 힙 오버플로우와 구분되는
+    UAF/함수포인터 하이재킹 유형)
+
+  red_task:
+    goal: "delete 후 남은 dangling 슬롯을 same-size malloc(메모)으로 재점유해 action 포인터를 admin_override 로 덮고 위성 실행"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "delete 후에도 슬롯으로 위성을 실행할 수 있다. free 된 뒤 슬롯이 비워지는가?" }
+      - { cost: 20, text: "위성 객체는 32바이트(첫 8B=함수포인터). 32바이트 메모를 malloc 하면 tcache 가 그 청크를 재사용한다." }
+      - { cost: 30, text: "create→delete→note(첫 8B=&admin_override)→run 순서. no-PIE 라 admin_override 주소는 바이너리에서 고정." }
+
+  blue_task:
+    goal: "free 후 dangling 방지(포인터 NULL 화)로 UAF 차단"
+    success_criteria: |
+      (1) 등록해제된 위성 슬롯에 대한 실행 요청(재점유 흔적) 관측
+      (2) 패치 후 free 된 슬롯 실행이 거부되어 함수포인터 하이재킹 불가
+    points_breakdown: { detection: 66, patch: 154 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["sat"]
+  safety:
+    profile: "hardened"
+    notes: "원격 정적 바이너리(no-PIE·의도적 UAF). cap_drop/pids_limit/mem_limit, 30초 타임아웃."

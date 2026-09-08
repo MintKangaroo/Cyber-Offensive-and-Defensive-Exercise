@@ -1,0 +1,41 @@
+challenge:
+  id: "CRY-003"
+  title: "LNG 터미널 문서 금고 - 구조적 RSA 모듈러스 인수분해"
+  category: "crypto"
+  difficulty: "hard"
+  points: { red: 250, blue: 250 }
+  asset: "lng-terminal-vault"
+  mitre: [T1040]
+
+  description: |
+    인천 LNG 터미널 문서 금고가 계량 보고서(flag)를 AES-CBC 로 봉인하고, 그 AES 키를 RSA 로
+    감싸 배포한다. 그런데 RSA 소수를 p = 2^512 + a, q = 2^512 + b (a·b 가 작음)로 생성해
+    모듈러스에 대수적 구조가 남는다: N = 2^1024 + (a+b)·2^512 + a·b. 이 구조로 N 을 인수분해해
+    개인키를 복구하고, RSA 로 감싼 AES 키를 풀어 문서를 복호해 override_token(flag)을 획득하라.
+    (실제 CCE 본선 write-up 의 구조적 모듈러스 문제를 국가기반시설 테마로 재구성)
+
+  red_task:
+    goal: "공개키 N 의 대수적 구조로 인수분해 → d 복구 → RSA 로 감싼 AES 키 복호 → AES-CBC 문서 복호로 flag 획득"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "N 은 정확히 1024비트를 조금 넘는다. N - 2^1024 를 계산해보라. 무엇이 남는가?" }
+      - { cost: 20, text: "N - 2^1024 = (a+b)·2^512 + a·b, 그리고 a·b < 2^512. >>512 몫이 a+b, 나머지가 a·b." }
+      - { cost: 30, text: "t^2 - (a+b)t + ab = 0 → a,b → p=2^512+a·q=2^512+b. d=e^{-1} mod φ. AES키=RSA복호(wrapped_key). AES-CBC로 문서 복호." }
+
+  blue_task:
+    goal: "구조 없는 임의 독립 대형 소수로 키 생성(구조적/Fermat 인수분해 차단)"
+    success_criteria: |
+      (1) 공개 N 이 2^1024 근방 구조(작은 a,b)를 갖는지 점검
+      (2) 패치 후 N - 2^1024 에서 소인수를 복구할 수 없음(문서 복호 불가)
+    points_breakdown: { detection: 75, patch: 175 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["lng-terminal-vault"]
+  safety:
+    profile: "hardened"
+    notes: "HTTP 서비스형. read_only/tmpfs/cap_drop/mem_limit. 취약은 의도된 약한 키 생성이며 실제 배포키 아님."
