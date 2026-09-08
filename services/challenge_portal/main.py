@@ -38,6 +38,31 @@ CHALLENGES_ROOT = REPO_ROOT / "challenges"
 COMPETITIONS_ROOT = REPO_ROOT / "competitions"
 EVENT_COLLECTOR_URL = os.environ.get("EVENT_COLLECTOR_URL", "http://event_collector:8010")
 
+# 동적 점수(dynamic scoring) — 해결 팀 수에 반비례해 점수 감소(DEF CON 계열 decay).
+# 기본은 옵트인/추가 필드만 제공하여 기존 정적 점수 동작·응답 계약을 보존한다.
+DYNAMIC_SCORING = os.environ.get("DYNAMIC_SCORING", "").lower() in {"1", "true", "yes", "on"}
+DYNAMIC_K = int(os.environ.get("DYNAMIC_K", "11"))
+DYNAMIC_MIN_RATIO = float(os.environ.get("DYNAMIC_MIN_RATIO", "0.3"))
+
+
+def _dynamic_points(base: int, solves: int,
+                    k: int | None = None, min_ratio: float | None = None) -> int:
+    """해결 팀 수(solves)에 반비례해 단조감소하는 동적 점수.
+
+    공식: max(floor, round(base * k / (k - 1 + max(solves, 1)))).
+    - 최초 해결(solves 0 또는 1)은 만점(base).
+    - solves 가 늘수록 감소, 하한 floor = max(1, round(base*min_ratio)).
+    """
+    k = DYNAMIC_K if k is None else k
+    min_ratio = DYNAMIC_MIN_RATIO if min_ratio is None else min_ratio
+    base = int(base)
+    if base <= 0:
+        return 0
+    solves = max(1, int(solves))
+    floor = max(1, round(base * min_ratio))
+    val = round(base * k / (k - 1 + solves))
+    return max(floor, min(base, val))
+
 # 공정성/안티치트(P1-5) — rate-limit·lockout·감사·플래그공유 탐지
 import sqlite3  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -169,6 +194,18 @@ def _load_catalog() -> dict[str, dict]:
 CATALOG = _load_catalog()
 
 
+def _solve_count(cid: str) -> int:
+    """해당 challenge 를 푼 고유 팀 수(동적 점수 계산용)."""
+    return sum(1 for solves in _SOLVES.values() if cid in solves)
+
+
+def _current_points(cid: str, base: int) -> int:
+    """현재 노출 점수 — 동적 점수 활성 시 solve 수 반영, 아니면 정적 base."""
+    if not DYNAMIC_SCORING:
+        return base
+    return _dynamic_points(base, _solve_count(cid))
+
+
 def _load_competitions() -> dict:
     """competitions/*.yaml 대회 세트 로드. 카탈로그에 없는 ID 는 걸러낸다(경고 없이 스킵)."""
     comps: dict[str, dict] = {}
@@ -286,6 +323,8 @@ def list_challenges(team_id: Optional[str] = None):
     for e in CATALOG.values():
         pub = _public(e)
         pub["solved"] = e["id"] in solved
+        pub["solve_count"] = _solve_count(e["id"])
+        pub["dynamic_points"] = _current_points(e["id"], e["points_red"])
         items.append(pub)
     # 카테고리 → 난이도 → 점수 순
     order = {"easy": 0, "medium": 1, "hard": 2, "insane": 3}
@@ -300,6 +339,8 @@ def get_challenge(cid: str, team_id: Optional[str] = None):
         raise HTTPException(404, "challenge not found")
     pub = _public(e)
     pub["solved"] = cid in _SOLVES.get(team_id or "", {})
+    pub["solve_count"] = _solve_count(cid)
+    pub["dynamic_points"] = _current_points(cid, e["points_red"])
     return pub
 
 
@@ -426,6 +467,29 @@ def scoreboard():
         })
     rows.sort(key=lambda r: (-r["points"], r["last_solve"]))
     return {"scoreboard": rows}
+
+
+@app.get("/portal/scoreboard/dynamic")
+def dynamic_scoreboard():
+    """동적 점수 스코어보드 — 각 solve 를 '현재 solve 수 기준 동적 점수'로 재계산.
+
+    기존 /portal/scoreboard(정적, solve 시점 점수)와 별개의 엔드포인트라 하위호환.
+    solve 수는 전역(그 문제를 푼 고유 팀 수) 기준이며 문제별 dynamic_points 로 환산한다.
+    """
+    dyn = {cid: _dynamic_points(CATALOG[cid]["points_red"], _solve_count(cid))
+           for cid in CATALOG}
+    rows = []
+    for team, solves in _SOLVES.items():
+        pts = sum(dyn.get(cid, s.get("points", 0)) for cid, s in solves.items())
+        rows.append({
+            "team_id": team,
+            "solved": len(solves),
+            "points": pts,
+            "last_solve": max((s["at"] for s in solves.values()), default=0),
+        })
+    rows.sort(key=lambda r: (-r["points"], r["last_solve"]))
+    return {"scoring": "dynamic", "k": DYNAMIC_K, "min_ratio": DYNAMIC_MIN_RATIO,
+            "scoreboard": rows}
 
 
 @app.get("/portal/competitions")
