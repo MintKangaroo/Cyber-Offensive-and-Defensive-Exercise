@@ -1,0 +1,30 @@
+# CCE형 국가기반시설 시스템 해킹 집중전 — 암호(crypto)·포너블(pwn) 특화 세트.
+# 이번 확장으로 신설된 암호/포너블 유형을 실전 투입한다(DEF CON/CCE 의 시스템해킹 트랙 형식).
+competition:
+  id: "cce-infra-syshack-2026"
+  name: "CCE형 국가기반시설 시스템 해킹 집중전"
+  description: |
+    암호(crypto)와 포너블(pwn)만으로 구성한 시스템 해킹 특화 세트. 대칭키 오라클(ECB/CBC/CTR),
+    RSA 구조적/공통 모듈러스 인수분해, DSA 논스 재사용 서명 위조부터 스택/전역/힙 오버플로우,
+    정수 오버플로우, Use-After-Free, tcache poisoning, 포맷 스트링 임의쓰기까지 —
+    국가기반시설 테마의 원격 서비스형 문제로 실제 익스플로잇해 플래그를 획득한다.
+  duration_hours: 6
+  scoring: { mode: dynamic }
+  first_blood_bonus: 50
+  challenges:
+    # crypto (6) — 대칭키 오라클 + 공개키(RSA/DSA)
+    - CRY-000   # 재난망 AES-ECB Byte-at-a-Time (hard)
+    - CRY-002   # 재난통신 AES-CTR 논스 재사용 (medium)
+    - CRY-001   # 전력망 AES-CBC 패딩 오라클 (hard)
+    - CRY-004   # 원전 RSA 공통 모듈러스 (medium)
+    - CRY-003   # LNG 구조적 RSA 모듈러스 인수분해 (hard)
+    - CRY-005   # 정부 전자서명 DSA 논스 재사용 (hard)
+    # pwn (8) — 스택/전역/힙/정수/UAF/tcache/포맷스트링
+    - PWN-000   # LNG경보센터 ret2win (medium)
+    - PWN-001   # 정수처리장 포맷스트링 정보유출 (medium)
+    - PWN-002   # 가스공사 전역 BOF 인증우회 (medium)
+    - PWN-004   # 상수도 정수오버플로우→스택BOF→ret2win (medium)
+    - PWN-005   # 위성 TLE Use-After-Free (medium)
+    - PWN-003   # 스마트그리드 힙 오버플로우 (medium)
+    - PWN-006   # 원자로 냉각계통 tcache poisoning (hard)
+    - PWN-007   # 발전소 로그 포맷스트링 임의쓰기 (hard)

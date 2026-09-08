@@ -14,6 +14,7 @@ QUALS = "cce-infra-quals-2026"
 BEGINNER = "cce-infra-beginner"
 HARDCORE = "cce-infra-hardcore"
 FINAL = "cce-infra-final-2026"
+SYSHACK = "cce-infra-syshack-2026"
 
 
 @pytest.fixture()
@@ -59,6 +60,22 @@ def test_difficulty_profiles(portal):
 def test_listing_endpoint_includes_new_sets(portal):
     client = TestClient(portal.app)
     ids = {x["id"] for x in client.get("/portal/competitions").json()["competitions"]}
-    assert {QUALS, BEGINNER, HARDCORE}.issubset(ids)
+    assert {QUALS, BEGINNER, HARDCORE, SYSHACK}.issubset(ids)
     detail = client.get(f"/portal/competitions/{HARDCORE}").json()
     assert detail["count"] == len(detail["challenges"]) > 0
+
+
+def test_syshack_set_is_crypto_pwn_only(portal):
+    """시스템 해킹 집중전: 암호(crypto)·포너블(pwn) 특화 세트 — 신규 유형 실전 투입 회귀 고정."""
+    comps = portal.COMPETITIONS
+    assert SYSHACK in comps, f"{SYSHACK} 미로드"
+    c = comps[SYSHACK]
+    # crypto·pwn 만으로 구성
+    assert set(c["by_category"]) == {"crypto", "pwn"}, c["by_category"]
+    # 이번 확장 신규 유형이 실제 편성됐는지(대표 ID 존재)
+    for cid in ("CRY-003", "CRY-004", "CRY-005", "PWN-005", "PWN-006", "PWN-007"):
+        assert cid in c["challenges"], f"{cid} 미편성"
+    # 동적 점수 + first-blood 정책
+    assert c["scoring"]["mode"] == "dynamic" and c["first_blood_bonus"] == 50
+    # detection(blue)은 red 세트에 미포함
+    assert "detection" not in c["by_category"]
