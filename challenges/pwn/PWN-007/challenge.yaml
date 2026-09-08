@@ -1,0 +1,42 @@
+challenge:
+  id: "PWN-007"
+  title: "발전소 로그 수집 데몬 - 포맷 스트링 임의쓰기 → 전역 함수포인터 하이재킹"
+  category: "pwn"
+  difficulty: "hard"
+  points: { red: 210, blue: 210 }
+  asset: "logd"
+  mitre: [T1203, T1068]
+
+  description: |
+    발전소 로그 수집 데몬(원격 TCP)이 로그 메시지를 printf(buf) 로 사용자 입력을 포맷 문자열로
+    그대로 넘겨 포맷 스트링 취약점이 있다. %n/%hn 으로 임의 주소 쓰기가 가능하므로, 전역 처리기
+    g_log(정상 처리기로 초기화)를 숨은 admin_shell 로 덮은 뒤 '로그 처리'를 실행하면 /flag 가
+    노출된다. 입력 버퍼는 스택 arg 6 에 있고, g_log·admin_shell 이 같은 0x40xxxx 영역이라 하위
+    2바이트만 %hn 으로 덮으면 된다. no-PIE 라 주소가 고정.
+    (PWN-001 포맷스트링 정보유출[leak-only] 과 구분되는 %n 임의쓰기 유형)
+
+  red_task:
+    goal: "printf(buf) 포맷스트링으로 전역 g_log 를 admin_shell 로 %hn 임의쓰기 후 '로그 처리' 실행"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "로그 메시지가 %p 로 스택을 새는가? 그렇다면 %n 도 된다. 입력이 스택 몇 번째 인자인지 %p 로 스캔." }
+      - { cost: 20, text: "입력 버퍼는 arg 6. 목표 주소(&g_log)를 버퍼 안 8정렬 위치에 두고 %N$hn 으로 참조." }
+      - { cost: 30, text: "g_log·admin_shell 은 같은 0x40xxxx → 하위2B만 덮으면 됨. %1$<admin&0xffff>c%8$hn + p64(&g_log). read 가 뒤 입력을 삼키니 페이로드/메뉴 분리 전송." }
+
+  blue_task:
+    goal: "사용자 입력을 포맷 문자열로 쓰지 않도록 수정(printf(\"%s\", buf))"
+    success_criteria: |
+      (1) 로그 입력에 %n·%hn·다수 %p·큰 폭 지정 패턴 관측
+      (2) 패치 후 포맷 지정자가 그대로 출력되어 임의쓰기 불가
+    points_breakdown: { detection: 63, patch: 147 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["logd"]
+  safety:
+    profile: "hardened"
+    notes: "원격 정적 바이너리(no-PIE·의도적 포맷스트링). cap_drop/pids_limit/mem_limit, 30초 타임아웃."
