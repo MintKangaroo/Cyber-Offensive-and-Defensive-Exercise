@@ -1,0 +1,35 @@
+# CCE형 국가기반시설 상급 세트 — hard·insane 중심. 상위권 변별용.
+competition:
+  id: "cce-infra-hardcore"
+  name: "CCE형 국가기반시설 상급(하드코어)"
+  description: |
+    상위권을 가리는 고난도 세트. hard·insane 문제로 구성한다(포너블은 현재 최대 medium 이라
+    대표 2문제를 포함). RCE·역직렬화·암호 오라클·심화 리버싱·OT 사보타주 등.
+  duration_hours: 8
+  challenges:
+    # web hard/insane (5)
+    - WEB-017   # 공항 SSTI (hard)
+    - WEB-020   # KEPCO 프로토타입 오염 (hard)
+    - WEB-023   # 한수원 JWT kid 주입 (hard)
+    - WEB-024   # 상수도 2차 SQLi (hard)
+    - WEB-009   # WAF 우회 + 블라인드 SQLi (insane)
+    # crypto (1)
+    - CRY-000   # 재난망 AES-ECB 오라클 (hard)
+    # reversing (2)
+    - REV-004   # 스택 VM 리버싱 (hard)
+    - REV-009   # 커스텀 VM 난독화 (insane)
+    # forensics (2)
+    - FOR-007   # 프로세스 할로잉 (hard)
+    - FOR-009   # 안티포렌식 다단계 (insane)
+    # network (2)
+    - NET-007   # 다중 홉 피벗 (hard)
+    - NET-009   # OT 사보타주 트레이스 (insane)
+    # ics (2)
+    - ICS-009   # (hard)
+    - ICS-011   # (hard)
+    # ai (2)
+    - AI-007    # (hard)
+    - AI-009    # (insane)
+    # pwn 대표 (2, 현재 최대 medium)
+    - PWN-000   # LNG경보센터 ret2win (medium)
+    - PWN-001   # 정수처리장 포맷스트링 (medium)
