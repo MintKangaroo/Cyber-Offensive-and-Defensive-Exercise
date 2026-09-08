@@ -8,6 +8,8 @@ competition:
     국가기반시설(에너지·수자원·교통·의료·재난) 테마로 카테고리·난이도를 균형 있게 큐레이션한
     본선 세트. 웹·포너블·크립토·리버싱·포렌식·네트워크·ICS·AI·탐지 9개 분야, easy→insane 곡선.
   duration_hours: 8
+  scoring: { mode: dynamic }
+  first_blood_bonus: 50
   challenges:
     # web (6)
     - WEB-011   # 석유공사 권한상승 (easy)

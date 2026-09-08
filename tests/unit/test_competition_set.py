@@ -62,4 +62,10 @@ def test_scoped_scoreboard_only_counts_set_members(portal):
     sb = portal.competition_scoreboard(SET_ID)["scoreboard"]
     row = next(r for r in sb if r["team_id"] == "teamX")
     assert row["solved"] == 1           # 세트 안 문제만 집계
-    assert row["points"] == 100         # 세트 밖 999 는 제외
+    # 세트 정책(동적+first-blood) 기준으로 재계산: 단독 해결 → dynamic(base,1)=base + fb 보너스.
+    c = portal.COMPETITIONS[SET_ID]
+    base = portal.CATALOG[inset]["points_red"]
+    expected = portal._dynamic_points(base, 1, k=c["scoring"]["k"],
+                                      min_ratio=c["scoring"]["min_ratio"]) + c["first_blood_bonus"]
+    assert row["points"] == expected     # 세트 밖 999 는 제외(정책 재계산 값과 일치)
+    assert row["points"] != 999

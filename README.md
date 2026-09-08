@@ -1064,10 +1064,15 @@ web·pwn·crypto·forensics·network·reversing·detection·ai·ICS/OT 9개 분�
 > 본선 세트를 정의합니다. 포털이 세트 단위 목록·스코프 스코어보드를 제공합니다.
 >
 > - 세트 목록: `GET /portal/competitions` · 상세(밸런스 요약): `GET /portal/competitions/{id}`
-> - 세트 스코어보드(세트 내 문제 solve 만 집계): `GET /portal/competitions/{id}/scoreboard`
-> - 기본 세트 **`cce-infra-final-2026`**(국가기반시설 본선): red 24문제 · 8분야
->   (web6·pwn3·crypto1·reversing3·forensics3·network3·ics3·ai2) · 난이도 easy8/medium8/hard6/insane2.
->   방어(blue)는 detection 카테고리로 SIEM 엔진이 별도 채점(채점 계통이 달라 세트엔 미포함).
+> - 세트 스코어보드: `GET /portal/competitions/{id}/scoreboard` — 세트 내 문제 solve 만 집계하고
+>   **세트별 스코어링 정책**(매니페스트 `scoring.mode`: static/dynamic)과 **first-blood 보너스**
+>   (`first_blood_bonus`, 각 문제 최초 해결 팀에 가산)를 기본 적용.
+> - 세트 4종: **`cce-infra-final-2026`**(본선 red24·동적·fb50) · **`cce-infra-quals-2026`**(예선
+>   27·동적·fb30) · **`cce-infra-beginner`**(입문 13·정적) · **`cce-infra-hardcore`**(상급 18·동적·fb50).
+>   본선은 8분야(web6·pwn3·crypto1·reversing3·forensics3·network3·ics3·ai2)·easy8/med8/hard6/insane2.
+>   방어(blue)는 detection 카테고리로 SIEM 엔진이 별도 채점(채점 계통이 달라 red 세트엔 미포함).
+> - **관제 대시보드**: `make training-up` 이 Competition 대시보드(포트 5181, 라운드 타이머·분야별
+>   진행률·실시간 세트 스코어보드)를 함께 띄웁니다.
 
 <details open>
 <summary><b>🌐 Web (24)</b></summary>

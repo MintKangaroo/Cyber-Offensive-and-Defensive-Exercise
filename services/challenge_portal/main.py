@@ -223,6 +223,13 @@ def _load_competitions() -> dict:
         selected = [x for x in (c.get("challenges") or []) if x in CATALOG]
         cats = collections.Counter(CATALOG[x]["category"] for x in selected)
         diffs = collections.Counter(CATALOG[x]["difficulty"] for x in selected)
+        # 세트별 스코어링 정책: scoring.mode(static|dynamic)·k·min_ratio, first_blood_bonus.
+        sc = c.get("scoring") or {}
+        scoring = {
+            "mode": sc.get("mode", "static") if isinstance(sc, dict) else str(sc),
+            "k": int(sc.get("k", DYNAMIC_K)) if isinstance(sc, dict) else DYNAMIC_K,
+            "min_ratio": float(sc.get("min_ratio", DYNAMIC_MIN_RATIO)) if isinstance(sc, dict) else DYNAMIC_MIN_RATIO,
+        }
         comps[cid] = {
             "id": cid,
             "name": c.get("name", cid),
@@ -233,8 +240,63 @@ def _load_competitions() -> dict:
             "total_points": sum(CATALOG[x]["points_red"] for x in selected),
             "by_category": dict(cats),
             "by_difficulty": {k: diffs.get(k, 0) for k in order},
+            "scoring": scoring,
+            "first_blood_bonus": int(c.get("first_blood_bonus", 0) or 0),
         }
     return comps
+
+
+def _first_bloods(challenges: list[str]) -> dict[str, str]:
+    """세트 내 각 challenge 의 최초 해결 팀(가장 이른 at). 반환: {cid: team_id}."""
+    fb: dict[str, str] = {}
+    for cid in challenges:
+        best_team, best_at = None, None
+        for team, solves in _SOLVES.items():
+            s = solves.get(cid)
+            if s is None:
+                continue
+            at = s.get("at", 0)
+            if best_at is None or at < best_at:
+                best_team, best_at = team, at
+        if best_team is not None:
+            fb[cid] = best_team
+    return fb
+
+
+def _competition_standings(comp: dict) -> list[dict]:
+    """세트 스코어링 정책(정적/동적) + first-blood 보너스를 적용한 팀별 순위 행."""
+    inset = comp["challenges"]
+    mode = comp["scoring"]["mode"]
+    k = comp["scoring"]["k"]
+    min_ratio = comp["scoring"]["min_ratio"]
+    bonus = comp["first_blood_bonus"]
+    fb = _first_bloods(inset)  # cid -> 최초 해결 팀
+    inset_set = set(inset)
+    rows = []
+    for team, solves in _SOLVES.items():
+        scoped = {cid: s for cid, s in solves.items() if cid in inset_set}
+        if not scoped:
+            continue
+        pts = 0
+        fb_count = 0
+        for cid in scoped:
+            base = CATALOG[cid]["points_red"]
+            if mode == "dynamic":
+                pts += _dynamic_points(base, _solve_count(cid), k=k, min_ratio=min_ratio)
+            else:
+                pts += base
+            if fb.get(cid) == team:
+                pts += bonus
+                fb_count += 1
+        rows.append({
+            "team_id": team,
+            "solved": len(scoped),
+            "first_bloods": fb_count,
+            "points": pts,
+            "last_solve": max((s["at"] for s in scoped.values()), default=0),
+        })
+    rows.sort(key=lambda r: (-r["points"], r["last_solve"]))
+    return rows
 
 
 COMPETITIONS = _load_competitions()
@@ -497,7 +559,8 @@ def list_competitions():
     """대회 세트 목록 — 난이도·카테고리 밸런스 요약 포함."""
     return {"competitions": [
         {k: c[k] for k in ("id", "name", "description", "duration_hours",
-                           "count", "total_points", "by_category", "by_difficulty")}
+                           "count", "total_points", "by_category", "by_difficulty",
+                           "scoring", "first_blood_bonus")}
         for c in COMPETITIONS.values()
     ]}
 
@@ -520,30 +583,25 @@ def get_competition(sid: str, team_id: Optional[str] = None):
         "id": c["id"], "name": c["name"], "description": c["description"],
         "duration_hours": c["duration_hours"], "count": c["count"],
         "total_points": c["total_points"], "by_category": c["by_category"],
-        "by_difficulty": c["by_difficulty"], "challenges": items,
+        "by_difficulty": c["by_difficulty"], "scoring": c["scoring"],
+        "first_blood_bonus": c["first_blood_bonus"], "challenges": items,
     }
 
 
 @app.get("/portal/competitions/{sid}/scoreboard")
 def competition_scoreboard(sid: str):
-    """대회 세트로 스코프된 스코어보드 — 세트에 포함된 문제 solve 만 집계."""
+    """대회 세트 스코어보드 — 세트별 스코어링 정책(정적/동적) + first-blood 보너스 기본 적용.
+
+    세트에 포함된 문제 solve 만 집계하고, 매니페스트의 scoring.mode 가 dynamic 이면 해결 팀 수
+    반비례 점수를, first_blood_bonus 가 있으면 각 문제 최초 해결 팀에 보너스를 준다."""
     c = COMPETITIONS.get(sid)
     if not c:
         raise HTTPException(404, "competition not found")
-    inset = set(c["challenges"])
-    rows = []
-    for team, solves in _SOLVES.items():
-        scoped = {cid: s for cid, s in solves.items() if cid in inset}
-        if not scoped:
-            continue
-        rows.append({
-            "team_id": team,
-            "solved": len(scoped),
-            "points": sum(s["points"] for s in scoped.values()),
-            "last_solve": max((s["at"] for s in scoped.values()), default=0),
-        })
-    rows.sort(key=lambda r: (-r["points"], r["last_solve"]))
-    return {"competition": sid, "scoreboard": rows}
+    return {
+        "competition": sid,
+        "scoring": c["scoring"], "first_blood_bonus": c["first_blood_bonus"],
+        "scoreboard": _competition_standings(c),
+    }
 
 
 @app.get("/portal/scoreboard/individuals")

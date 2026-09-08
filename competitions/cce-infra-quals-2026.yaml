@@ -8,6 +8,8 @@ competition:
     본선 진출을 가리는 예선 세트. easy·medium 중심으로 8개 분야를 넓게 커버하고, 맛보기용
     insane 1문제를 둔다. 입문~중급 참가자가 폭넓게 득점할 수 있도록 균형을 맞췄다.
   duration_hours: 6
+  scoring: { mode: dynamic }
+  first_blood_bonus: 30
   challenges:
     # web (7)
     - WEB-000   # 노출된 디버그 설정 (easy)

@@ -6,6 +6,8 @@ competition:
     사이버공방 입문자를 위한 저난이도 세트. easy 문제를 중심으로 분야 감을 잡고, 완만한
     medium 3문제로 다음 단계를 준비한다.
   duration_hours: 4
+  scoring: { mode: static }
+  first_blood_bonus: 0
   challenges:
     # easy (10)
     - WEB-000   # 노출된 디버그 설정
