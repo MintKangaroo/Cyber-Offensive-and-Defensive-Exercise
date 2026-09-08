@@ -13,7 +13,7 @@
 
 ## 완성도 · 검증 현황
 
-![status](https://img.shields.io/badge/status-operational-2aa25c) ![challenges](https://img.shields.io/badge/challenges-87%2F87-2aa25c) ![tests](https://img.shields.io/badge/unit-557%20passed-2aa25c) ![ci](https://img.shields.io/badge/CI-7%2F7-2aa25c)
+![status](https://img.shields.io/badge/status-operational-2aa25c) ![challenges](https://img.shields.io/badge/challenges-88%2F88-2aa25c) ![tests](https://img.shields.io/badge/unit-563%20passed-2aa25c) ![ci](https://img.shields.io/badge/CI-7%2F7-2aa25c)
 
 **운영 준비 완료(operational).** 4주차 전면 보안 감사(Showstopper 11건 · 35개 항목)를 전량 리메디에이션했고,
 감사 §6 미검증 10건과 경쟁표준 갭(DEF CON/CCE G-1~G-14)까지 전부 해소했습니다. 남은 항목은
@@ -733,7 +733,7 @@ docker compose down
 
 **소개 · 구조**
 - [무엇을 하는 플랫폼인가](#무엇을-하는-플랫폼인가) · [아키텍처](#아키텍처) · [주요 화면](#주요-화면-스크린샷) · [핵심 기능](#핵심-기능)
-- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (87종)](#챌린지-카탈로그-87종)
+- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (88종)](#챌린지-카탈로그-88종)
 
 **시작 · 품질 · 접근제어**
 - [처음 시작하기](#처음-시작하기) · [경기 운영 방법](#경기-운영-방법) · [빠른 시작](#빠른-시작)
@@ -1043,9 +1043,9 @@ patched/vulnerable 상태를 한 번에 판정합니다.
 
 ---
 
-## 챌린지 카탈로그 (87종)
+## 챌린지 카탈로그 (88종)
 
-web·pwn·forensics·network·reversing·detection·ai·ICS/OT 8개 분야가 모두 **easy → medium → hard → insane** 난이도 곡선을 갖추고 있습니다.
+web·pwn·crypto·forensics·network·reversing·detection·ai·ICS/OT 9개 분야가 모두 **easy → medium → hard → insane** 난이도 곡선을 갖추고 있습니다.
 표기: `점수(Red/Blue)`. 팀마다 플래그·정답이 HMAC으로 달라 답 공유가 불가능합니다.
 
 > **🇰🇷 CCE형 국가기반시설 Jeopardy** — 사이버공격방어대회(CCE) 본선 스타일의 국가기반시설 테마
@@ -1059,6 +1059,15 @@ web·pwn·forensics·network·reversing·detection·ai·ICS/OT 8개 분야가 �
 > | PWN-000 | LNG 경보센터 | 스택 오버플로우 ret2win(원격 바이너리) | medium | 9010 |
 >
 > 개별 기동: `cd challenges/<cat>/<ID>/deploy && CHALLENGE_SECRET=<secret> docker compose up -d --build`
+
+> **🏁 대회 세트(Competition Set)** — `competitions/*.yaml` 로 난이도·카테고리를 균형 큐레이션한
+> 본선 세트를 정의합니다. 포털이 세트 단위 목록·스코프 스코어보드를 제공합니다.
+>
+> - 세트 목록: `GET /portal/competitions` · 상세(밸런스 요약): `GET /portal/competitions/{id}`
+> - 세트 스코어보드(세트 내 문제 solve 만 집계): `GET /portal/competitions/{id}/scoreboard`
+> - 기본 세트 **`cce-infra-final-2026`**(국가기반시설 본선): red 24문제 · 8분야
+>   (web6·pwn3·crypto1·reversing3·forensics3·network3·ics3·ai2) · 난이도 easy8/medium8/hard6/insane2.
+>   방어(blue)는 detection 카테고리로 SIEM 엔진이 별도 채점(채점 계통이 달라 세트엔 미포함).
 
 <details open>
 <summary><b>🌐 Web (22)</b></summary>

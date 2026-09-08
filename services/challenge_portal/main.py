@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import collections
 import json
 import os
 import subprocess
@@ -34,6 +35,7 @@ from pydantic import BaseModel
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CHALLENGES_ROOT = REPO_ROOT / "challenges"
+COMPETITIONS_ROOT = REPO_ROOT / "competitions"
 EVENT_COLLECTOR_URL = os.environ.get("EVENT_COLLECTOR_URL", "http://event_collector:8010")
 
 # 공정성/안티치트(P1-5) — rate-limit·lockout·감사·플래그공유 탐지
@@ -165,6 +167,40 @@ def _load_catalog() -> dict[str, dict]:
 
 
 CATALOG = _load_catalog()
+
+
+def _load_competitions() -> dict:
+    """competitions/*.yaml 대회 세트 로드. 카탈로그에 없는 ID 는 걸러낸다(경고 없이 스킵)."""
+    comps: dict[str, dict] = {}
+    if not COMPETITIONS_ROOT.exists():
+        return comps
+    order = {"easy": 0, "medium": 1, "hard": 2, "insane": 3}
+    for f in sorted(COMPETITIONS_ROOT.glob("*.yaml")):
+        try:
+            c = (yaml.safe_load(f.read_text()) or {}).get("competition", {}) or {}
+        except yaml.YAMLError:
+            continue
+        cid = c.get("id")
+        if not cid:
+            continue
+        selected = [x for x in (c.get("challenges") or []) if x in CATALOG]
+        cats = collections.Counter(CATALOG[x]["category"] for x in selected)
+        diffs = collections.Counter(CATALOG[x]["difficulty"] for x in selected)
+        comps[cid] = {
+            "id": cid,
+            "name": c.get("name", cid),
+            "description": c.get("description", ""),
+            "duration_hours": c.get("duration_hours"),
+            "challenges": selected,
+            "count": len(selected),
+            "total_points": sum(CATALOG[x]["points_red"] for x in selected),
+            "by_category": dict(cats),
+            "by_difficulty": {k: diffs.get(k, 0) for k in order},
+        }
+    return comps
+
+
+COMPETITIONS = _load_competitions()
 
 
 def _public(entry: dict) -> dict:
@@ -390,6 +426,60 @@ def scoreboard():
         })
     rows.sort(key=lambda r: (-r["points"], r["last_solve"]))
     return {"scoreboard": rows}
+
+
+@app.get("/portal/competitions")
+def list_competitions():
+    """대회 세트 목록 — 난이도·카테고리 밸런스 요약 포함."""
+    return {"competitions": [
+        {k: c[k] for k in ("id", "name", "description", "duration_hours",
+                           "count", "total_points", "by_category", "by_difficulty")}
+        for c in COMPETITIONS.values()
+    ]}
+
+
+@app.get("/portal/competitions/{sid}")
+def get_competition(sid: str, team_id: Optional[str] = None):
+    """대회 세트의 문제 목록(공개 필드) + 밸런스 요약. team_id 시 solved 표시."""
+    c = COMPETITIONS.get(sid)
+    if not c:
+        raise HTTPException(404, "competition not found")
+    solved = _SOLVES.get(team_id or "", {})
+    order = {"easy": 0, "medium": 1, "hard": 2, "insane": 3}
+    items = []
+    for cid in c["challenges"]:
+        pub = _public(CATALOG[cid])
+        pub["solved"] = cid in solved
+        items.append(pub)
+    items.sort(key=lambda x: (x["category"], order.get(x["difficulty"], 9), x["points_red"]))
+    return {
+        "id": c["id"], "name": c["name"], "description": c["description"],
+        "duration_hours": c["duration_hours"], "count": c["count"],
+        "total_points": c["total_points"], "by_category": c["by_category"],
+        "by_difficulty": c["by_difficulty"], "challenges": items,
+    }
+
+
+@app.get("/portal/competitions/{sid}/scoreboard")
+def competition_scoreboard(sid: str):
+    """대회 세트로 스코프된 스코어보드 — 세트에 포함된 문제 solve 만 집계."""
+    c = COMPETITIONS.get(sid)
+    if not c:
+        raise HTTPException(404, "competition not found")
+    inset = set(c["challenges"])
+    rows = []
+    for team, solves in _SOLVES.items():
+        scoped = {cid: s for cid, s in solves.items() if cid in inset}
+        if not scoped:
+            continue
+        rows.append({
+            "team_id": team,
+            "solved": len(scoped),
+            "points": sum(s["points"] for s in scoped.values()),
+            "last_solve": max((s["at"] for s in scoped.values()), default=0),
+        })
+    rows.sort(key=lambda r: (-r["points"], r["last_solve"]))
+    return {"competition": sid, "scoreboard": rows}
 
 
 @app.get("/portal/scoreboard/individuals")
