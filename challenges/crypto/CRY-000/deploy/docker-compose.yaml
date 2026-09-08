@@ -1,0 +1,13 @@
+services:
+  cry000_deploy:
+    build: { context: . }
+    container_name: cry000_deploy
+    ports: ["8130:8130"]
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-cry000-dev-secret}
+      - PATCH_CRY_000=false
+    mem_limit: 160m
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]

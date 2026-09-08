@@ -1,0 +1,39 @@
+challenge:
+  id: "CRY-000"
+  title: "국가 재난망 토큰 오라클 - AES-ECB Byte-at-a-Time"
+  category: "crypto"
+  difficulty: "hard"
+  points: { red: 200, blue: 200 }
+  asset: "disaster_net"
+  mitre: [T1040]
+
+  description: |
+    국가 재난망 토큰 발급기가 사용자 입력 뒤에 비상 마스터 토큰(flag)을 붙여 AES-ECB 로 암호화해
+    돌려준다. ECB 모드의 결정성(동일 평문 블록→동일 암호블록)을 악용해 입력 길이를 조절하며 비밀을
+    한 바이트씩 복구하라. (신규 카테고리 — crypto)
+
+  red_task:
+    goal: "ECB byte-at-a-time 공격으로 encrypt(input||SECRET) 오라클에서 SECRET(flag)을 복구하라"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 15, text: "같은 16바이트 평문 블록은 항상 같은 암호블록이 된다(ECB). 응답 mode 를 보라." }
+      - { cost: 30, text: "입력을 늘려 비밀의 첫 바이트가 한 블록의 마지막 칸에 오게 정렬한 뒤 후보를 대입." }
+      - { cost: 45, text: "표준 ECB byte-at-a-time: prefix 길이를 줄여가며 블록별로 1바이트씩 복구." }
+
+  blue_task:
+    goal: "ECB 대신 임의 IV 의 CBC/GCM 으로 전환해 오라클 복구 차단"
+    success_criteria: |
+      (1) 입력 길이를 1바이트씩 바꾸는 반복 오라클 질의 관측
+      (2) 패치(PATCH_CRY_000=true) 후 동일 입력도 매번 다른 암호문(복구 불가)
+    points_breakdown: { detection: 60, patch: 140 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용. 키는 CHALLENGE_SECRET 파생. 비밀=flag 를 ECB 오라클로만 복구 가능."
