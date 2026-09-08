@@ -112,6 +112,12 @@ class Database:
         self.connect_timeout_seconds = connect_timeout_seconds
         self.statement_timeout_ms = statement_timeout_ms
         self.application_name = application_name
+        # 백엔드는 database_url 설정 여부로 '명시적으로' 결정된다(연결 실패 시 조용히 sqlite 로
+        # 폴백하지 않는다 — URL 이 있으면 postgres 로만 동작하고, 못 붙으면 그대로 실패한다).
+        # 설계상: 기본 단일 인스턴스(attack_defense) = sqlite(ATTACK_DEFENSE_DATABASE_URL 미설정),
+        # HA 프로파일(attack_defense_ha) = postgres(URL 설정 + compose 의 depends_on
+        # ad_postgres:service_healthy 로 준비 대기). 로컬에서 attack_defense 가 sqlite 인 것은
+        # 폴백/버그가 아니라 이 기본 설정 그대로다.
         self.backend_name = "postgresql" if database_url else "sqlite"
         if self.backend_name == "sqlite":
             self.path.parent.mkdir(parents=True, exist_ok=True)
