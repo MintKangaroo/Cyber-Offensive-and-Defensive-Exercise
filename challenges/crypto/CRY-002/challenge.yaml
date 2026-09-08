@@ -1,0 +1,38 @@
+challenge:
+  id: "CRY-002"
+  title: "재난 통신 암호화 - AES-CTR 논스 재사용"
+  category: "crypto"
+  difficulty: "medium"
+  points: { red: 150, blue: 150 }
+  asset: "disaster_comms"
+  mitre: [T1040]
+
+  description: |
+    재난 통신 시스템이 비상 지령(flag)과 사용자 메시지를 같은 키+논스의 AES-CTR 로 암호화한다.
+    CTR 키스트림 재사용을 악용해 아는 평문으로 키스트림을 복원하고 지령을 복호하라. (crypto 보강)
+
+  red_task:
+    goal: "아는 평문을 암호화해 키스트림을 복원하고 /api/comms/secret 암호문을 복호해 flag 획득"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "secret 과 encrypt 의 nonce 필드를 보라(fixed). CTR 은 키스트림 XOR." }
+      - { cost: 20, text: "아는 평문 P 를 암호화하면 C=P⊕KS → KS=C⊕P. 같은 논스면 KS 동일." }
+      - { cost: 25, text: "flag 암호문 ⊕ KS = flag 평문." }
+
+  blue_task:
+    goal: "암호화마다 임의 논스(또는 AEAD)로 전환해 키스트림 재사용 차단"
+    success_criteria: |
+      (1) 고정 논스로 다수 메시지를 암호화하는 사용 패턴
+      (2) 패치(PATCH_CRY_002=true) 후 매 암호문에 임의 논스가 prepend 되어 재사용 소멸
+    points_breakdown: { detection: 50, patch: 100 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용. 키/논스 CHALLENGE_SECRET 파생. 키스트림 재사용으로만 복호."

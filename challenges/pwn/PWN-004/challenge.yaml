@@ -1,0 +1,42 @@
+challenge:
+  id: "PWN-004"
+  title: "상수도 유량 계측 콘솔 - 정수 오버플로우(길이 절단) → 스택 BOF → ret2win"
+  category: "pwn"
+  difficulty: "medium"
+  points: { red: 200, blue: 200 }
+  asset: "flow"
+  mitre: [T1203, T1068]
+
+  description: |
+    상수도 유량 계측 콘솔(원격 TCP)이 샘플 길이 count 를 int(부호있음)로 받고 'count > 64' 만
+    검사한다. 음수 count 는 검사를 통과하지만, 하드웨어 16비트 길이 레지스터로 넘길 때
+    (unsigned short) 로 절단되며 거대한 양수(예: -1 → 65535)가 되어 read() 로 64바이트 스택
+    버퍼를 넘겨 저장된 복귀주소를 덮는다. 숨은 emergency_dump() 로 복귀시켜 /flag 를 획득하라.
+    (신규 pwn 유형 — 정수 오버플로우/길이 절단발 스택 BOF; PWN-000 스택 ret2win·PWN-001
+    포맷스트링·PWN-002 전역 BOF·PWN-003 힙 오버플로우 와 구분)
+
+  red_task:
+    goal: "음수 count 로 길이 검사를 우회하고 스택 오버플로우로 emergency_dump() 에 ret2win → flag 획득"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "count 는 int 로 검사(count>64)하지만 read 크기로 넘길 때 16비트로 절단된다. 음수를 넣으면?" }
+      - { cost: 20, text: "count=-1 은 검사를 통과하고 (unsigned short)(-1)=65535 로 read 되어 buf[64] 를 넘긴다. buf 는 rbp-0x40." }
+      - { cost: 30, text: "오프셋 72(=64 buf +8 saved rbp) 뒤에 복귀주소. emergency_dump 전에 ret 가젯 1개로 16바이트 정렬(movaps)." }
+
+  blue_task:
+    goal: "부호/절단 안전한 길이 검사로 오버플로우 차단"
+    success_criteria: |
+      (1) 음수 또는 절단으로 64 를 초과하는 샘플 길이 요청 관측
+      (2) 패치 후 음수 count 가 거부되어 복귀주소를 덮을 수 없음
+    points_breakdown: { detection: 60, patch: 140 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["flow"]
+  safety:
+    profile: "hardened"
+    notes: "원격 정적 바이너리(no-PIE·no-canary·의도적 취약). cap_drop/pids_limit/mem_limit, 30초 타임아웃."
