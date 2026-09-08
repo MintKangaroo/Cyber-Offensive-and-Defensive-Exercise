@@ -239,6 +239,29 @@ services:
     volumes: [ ./infra/match/match_proxy.conf:/etc/nginx/conf.d/default.conf:ro ]
     networks: [range_control]
 
+  # A/D 공격 타깃 게이트웨이 — 팀 취약 서비스는 internal 망(ad_team_access)에 격리되어 host 에서
+  # 직접 도달 불가하다. 이 게이트웨이만 internal 망과 host(ad_target_ingress, non-internal)에 동시
+  # 연결되어 attack-surface 가 광고하는 게임 포트(9101~9303)를 host 에 발행한다. 관리 포트 9001 은
+  # 노출하지 않는다. 이로써 Red 포털 브라우저가 host:<public_port> 로 실제 공격할 수 있다.
+  ad_target_gateway:
+    mem_limit: 128m
+    cpus: "0.50"
+    image: nginx:1.29-alpine
+    container_name: ad_target_gateway
+    restart: unless-stopped
+    ports:
+      - "9101:9101"
+      - "9201:9201"
+      - "9301:9301"
+      - "9102:9102"
+      - "9202:9202"
+      - "9302:9302"
+      - "9103:9103"
+      - "9203:9203"
+      - "9303:9303"
+    volumes: [ ./infra/match/ad_target_gateway.conf:/etc/nginx/conf.d/default.conf:ro ]
+    networks: [ad_team_access, ad_target_ingress]
+
   range_control:
     mem_limit: 512m
     cpus: "0.75"
@@ -1709,6 +1732,9 @@ networks:
   # 여전히 도달하고, 체커(attack_defense)도 이 망에 붙어 컨테이너명으로 팀 서비스에 접근한다.
   ad_team_access: { driver: bridge, internal: true }
   ad_game_attack: { driver: bridge, internal: true }
+  # 공격 타깃 게이트웨이의 host 발행 경로(non-internal). 게이트웨이만 이 망 + ad_team_access 에
+  # 동시 연결되어 격리된 팀 서비스를 통제된 단일 지점으로 host 에 노출한다.
+  ad_target_ingress: { driver: bridge }
   ad_scoreboard_api: { driver: bridge }
   ad_management: { driver: bridge, internal: true }
   # Host-side push/pull path. Game service containers are deliberately absent.
