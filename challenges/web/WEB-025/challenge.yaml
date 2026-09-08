@@ -1,0 +1,40 @@
+challenge:
+  id: "WEB-025"
+  title: "정부 G-Cloud 인스턴스 콘솔 - SSRF 클라우드 메타데이터 탈취"
+  category: "web"
+  difficulty: "hard"
+  points: { red: 200, blue: 200 }
+  asset: "gov_cloud"
+  mitre: [T1190, T1552.005]
+
+  description: |
+    정부 G-Cloud 인스턴스 콘솔의 상태 수집기가 사용자 URL 을 목적지 검증 없이 서버가 대신
+    fetch 한다(SSRF). 클라우드 메타데이터 서비스(IMDS, 인스턴스 내부/루프백에서만 응답)를 서버가
+    대신 호출하게 만들어 IAM 임시 자격증명(SecretAccessKey=flag)을 탈취하라.
+    (신규 취약점 유형 — SSRF→클라우드 메타데이터; WEB-013 단순 내부 SSRF 와 구분)
+
+  red_task:
+    goal: "상태 수집기 SSRF 로 IMDS(/latest/meta-data/iam/security-credentials/<role>)를 서버가 호출하게 해 자격증명(flag) 탈취"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "수집기는 서버가 대신 URL 을 가져온다. 외부만 향해야 할 이유가 있나?" }
+      - { cost: 20, text: "클라우드 인스턴스는 메타데이터 서비스(IMDS)에서 임시 자격증명을 얻는다. 역할 목록부터." }
+      - { cost: 30, text: "url=http://127.0.0.1:8131/latest/meta-data/iam/security-credentials/gcloud-ops-role" }
+
+  blue_task:
+    goal: "fetch 목적지의 루프백/사설/링크로컬(169.254) 대역을 차단"
+    success_criteria: |
+      (1) 수집 파라미터가 IMDS/루프백을 가리키는 요청 관측
+      (2) 패치(PATCH_WEB_025=true) 후 내부/메타데이터 대상 fetch 는 400
+    points_breakdown: { detection: 60, patch: 140 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: []
+  safety:
+    profile: "standard"
+    notes: "훈련용. IMDS 는 mock 이며 루프백 전용. 실제 클라우드 자격증명 아님(flag 더미)."

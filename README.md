@@ -13,7 +13,7 @@
 
 ## 완성도 · 검증 현황
 
-![status](https://img.shields.io/badge/status-operational-2aa25c) ![challenges](https://img.shields.io/badge/challenges-88%2F88-2aa25c) ![tests](https://img.shields.io/badge/unit-563%20passed-2aa25c) ![ci](https://img.shields.io/badge/CI-7%2F7-2aa25c)
+![status](https://img.shields.io/badge/status-operational-2aa25c) ![challenges](https://img.shields.io/badge/challenges-91%2F91-2aa25c) ![tests](https://img.shields.io/badge/unit-563%20passed-2aa25c) ![ci](https://img.shields.io/badge/CI-7%2F7-2aa25c)
 
 **운영 준비 완료(operational).** 4주차 전면 보안 감사(Showstopper 11건 · 35개 항목)를 전량 리메디에이션했고,
 감사 §6 미검증 10건과 경쟁표준 갭(DEF CON/CCE G-1~G-14)까지 전부 해소했습니다. 남은 항목은
@@ -733,7 +733,7 @@ docker compose down
 
 **소개 · 구조**
 - [무엇을 하는 플랫폼인가](#무엇을-하는-플랫폼인가) · [아키텍처](#아키텍처) · [주요 화면](#주요-화면-스크린샷) · [핵심 기능](#핵심-기능)
-- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (88종)](#챌린지-카탈로그-88종)
+- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (91종)](#챌린지-카탈로그-91종)
 
 **시작 · 품질 · 접근제어**
 - [처음 시작하기](#처음-시작하기) · [경기 운영 방법](#경기-운영-방법) · [빠른 시작](#빠른-시작)
@@ -1043,7 +1043,7 @@ patched/vulnerable 상태를 한 번에 판정합니다.
 
 ---
 
-## 챌린지 카탈로그 (88종)
+## 챌린지 카탈로그 (91종)
 
 web·pwn·crypto·forensics·network·reversing·detection·ai·ICS/OT 9개 분야가 모두 **easy → medium → hard → insane** 난이도 곡선을 갖추고 있습니다.
 표기: `점수(Red/Blue)`. 팀마다 플래그·정답이 HMAC으로 달라 답 공유가 불가능합니다.
@@ -1070,7 +1070,7 @@ web·pwn·crypto·forensics·network·reversing·detection·ai·ICS/OT 9개 분�
 >   방어(blue)는 detection 카테고리로 SIEM 엔진이 별도 채점(채점 계통이 달라 세트엔 미포함).
 
 <details open>
-<summary><b>🌐 Web (22)</b></summary>
+<summary><b>🌐 Web (24)</b></summary>
 
 | ID | 제목 | 난이도 | ATT&CK | 점수 |
 |---|---|---|---|---|
@@ -1094,12 +1094,14 @@ web·pwn·crypto·forensics·network·reversing·detection·ai·ICS/OT 9개 분�
 | WEB-021 | 재난문자(CBS) 포털 — 웹 캐시 포이즈닝 · **인프라 확장** | hard | T1190,T1557 | 150/150 |
 | WEB-023 | 한수원 원전 통합인증 — JWT kid 경로 주입 · **인프라 확장** | hard | T1078,T1552.004 | 200/200 |
 | WEB-024 | 상수도 요금 시스템 — 2차 SQL 인젝션 · **인프라 확장** | hard | T1190 | 200/200 |
+| WEB-025 | 정부 G-Cloud 콘솔 — SSRF 클라우드 메타데이터 탈취 · **인프라 확장** | hard | T1190,T1552.005 | 200/200 |
+| WEB-026 | 스마트팜 관제 설정 — YAML 역직렬화 RCE · **인프라 확장** | hard | T1190,T1059 | 200/200 |
 | WEB-005 | 복원의 대가 — Historian 역직렬화 RCE | hard | T1059,T1203 | 250/250 |
 | WEB-009 | WAF 우회 + 블라인드 SQL 인젝션 | insane | T1190 | 300/150 |
 </details>
 
 <details>
-<summary><b>💥 Pwn (3) — 원격 바이너리 포너블</b></summary>
+<summary><b>💥 Pwn (4) — 원격 바이너리 포너블</b></summary>
 
 | ID | 제목 | 난이도 | ATT&CK | 점수 |
 |---|---|---|---|---|

@@ -1,0 +1,14 @@
+services:
+  web025_deploy:
+    build:
+      context: .
+    container_name: web025_deploy
+    ports:
+      - "8131:8131"
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web025-dev-secret}
+      - PATCH_WEB_025=false
+      - PORT=8131
+    mem_limit: 160m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
