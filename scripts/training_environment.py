@@ -68,6 +68,11 @@ DASHBOARDS = (
         "cwd": ROOT / "dashboards" / "control-tower",
         "serve_dir": ".",
     },
+    {
+        "name": "Competition", "slug": "competition", "port": 5181,
+        "cwd": ROOT / "dashboards" / "competition",
+        "serve_dir": ".",
+    },
 )
 
 A_D_BUILD_SERVICES = (

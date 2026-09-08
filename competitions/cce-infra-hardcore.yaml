@@ -6,6 +6,8 @@ competition:
     상위권을 가리는 고난도 세트. hard·insane 문제로 구성한다(포너블은 현재 최대 medium 이라
     대표 2문제를 포함). RCE·역직렬화·암호 오라클·심화 리버싱·OT 사보타주 등.
   duration_hours: 8
+  scoring: { mode: dynamic }
+  first_blood_bonus: 50
   challenges:
     # web hard/insane (5)
     - WEB-017   # 공항 SSTI (hard)
