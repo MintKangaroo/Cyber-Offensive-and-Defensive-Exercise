@@ -37,9 +37,9 @@ def ad(tmp_path: Path):
 
 def bootstrap(
     ad, match_id: str = "match-1", teams: int = 3, services: int = 2,
-    mode: str = "attack_defense",
+    mode: str = "attack_defense", round_duration: int = 5,
 ):
-    ad.repo.create_match("Test Match", 5, 3, {}, match_id, mode)
+    ad.repo.create_match("Test Match", round_duration, 3, {}, match_id, mode)
     for index in range(1, teams + 1):
         ad.repo.add_team(match_id, f"team-{index:02}", f"Team {index}", f"team-{index}")
     specs = [
