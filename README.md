@@ -1,4 +1,4 @@
-# 🛡️ Cyber Range Platform — 공방(攻防) 통합 훈련 플랫폼
+# Cyber Range Command — Digital Twin Cyber Operations Center
 
 > **위성 지상국 · 전력망(SCADA) · 사내망 + 정유/석유화학 · 스마트팩토리 · 수도 · LNG · 철도 · 공항 ·
 > 데이터센터 · 병원** 등 **11개 ICS/OT 섹터**를 모사한 디지털 트윈 위에서
@@ -11,27 +11,38 @@
 > **SSE 실시간 상황판 + 단일 관리 콘솔(Control Tower)**, **인시던트·안티치트·위기 인젝트**,
 > **Prometheus 관측성·시나리오 저작 도구**까지 갖춘 운영형 레인지입니다.
 
-## 완성도 · 검증 현황
+## Cyber Range Command 업그레이드 (2026-09)
 
-![status](https://img.shields.io/badge/status-operational-2aa25c) ![challenges](https://img.shields.io/badge/challenges-100%2F100-2aa25c) ![tests](https://img.shields.io/badge/unit-563%20passed-2aa25c) ![ci](https://img.shields.io/badge/CI-7%2F7-2aa25c)
+기존 공방·CTF·ICS 훈련 서비스를 유지하면서 **React Control Tower와 공통 디자인 시스템**을
+추가했습니다. 교관은 범위 내 텔레메트리, 11개 섹터, 인시던트와 안전 상태를 한 화면에서 확인하고,
+역할에 따라 허용된 조사·훈련·경쟁 도구로 이동할 수 있습니다.
 
-**운영 준비 완료(operational).** 4주차 전면 보안 감사(Showstopper 11건 · 35개 항목)를 전량 리메디에이션했고,
-감사 §6 미검증 10건과 경쟁표준 갭(DEF CON/CCE G-1~G-14)까지 전부 해소했습니다. 남은 항목은
-새 기능이 아니라 8시간 정식 소크 실측(선택, 2시간 가속은 PASS)뿐입니다.
+- **Live Operations / Digital Twin**: 실제 이벤트 기반 상태, 근거 검사, 5,000개 버퍼와 가상화 피드,
+  일시 정지·검색·필터·핀·SSE 재연결. 없는 데이터는 `Unavailable`로 표시합니다.
+- **Incident Workbench**: 큐 → 조사 → 근거의 3단 구성, SLA, 담당자·노트·기존 상태 전이.
+- **Scenario Studio**: 주석·확장 필드·다중 문서를 보존하는 Visual↔YAML 편집, 실제 엔진 검증,
+  드라이런, 개인 초안, 버전 충돌 검사와 명시적 게시.
+- **Replay / AAR**: 한 재생 시각으로 이벤트·관측 자산·점수 원장·연결된 인시던트 이력을 재구성하고,
+  주요 시점과 교관 주석을 검토합니다. 누락된 과거 상태를 현재 값으로 채우지 않습니다.
+- **운영 UX**: Ctrl/Cmd+K 검색, 알림, 고대비, War Room, 모바일 긴급 제어, 사유·확인·감사 로그.
+- **선택형 AI**: 관리자 설정과 교관 정책이 있을 때만 로컬 모델이 근거 요약과 방어 조사 제안을
+  제공합니다. 자동 실행이나 AI 경쟁 채점은 없습니다.
+- **Higgsfield 브랜드 자산 19개**: 이미지·영상은 분위기 표현에만 사용하며, 지도·차트·계측을 대체하지 않습니다.
 
-| 검증 축 | 결과 |
-|---|---|
-| 챌린지 자동 QA | **70 / 70** 통과 |
-| 백엔드 유닛 테스트 | **455 passed** |
-| CI 파이프라인 | **7 / 7** green (unit·integration·challenges·clean-install·dashboard·secret-scan·supply-chain) |
-| 트윈→SIEM 라이브 탐지 E2E | **6 / 6** 규칙 발화 (실 도커 스택) |
-| 실 ICS 프로토콜 | **14종** (11개 섹터 트윈 전부 실 프로토콜 구사) |
-| 감사 §6 미검증 항목 | **10 / 10** 해소 (라이브 실측 + 결정론적 테스트) |
-| 라이브 실측 실결함 수정 | **8건** (정적 분석이 못 잡은 런타임 결함) |
+**검증 범위:** 백엔드 623개 통과 / 6개 PostgreSQL 환경 의존 건너뜀, Command Vitest 34개,
+Playwright 11개 흐름, 기존 LiveFire 테스트와 6개 React 빌드, TypeScript·ESLint,
+게이트웨이 Docker 빌드를 검증합니다. 원격 CI 결과는 아래 워크플로에서 확인하세요.
 
-> ICS 챌린지 13종은 전부 HTTP 목업 → **실 프로토콜**(라이브 서버 익스플로잇 또는 실 pcap 포렌식)로 재저작 완료.
-> 감사 §7 「대외 공개 최소조건」 충족. 상세 이력은 [`CHANGELOG.md`](CHANGELOG.md), 갭 해소 현황은
-> [`docs/GAP_ANALYSIS.md`](docs/GAP_ANALYSIS.md) 상단 배너 참고.
+[![CI](https://github.com/MintKangaroo/Cyber-Offensive-and-Defensive-Exercise/actions/workflows/ci.yml/badge.svg)](https://github.com/MintKangaroo/Cyber-Offensive-and-Defensive-Exercise/actions/workflows/ci.yml)
+
+**이번 변경은 단계적 전환입니다.** 새 Command API는 서버에서 역할·팀·훈련 범위를 검사합니다.
+기존 독립 API의 읽기 권한 정비, 모든 전문 화면의 내부 디자인 통합, 완전한 역사 체크포인트,
+개인별 숙련도 모델과 장시간 운영 부하 검증은 남아 있습니다. 전사·공공기관 실운영 완료나
+보안 인증을 의미하지 않습니다. 상세한 완료/유지/후속 항목은
+[로드맵](docs/NEXTGEN_ROADMAP.md)과 [저장소 감사](docs/NEXTGEN_AUDIT.md)에 기록했습니다.
+
+문서: [구조와 API](docs/NEXTGEN_ARCHITECTURE.md) · [디자인 시스템](docs/design/DESIGN_SYSTEM.md) ·
+[Higgsfield 프롬프트](docs/design/HIGGSFIELD_PROMPTS.md) · [변경·검증 이력](docs/NEXTGEN_CHANGELOG.md)
 
 **최근 개선 (2026-08)**
 - **네트워크 계층 배경 트래픽(G-11)** — `traffic_generator`가 트윈 양성 엔드포인트로 실 HTTP를 흘려
@@ -43,7 +54,7 @@
 
 ## 처음 시작하기
 
-Docker와 Docker Compose v2, Node.js 20+가 설치돼 있다면 아래 순서만 따라 하면
+Docker와 Docker Compose v2, Node.js 22 LTS(또는 20.19+)가 설치돼 있다면 아래 순서만 따라 하면
 됩니다. 첫 실행은 image build 때문에 시간이 조금 걸릴 수 있습니다.
 
 ### ⚠️ 0단계 — 시크릿 준비 (필수, 한 번만)
@@ -1267,7 +1278,7 @@ web·pwn·crypto·forensics·network·reversing·detection·ai·ICS/OT 9개 분�
 
 ### 요구사항
 - Docker + Docker Compose v2
-- (대시보드 개발서버 실행 시) Node.js 20+
+- (대시보드 개발서버 실행 시) Node.js 22 LTS(또는 20.19+)
 
 ### 1) 플랫폼 기동
 ```bash
@@ -1407,31 +1418,48 @@ $ python3 loadtest/sse_loadtest.py --observers 100 --teams 8 --rate 15 --duratio
 
 ## 통합 관리 콘솔 — Control Tower (단일 화면 운영)
 
-교관이 **한 화면에서 플랫폼 전체를 관리**하는 단일 페이지 콘솔(`dashboards/control-tower/index.html`,
-빌드 불필요한 self-contained HTML). gateway에서 `/control/`로 접속(랜딩 카드), dev에서는 직접 포트로.
+기존 `dashboards/control-tower` 경로를 React/TypeScript 앱으로 전환했습니다.
+`make training-up`이 의존성과 정적 빌드를 준비하며 **http://localhost:5180/** 에서 접속합니다.
+기존 TLS 게이트웨이에서는 **`/control/`** 을 사용합니다.
 
-![Control Tower](docs/images/control-tower.png)
+일반 사용자는 훈련 계정으로 로그인합니다. 교관이 기존 정적 역할 토큰을 써야 할 때는
+로그인의 **Advanced access**를 사용할 수 있습니다. 새 Command API는 개발 무인증 우회를
+허용하지 않으며, Red/Blue 데이터 조회에는 팀·훈련 멤버십이 있는 JWT가 필요합니다.
 
-한 화면에서:
-- **서비스 헬스**: 11개 서비스 도달성·지연(events/scoring/config/siem/auth/instructor/range/portal/edr/noc/aar).
-- **실시간 상황 피드**: SSE `/stream` 구독(P0-4) — events/detections/scores/safety/phase_clock 토픽 색상 구분.
-- **라이브 스코어보드 · 매치 · 인시던트 · 안전 상태**(SLA 위반 인시던트 강조·격리 점수·긴급정지).
-- **ICS 자산 상태판**: SSE 이벤트만으로 9개 ICS 트윈의 상태(공격 중·파괴/침해·방어됨·복구됨)를
-  MITRE 기법과 함께 색상 추적 — SCADA 상황 인식(백엔드 추가 없이 이벤트 스트림 파생).
-- **컨트롤 액션**: 시나리오 Start/End, 긴급정지 발동/해제, 훈련 초기화 — 각 사유는 감사 로그에 기록.
-- gateway/dev **모드 자동 감지**(`/api/*` 프록시 생존 여부로 판별), 역할 대시보드로 바로가기.
-- **워룸 모드(P2-2)**: 헤더 `▣ WARROOM` 버튼(또는 키보드 `W`)으로 프로젝터/대형 화면용 고대비·
-  대형 레이아웃 토글 — 조작 바를 숨긴 **읽기전용 상황판**. 선택은 localStorage 로 유지.
-- **반응형(P2-3)**: 태블릿(≤900px)·모바일(≤600px)에서 세로 스택(flex-column)으로 재배치 —
-  라이브 피드 우선, 헬스 칩 가로 스크롤, 조작 바는 하단, 터치 타깃 확대. 가로 스크롤 없음.
+![Cyber Range Command overview](docs/images/command-overview.png)
 
-![Control Tower 워룸 모드](docs/images/control-tower-warroom.png)
-![Control Tower 모바일](docs/images/control-tower-mobile.png)
+*디자인 검토용 Playwright 캡처입니다. 위 화면 데이터는 자동화 테스트 fixture이며 실제 운영
+텔레메트리를 주장하지 않습니다. 배포 앱에는 데모 데이터가 포함되지 않습니다.*
 
-> 위 스크린샷은 **실제 실행 캡처**다(Playwright, 4서비스 라이브 + 이벤트·인시던트 주입). 검증: SSE
-> 피드 실시간 수신, 헬스 9/12 green, 스코어 실시간 갱신, **인시던트 4건(SLA 위반 1건 ⚠ 강조)**,
-> 그리고 초기화 액션이 실제로 `event(120)·scoring(성취+팀점수)`를 비우고 긴급정지가 200을 반환하는
-> 것까지 확인했다.
+- **Overview / Live operations**: 관측 상태, 서비스 가용성, 우선 인시던트와 이벤트 근거.
+- **Digital twin / Event stream**: 11개 섹터 검사, 확대·필터, 원본 이벤트 및 인시던트/리플레이 이동.
+- **Incidents / Blue workspace**: 기존 SOC 생명주기와 조사 근거를 함께 표시.
+- **Scenario Studio / Replay / AAR**: 기존 YAML·이벤트·점수 계약을 사용하는 저작/검토 흐름.
+- **Attack / Defense**: 기존 게임 엔진의 역할별 지연 공개·Stealth 규칙 유지. 패치·플래그·대회
+  세부 조작은 전체 경쟁 워크벤치로 연결됩니다.
+- **Safety controls**: 긴급정지·해제·리셋·시나리오 종료는 사용자 확인과 사유를 받아 감사 기록.
+- **War Room / Ctrl·Cmd+K / 고대비**: 대형 화면, 키보드 탐색과 접근성 설정.
+
+AI는 기본 꺼짐입니다. 운영자가 `.env`의 `COMMAND_AI_URL`과 `COMMAND_AI_MODEL`에
+접근 가능한 로컬 Ollama 호환 제공자를 지정한 뒤 교관이 Copilot 정책을 활성화해야 합니다.
+프롬프트에는 서버가 허용한 근거만 포함되며, 출력은 실행 명령이 아닌 검토할 제안입니다.
+
+개발 및 검증:
+
+```bash
+cd dashboards/control-tower
+npm ci
+npm run dev
+npm test
+npm run lint
+npm run build
+npx playwright install chromium
+npm run test:ui
+```
+
+공유 UI 소스 변경 후에는 소비 앱에서 `npm ci`로 로컬 패키지를 갱신하세요.
+`make training-up`은 의존성/공유 소스 변경을 감지합니다. 전문 대시보드와 기존 START HERE
+경로는 유지됩니다. 운영 범위와 데이터 제약은 [아키텍처](docs/NEXTGEN_ARCHITECTURE.md)를 참조하세요.
 
 ---
 

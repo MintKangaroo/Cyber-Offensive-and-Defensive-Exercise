@@ -80,3 +80,12 @@ Live Fire 사이버 모의공방훈련 플랫폼을 Claude Code 팀 에이전트
 - Red↔Blue 균형: 모든 문제·시나리오가 공격 과제와 방어 과제를 함께 정의.
 - 점수는 achievement 단위 멱등. 탐지·차단·복구가 모두 점수로 연결되어야 훈련 완결.
 - 계약 우선: B0가 스키마/API 확정 후 병렬 개발.
+
+## Cyber Range Command
+
+- [Repository audit](NEXTGEN_AUDIT.md)
+- [Architecture and contracts](NEXTGEN_ARCHITECTURE.md)
+- [Delivery and remaining work](NEXTGEN_ROADMAP.md)
+- [Change and validation record](NEXTGEN_CHANGELOG.md)
+- [Design system](design/DESIGN_SYSTEM.md)
+- [Higgsfield prompts](design/HIGGSFIELD_PROMPTS.md)

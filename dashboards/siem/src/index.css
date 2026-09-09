@@ -8,9 +8,9 @@ html, body, #root {
 }
 
 body {
-  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--cr-font);
 }
 
 .font-mono {
-  font-family: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--cr-mono);
 }

@@ -1,0 +1,256 @@
+[
+  {
+    "id": "command-hero",
+    "file": "command-hero.webp",
+    "model": "gpt_image_2",
+    "generated_at": "2026-09-09T10:15:26.826662Z",
+    "purpose": "decorative atmosphere; not telemetry",
+    "original_sha256": "a7a01e17fa4f4c613788c9575c1ef569659a27895f3d89809a81671330e924fc",
+    "sha256": "d5c7de613698457a8d9bb7a88d9aa852fdf911c8fcce8f210f9c8871292c5292",
+    "delivery_dimensions": [
+      1920,
+      1086
+    ],
+    "encoding": "WebP quality 85; Lanczos downsample only, no creative modification"
+  },
+  {
+    "id": "sector-ground_station",
+    "file": "sector-ground_station.webp",
+    "model": "gpt_image_2",
+    "generated_at": "2026-09-09T10:17:16.127046Z",
+    "purpose": "decorative atmosphere; not telemetry",
+    "original_sha256": "625b226bdcbc3b2f4b806bb3463402fd45fefaaf82845c29b085be97c9661573",
+    "sha256": "75b71c65559e47160154280eb5c3cd5abad0a61073a1ca857a79fce04f773948",
+    "delivery_dimensions": [
+      960,
+      543
+    ],
+    "encoding": "WebP quality 85; Lanczos downsample only, no creative modification"
+  },
+  {
+    "id": "sector-power_plant",
+    "file": "sector-power_plant.webp",
+    "model": "gpt_image_2",
+    "generated_at": "2026-09-09T10:17:16.444346Z",
+    "purpose": "decorative atmosphere; not telemetry",
+    "original_sha256": "0fff1db1375441169f5180a291b5d0955a97105b2b1661b0875399c6f4121323",
+    "sha256": "9132787f3e0a03ce5c16086845aa0fb5c329c8a7e5e2d546c5111e887497b24c",
+    "delivery_dimensions": [
+      960,
+      543
+    ],
+    "encoding": "WebP quality 85; Lanczos downsample only, no creative modification"
+  },
+  {
+    "id": "sector-defense_network",
+    "file": "sector-defense_network.webp",
+    "model": "gpt_image_2",
+    "generated_at": "2026-09-09T10:17:16.153927Z",
+    "purpose": "decorative atmosphere; not telemetry",
+    "original_sha256": "90cbdd81eb3d5770d16994652e9a32580b28114e50d11a1b43a1806a2f139c7a",
+    "sha256": "0661bd64241908c9b56fef426e348d9d65f1f220ce8e97a4a31655e8d594573f",
+    "delivery_dimensions": [
+      960,
+      543
+    ],
+    "encoding": "WebP quality 85; Lanczos downsample only, no creative modification"
+  },
+  {
+    "id": "sector-refinery_plant",
+    "file": "sector-refinery_plant.webp",
+    "model": "gpt_image_2",
+    "generated_at": "2026-09-09T10:18:59.915074Z",
+    "purpose": "decorative atmosphere; not telemetry",
+    "original_sha256": "18baf060df9f748bf4fadd84961b5d431a6529aeb844395375cfe688e710b53f",
+    "sha256": "c5421f0a3184224e3416dee4c2941e5a8669457109684da59d75df5e0402728d",
+    "delivery_dimensions": [
+      960,
+      543
+    ],
+    "encoding": "WebP quality 85; Lanczos downsample only, no creative modification"
+  },
+  {
+    "id": "sector-smart_factory",
+    "file": "sector-smart_factory.webp",
+    "model": "gpt_image_2",
+    "generated_at": "2026-09-09T10:19:10.931593Z",
+    "purpose": "decorative atmosphere; not telemetry",
+    "original_sha256": "e2f82d0fe155b1ef8629ed7762304c44e05cb9f7c4a597291ccbaa672a5ee244",
+    "sha256": "67b7d0a630adaa4a193e4b2a19a4dcf8d3c79f370331c7d7a73bbf658c0e481d",
+    "delivery_dimensions": [
+      960,
+      543
+    ],
+    "encoding": "WebP quality 85; Lanczos downsample only, no creative modification"
+  },
+  {
+    "id": "sector-water_utility",
+    "file": "sector-water_utility.webp",
+    "model": "gpt_image_2",
+    "generated_at": "2026-09-09T10:19:11.536981Z",
+    "purpose": "decorative atmosphere; not telemetry",
+    "original_sha256": "6fea1ee6ed247bfe2e5bd3c4025e35d7d11481b17ed644fc26d0813c716dccb2",
+    "sha256": "eb28a48e92271b206b790f87167042eb4265c4d0cb23e8249a660834eef99031",
+    "delivery_dimensions": [
+      960,
+      543
+    ],
+    "encoding": "WebP quality 85; Lanczos downsample only, no creative modification"
+  },
+  {
+    "id": "sector-lng_terminal",
+    "file": "sector-lng_terminal.webp",
+    "model": "gpt_image_2",
+    "generated_at": "2026-09-09T10:20:50.992974Z",
+    "purpose": "decorative atmosphere; not telemetry",
+    "original_sha256": "4c537b24983b48b1a4f7740987ac26411d57f8ca1dccd8a3eb8dfc82e851c3e5",
+    "sha256": "56cdf2f1f5627c56cd7c5b591c318e45094169196cf9a8f7b71f38b2dd4c5f24",
+    "delivery_dimensions": [
+      960,
+      543
+    ],
+    "encoding": "WebP quality 85; Lanczos downsample only, no creative modification"
+  },
+  {
+    "id": "sector-railway_signaling",
+    "file": "sector-railway_signaling.webp",
+    "model": "gpt_image_2",
+    "generated_at": "2026-09-09T10:21:01.063378Z",
+    "purpose": "decorative atmosphere; not telemetry",
+    "original_sha256": "e7413c1e7f33d51dab9142883b8f9bbb1308b0bceab3a12eb6b3de3ef0542bc3",
+    "sha256": "719e9f11a6259135419624ae7ab2fd300ad5bd114d7e7dce6dd869dfdb180362",
+    "delivery_dimensions": [
+      960,
+      543
+    ],
+    "encoding": "WebP quality 85; Lanczos downsample only, no creative modification"
+  },
+  {
+    "id": "sector-airport_ot",
+    "file": "sector-airport_ot.webp",
+    "model": "gpt_image_2",
+    "generated_at": "2026-09-09T10:21:04.007288Z",
+    "purpose": "decorative atmosphere; not telemetry",
+    "original_sha256": "7c3c8e4eb26cf9bc01daa925d7d8774af600541e57b10a2a1c25a996287f6134",
+    "sha256": "d279302e365be8f9832a34bb43d2f2fa165438d04a5a12d68b587e2c7eb4982a",
+    "delivery_dimensions": [
+      960,
+      543
+    ],
+    "encoding": "WebP quality 85; Lanczos downsample only, no creative modification"
+  },
+  {
+    "id": "sector-datacenter_bms",
+    "file": "sector-datacenter_bms.webp",
+    "model": "gpt_image_2",
+    "generated_at": "2026-09-09T10:22:40.083346Z",
+    "purpose": "decorative atmosphere; not telemetry",
+    "original_sha256": "90a11fb1b47faedf68056813ea738e54df3fbc90c7eda2a969029caf95534bfe",
+    "sha256": "1cff5e0cb8538ff9bef1c36fd85235a6f86c70928458aea554df8bf61e8b7de5",
+    "delivery_dimensions": [
+      960,
+      543
+    ],
+    "encoding": "WebP quality 85; Lanczos downsample only, no creative modification"
+  },
+  {
+    "id": "sector-hospital_ot",
+    "file": "sector-hospital_ot.webp",
+    "model": "gpt_image_2",
+    "generated_at": "2026-09-09T10:22:44.017394Z",
+    "purpose": "decorative atmosphere; not telemetry",
+    "original_sha256": "e48eb5f87cab3afaa03c93a180a501d1208b548b3a3123c422e0ae999d77b530",
+    "sha256": "192853d04a120889c027bf14ee6ac74461ac9ab5805acf206df1ccf02214924c",
+    "delivery_dimensions": [
+      960,
+      543
+    ],
+    "encoding": "WebP quality 85; Lanczos downsample only, no creative modification"
+  },
+  {
+    "id": "empty-no-incidents",
+    "file": "empty-no-incidents.webp",
+    "model": "gpt_image_2",
+    "generated_at": "2026-09-09T10:22:44.538893Z",
+    "purpose": "decorative atmosphere; not telemetry",
+    "original_sha256": "52dfe01c7ea627ff4e895172ca79cca15443612fa231aa0dd962b03c3435b1b0",
+    "sha256": "2b94408d8da3d3ac1b688a548e861b0f55f6c4c79804b1eec02cdc4a02d1efd7",
+    "delivery_dimensions": [
+      480,
+      358
+    ],
+    "encoding": "WebP quality 85; Lanczos downsample only, no creative modification"
+  },
+  {
+    "id": "empty-no-alerts",
+    "file": "empty-no-alerts.webp",
+    "model": "gpt_image_2",
+    "generated_at": "2026-09-09T10:24:26.077112Z",
+    "purpose": "decorative atmosphere; not telemetry",
+    "original_sha256": "9d5362ea38376111d141011aa7d42ca6972992911d0721af067303c8f1287e9a",
+    "sha256": "1e461ddff9e4efbe42c72274635badeb8e32b8e7470d94eeb72440861869515c",
+    "delivery_dimensions": [
+      480,
+      358
+    ],
+    "encoding": "WebP quality 85; Lanczos downsample only, no creative modification"
+  },
+  {
+    "id": "empty-no-exercise",
+    "file": "empty-no-exercise.webp",
+    "model": "gpt_image_2",
+    "generated_at": "2026-09-09T10:24:26.776285Z",
+    "purpose": "decorative atmosphere; not telemetry",
+    "original_sha256": "191b66477e792e5f135695552dfa7e490ae13612d1a2f45550cc19ddb9ae9bbf",
+    "sha256": "3913eff5fbb1fa7222da77f85b0b60c8a74e131bd55543c1a0377908866cfcf4",
+    "delivery_dimensions": [
+      480,
+      358
+    ],
+    "encoding": "WebP quality 85; Lanczos downsample only, no creative modification"
+  },
+  {
+    "id": "empty-no-replay",
+    "file": "empty-no-replay.webp",
+    "model": "gpt_image_2",
+    "generated_at": "2026-09-09T10:24:39.207298Z",
+    "purpose": "decorative atmosphere; not telemetry",
+    "original_sha256": "6ab72e492aab4763056448bc2763c56a976cada1a43dc573fe7a656fc63d3144",
+    "sha256": "bc33c1c981b549b79b1fc40605f662dc5a9205185e98f821c9c8b37d0695bbf8",
+    "delivery_dimensions": [
+      480,
+      358
+    ],
+    "encoding": "WebP quality 85; Lanczos downsample only, no creative modification"
+  },
+  {
+    "id": "empty-offline",
+    "file": "empty-offline.webp",
+    "model": "gpt_image_2",
+    "generated_at": "2026-09-09T10:26:24.383497Z",
+    "purpose": "decorative atmosphere; not telemetry",
+    "original_sha256": "502ee48fa3e083ed6060615ca3651dc47e8e9b74e06fadfb69ad9ac3f3c9ce08",
+    "sha256": "33f074a7412011e59e1557f6a5f261890906fae5ae6b5e5bb8f485bc7a4124b2",
+    "delivery_dimensions": [
+      480,
+      358
+    ],
+    "encoding": "WebP quality 85; Lanczos downsample only, no creative modification"
+  },
+  {
+    "id": "live-atmosphere",
+    "file": "live-atmosphere.mp4",
+    "model": "seedance_2_0",
+    "generated_at": "2026-09-09T10:26:30.284546Z",
+    "sha256": "c1ac5a890a15c17c60a86073a92d6dbfb63cf4183b5e467ddba478c0db409d37",
+    "purpose": "decorative atmosphere; not telemetry"
+  },
+  {
+    "id": "login-sequence",
+    "file": "login-sequence.mp4",
+    "model": "seedance_2_0",
+    "generated_at": "2026-09-09T10:26:32.654448Z",
+    "sha256": "eef836cb8f834508e0f5d8358185fe90f215e890b188543b5da552d13975ab97",
+    "purpose": "decorative atmosphere; not telemetry"
+  }
+]

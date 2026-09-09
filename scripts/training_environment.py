@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import signal
@@ -66,7 +67,7 @@ DASHBOARDS = (
     {
         "name": "Control Tower", "slug": "control", "port": 5180,
         "cwd": ROOT / "dashboards" / "control-tower",
-        "serve_dir": ".",
+        "build_command": ["npm", "run", "build"], "serve_dir": "dist",
     },
     {
         "name": "Competition", "slug": "competition", "port": 5181,
@@ -168,10 +169,27 @@ def stop_dashboards() -> None:
 
 def install_frontend_dependencies(item: dict) -> None:
     cwd = item["cwd"]
-    if not item.get("build_command") or (cwd / "node_modules").is_dir():
+    if not item.get("build_command"):
+        return
+    # Existing node_modules may predate a dependency or local shared-package update.
+    files = [cwd / name for name in ("package.json", "package-lock.json", ".npmrc")]
+    files += sorted((ROOT / "dashboards" / "shared").rglob("*.ts"))
+    files += sorted((ROOT / "dashboards" / "shared").rglob("*.tsx"))
+    files += sorted((ROOT / "dashboards" / "shared").rglob("*.css"))
+    files += [ROOT / "dashboards" / "shared" / "package.json"]
+    digest = hashlib.sha256()
+    for file in files:
+        if file.is_file():
+            digest.update(str(file).encode())
+            digest.update(file.read_bytes())
+    fingerprint = digest.hexdigest()
+    marker = cwd / "node_modules" / ".command-dependencies"
+    if marker.is_file() and marker.read_text() == fingerprint:
         return
     command = ["npm", "ci"] if (cwd / "package-lock.json").exists() else ["npm", "install"]
     subprocess.run(command, cwd=cwd, check=True)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(fingerprint)
 
 
 def prepare_dashboard(item: dict) -> Path:

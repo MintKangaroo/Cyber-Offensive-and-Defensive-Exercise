@@ -236,3 +236,40 @@ jobs:
           exit-code: '1'
           trivyignores: infra/ci/.trivyignore
           skip-dirs: challenges,services/attack_defense/demo_services,node_modules
+
+  command-platform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboards/control-tower
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: dashboards/control-tower/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:ui
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: command-browser-report
+          path: dashboards/control-tower/playwright-report/
+
+  specialist-dashboards:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        workspace: [dashboards/redportal, dashboards/blueportal, dashboards/siem, services/edr/console]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci && npm run test --if-present && npm run build
+        working-directory: ${{ matrix.workspace }}

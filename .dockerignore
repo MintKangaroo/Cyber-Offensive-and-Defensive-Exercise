@@ -2,3 +2,18 @@
 # 런타임 sqlite(이벤트/점수) — 이미지 baked-in 방지
 *.db
 **/events.db
+
+# Build only source and approved assets; never include local credentials or caches.
+.git
+.env
+.env.*
+!.env.example
+**/node_modules
+**/dist
+**/__pycache__
+**/.pytest_cache
+**/playwright-report
+**/test-results
+.runtime
+.venv
+.claude

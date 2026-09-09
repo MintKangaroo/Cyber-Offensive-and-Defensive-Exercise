@@ -1,0 +1,99 @@
+/* CYBER RANGE COMMAND SYSTEM — all shared semantic values live here. */
+:root {
+  color-scheme: dark;
+  --cr-bg: #0a101b;
+  --cr-surface: #101a28;
+  --cr-raised: #162234;
+  --cr-hover: #1c2c40;
+  --cr-border: #2b3b50;
+  --cr-border-strong: #536780;
+  --cr-text: #e9eff7;
+  --cr-muted: #a4b4c9;
+  --cr-subtle: #879bb6;
+  --cr-cyan: #6cdaef;
+  --cr-amber: #f3bd63;
+  --cr-red: #ff858b;
+  --cr-green: #75d8ad;
+  --cr-magenta: #d6a0e8;
+  --cr-neutral: #a4b4c9;
+  --cr-operational: var(--cr-cyan);
+  --cr-warning: var(--cr-amber);
+  --cr-critical: var(--cr-red);
+  --cr-healthy: var(--cr-green);
+  --cr-unknown: var(--cr-neutral);
+  --cr-intelligence: var(--cr-magenta);
+  --cr-blue-team: var(--cr-cyan);
+  --cr-red-team: var(--cr-amber);
+  --cr-severity-critical: var(--cr-red);
+  --cr-severity-high: var(--cr-amber);
+  --cr-severity-medium: var(--cr-magenta);
+  --cr-severity-low: var(--cr-neutral);
+  --cr-asset-compromised: var(--cr-red);
+  --cr-asset-recovered: var(--cr-green);
+  --cr-asset-contained: var(--cr-cyan);
+  --cr-attack-active: var(--cr-amber);
+  --cr-chart-1: var(--cr-cyan);
+  --cr-chart-2: var(--cr-amber);
+  --cr-chart-3: var(--cr-magenta);
+  --cr-font:
+    Pretendard, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Noto Sans KR", sans-serif;
+  --cr-mono:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  --cr-text-xs: 0.75rem;
+  --cr-text-sm: 0.8125rem;
+  --cr-text-md: 0.875rem;
+  --cr-text-lg: 1rem;
+  --cr-text-xl: 1.375rem;
+  --cr-space-1: 4px;
+  --cr-space-2: 8px;
+  --cr-space-3: 12px;
+  --cr-space-4: 16px;
+  --cr-space-5: 20px;
+  --cr-space-6: 24px;
+  --cr-space-8: 32px;
+  --cr-space-10: 40px;
+  --cr-radius-sm: 4px;
+  --cr-radius: 8px;
+  --cr-radius-lg: 12px;
+  --cr-shadow: 0 12px 36px #0006;
+  --cr-elevation-header: 20;
+  --cr-elevation-drawer: 40;
+  --cr-elevation-modal: 80;
+  --cr-duration: 160ms;
+  --cr-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --cr-row-height: 56px;
+}
+[data-contrast="high"] {
+  --cr-bg: #030810;
+  --cr-surface: #0b1320;
+  --cr-raised: #162235;
+  --cr-text: #fff;
+  --cr-muted: #d1deef;
+  --cr-subtle: #b8cce5;
+  --cr-border: #758ca8;
+  --cr-border-strong: #cfdef2;
+}
+[data-density="comfortable"] {
+  --cr-row-height: 68px;
+}
+@media (prefers-contrast: more) {
+  :root {
+    --cr-muted: #d1deef;
+    --cr-subtle: #b8cce5;
+    --cr-border: #758ca8;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --cr-duration: 0ms;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

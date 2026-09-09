@@ -80,3 +80,17 @@ docker compose up --build
 - **Kill Process는 실제 종료까지 구현·검증 완료**: EDR Agent가 kill_commands 큐를 폴링해
   `psutil.Process.terminate()`(SIGTERM) → 3초 내 미종료 시 `.kill()`(SIGKILL)로 실제 종료한다.
   실제 자식 프로세스와 SIGTERM 무시 프로세스 양쪽 시나리오로 종료/승격 경로를 실행 검증했다.
+
+## Cyber Range Command migration (2026-09)
+
+Control Tower is now built from `dashboards/control-tower`; local port 5180 and
+gateway `/control/` remain unchanged. Use `npm ci` and `npm run build`, or the
+existing `make training-up` orchestration. The gateway build includes the local
+`dashboards/shared` source package for all six React applications.
+
+New command routes live under Instructor API `/command` (gateway
+`/api/instructor/command`) and always require authenticated identity. See
+[command architecture and endpoint contracts](docs/NEXTGEN_ARCHITECTURE.md).
+Scenario Engine persists published sources in `scenario_data:/data/authored`.
+Back up this volume and Instructor API data before deployment. AI remains disabled
+unless a local provider and instructor policy are configured.

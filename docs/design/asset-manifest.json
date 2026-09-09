@@ -1,0 +1,224 @@
+[
+  {
+    "id": "command-hero",
+    "file": "command-hero.webp",
+    "model": "gpt_image_2",
+    "aspect_ratio": "16:9",
+    "usage": "Login and briefing atmosphere; never map telemetry",
+    "prompt": "CYBER RANGE COMMAND SYSTEM visual direction. Premium enterprise and government cyber exercise platform. Near-black navy and deep graphite materials, cool slate industrial surfaces, subtle restrained cyan telemetry accents, very limited amber warning accents. Photorealistic architectural miniature plus precise technical visualization hybrid. Soft overhead lighting, consistent elevated three-quarter isometric camera, 50mm equivalent lens. Quiet, credible, precise, no neon glow, no people, no hackers, no hooded figures, no Matrix code, no text, no labels, no logos, no charts, no UI controls. No explosions or damage spectacle. Wide composition with generous dark negative space. Show one coherent global cyber-range architectural landscape containing a satellite ground station, power infrastructure, factory, railway, airport, refinery, data center and hospital, connected by delicate cyan network links. Leave left third particularly dark for live HTML title.",
+    "delivery_dimensions": [
+      1920,
+      1086
+    ]
+  },
+  {
+    "id": "sector-ground_station",
+    "file": "sector-ground_station.webp",
+    "model": "gpt_image_2",
+    "aspect_ratio": "16:9",
+    "usage": "Decorative sector inspector image, with independent live HTML state",
+    "prompt": "CYBER RANGE COMMAND SYSTEM visual direction. Premium enterprise and government cyber exercise platform. Near-black navy and deep graphite materials, cool slate industrial surfaces, subtle restrained cyan telemetry accents, very limited amber warning accents. Photorealistic architectural miniature plus precise technical visualization hybrid. Soft overhead lighting, consistent elevated three-quarter isometric camera, 50mm equivalent lens. Quiet, credible, precise, no neon glow, no people, no hackers, no hooded figures, no Matrix code, no text, no labels, no logos, no charts, no UI controls. No explosions or damage spectacle. Wide composition with generous dark negative space. Show only a satellite ground station with two parabolic antenna dishes and mission operations building. Match the supplied hero reference lighting, grading and elevated camera exactly. One centered architectural scene on a graphite base. No implied compromise or healthy state.",
+    "delivery_dimensions": [
+      960,
+      543
+    ]
+  },
+  {
+    "id": "sector-power_plant",
+    "file": "sector-power_plant.webp",
+    "model": "gpt_image_2",
+    "aspect_ratio": "16:9",
+    "usage": "Decorative sector inspector image, with independent live HTML state",
+    "prompt": "CYBER RANGE COMMAND SYSTEM visual direction. Premium enterprise and government cyber exercise platform. Near-black navy and deep graphite materials, cool slate industrial surfaces, subtle restrained cyan telemetry accents, very limited amber warning accents. Photorealistic architectural miniature plus precise technical visualization hybrid. Soft overhead lighting, consistent elevated three-quarter isometric camera, 50mm equivalent lens. Quiet, credible, precise, no neon glow, no people, no hackers, no hooded figures, no Matrix code, no text, no labels, no logos, no charts, no UI controls. No explosions or damage spectacle. Wide composition with generous dark negative space. Show only a power grid SCADA substation with transformers and transmission pylons. Match the supplied hero reference lighting, grading and elevated camera exactly. One centered architectural scene on a graphite base. No implied compromise or healthy state.",
+    "delivery_dimensions": [
+      960,
+      543
+    ]
+  },
+  {
+    "id": "sector-defense_network",
+    "file": "sector-defense_network.webp",
+    "model": "gpt_image_2",
+    "aspect_ratio": "16:9",
+    "usage": "Decorative sector inspector image, with independent live HTML state",
+    "prompt": "CYBER RANGE COMMAND SYSTEM visual direction. Premium enterprise and government cyber exercise platform. Near-black navy and deep graphite materials, cool slate industrial surfaces, subtle restrained cyan telemetry accents, very limited amber warning accents. Photorealistic architectural miniature plus precise technical visualization hybrid. Soft overhead lighting, consistent elevated three-quarter isometric camera, 50mm equivalent lens. Quiet, credible, precise, no neon glow, no people, no hackers, no hooded figures, no Matrix code, no text, no labels, no logos, no charts, no UI controls. No explosions or damage spectacle. Wide composition with generous dark negative space. Show only a enterprise network campus with secure office and server infrastructure. Match the supplied hero reference lighting, grading and elevated camera exactly. One centered architectural scene on a graphite base. No implied compromise or healthy state.",
+    "delivery_dimensions": [
+      960,
+      543
+    ]
+  },
+  {
+    "id": "sector-refinery_plant",
+    "file": "sector-refinery_plant.webp",
+    "model": "gpt_image_2",
+    "aspect_ratio": "16:9",
+    "usage": "Decorative sector inspector image, with independent live HTML state",
+    "prompt": "CYBER RANGE COMMAND SYSTEM visual direction. Premium enterprise and government cyber exercise platform. Near-black navy and deep graphite materials, cool slate industrial surfaces, subtle restrained cyan telemetry accents, very limited amber warning accents. Photorealistic architectural miniature plus precise technical visualization hybrid. Soft overhead lighting, consistent elevated three-quarter isometric camera, 50mm equivalent lens. Quiet, credible, precise, no neon glow, no people, no hackers, no hooded figures, no Matrix code, no text, no labels, no logos, no charts, no UI controls. No explosions or damage spectacle. Wide composition with generous dark negative space. Show only a refinery and petrochemical facility with distillation columns and pipework. Match the supplied hero reference lighting, grading and elevated camera exactly. One centered architectural scene on a graphite base. No implied compromise or healthy state.",
+    "delivery_dimensions": [
+      960,
+      543
+    ]
+  },
+  {
+    "id": "sector-smart_factory",
+    "file": "sector-smart_factory.webp",
+    "model": "gpt_image_2",
+    "aspect_ratio": "16:9",
+    "usage": "Decorative sector inspector image, with independent live HTML state",
+    "prompt": "CYBER RANGE COMMAND SYSTEM visual direction. Premium enterprise and government cyber exercise platform. Near-black navy and deep graphite materials, cool slate industrial surfaces, subtle restrained cyan telemetry accents, very limited amber warning accents. Photorealistic architectural miniature plus precise technical visualization hybrid. Soft overhead lighting, consistent elevated three-quarter isometric camera, 50mm equivalent lens. Quiet, credible, precise, no neon glow, no people, no hackers, no hooded figures, no Matrix code, no text, no labels, no logos, no charts, no UI controls. No explosions or damage spectacle. Wide composition with generous dark negative space. Show only a smart factory with robotic production cells and industrial hall. Match the supplied hero reference lighting, grading and elevated camera exactly. One centered architectural scene on a graphite base. No implied compromise or healthy state.",
+    "delivery_dimensions": [
+      960,
+      543
+    ]
+  },
+  {
+    "id": "sector-water_utility",
+    "file": "sector-water_utility.webp",
+    "model": "gpt_image_2",
+    "aspect_ratio": "16:9",
+    "usage": "Decorative sector inspector image, with independent live HTML state",
+    "prompt": "CYBER RANGE COMMAND SYSTEM visual direction. Premium enterprise and government cyber exercise platform. Near-black navy and deep graphite materials, cool slate industrial surfaces, subtle restrained cyan telemetry accents, very limited amber warning accents. Photorealistic architectural miniature plus precise technical visualization hybrid. Soft overhead lighting, consistent elevated three-quarter isometric camera, 50mm equivalent lens. Quiet, credible, precise, no neon glow, no people, no hackers, no hooded figures, no Matrix code, no text, no labels, no logos, no charts, no UI controls. No explosions or damage spectacle. Wide composition with generous dark negative space. Show only a water utility with circular treatment basins and pumping plant. Match the supplied hero reference lighting, grading and elevated camera exactly. One centered architectural scene on a graphite base. No implied compromise or healthy state.",
+    "delivery_dimensions": [
+      960,
+      543
+    ]
+  },
+  {
+    "id": "sector-lng_terminal",
+    "file": "sector-lng_terminal.webp",
+    "model": "gpt_image_2",
+    "aspect_ratio": "16:9",
+    "usage": "Decorative sector inspector image, with independent live HTML state",
+    "prompt": "CYBER RANGE COMMAND SYSTEM visual direction. Premium enterprise and government cyber exercise platform. Near-black navy and deep graphite materials, cool slate industrial surfaces, subtle restrained cyan telemetry accents, very limited amber warning accents. Photorealistic architectural miniature plus precise technical visualization hybrid. Soft overhead lighting, consistent elevated three-quarter isometric camera, 50mm equivalent lens. Quiet, credible, precise, no neon glow, no people, no hackers, no hooded figures, no Matrix code, no text, no labels, no logos, no charts, no UI controls. No explosions or damage spectacle. Wide composition with generous dark negative space. Show only a LNG terminal with cryogenic storage tanks and loading infrastructure. Match the supplied hero reference lighting, grading and elevated camera exactly. One centered architectural scene on a graphite base. No implied compromise or healthy state.",
+    "delivery_dimensions": [
+      960,
+      543
+    ]
+  },
+  {
+    "id": "sector-railway_signaling",
+    "file": "sector-railway_signaling.webp",
+    "model": "gpt_image_2",
+    "aspect_ratio": "16:9",
+    "usage": "Decorative sector inspector image, with independent live HTML state",
+    "prompt": "CYBER RANGE COMMAND SYSTEM visual direction. Premium enterprise and government cyber exercise platform. Near-black navy and deep graphite materials, cool slate industrial surfaces, subtle restrained cyan telemetry accents, very limited amber warning accents. Photorealistic architectural miniature plus precise technical visualization hybrid. Soft overhead lighting, consistent elevated three-quarter isometric camera, 50mm equivalent lens. Quiet, credible, precise, no neon glow, no people, no hackers, no hooded figures, no Matrix code, no text, no labels, no logos, no charts, no UI controls. No explosions or damage spectacle. Wide composition with generous dark negative space. Show only a railway signaling junction with parallel tracks and signal control building. Match the supplied hero reference lighting, grading and elevated camera exactly. One centered architectural scene on a graphite base. No implied compromise or healthy state.",
+    "delivery_dimensions": [
+      960,
+      543
+    ]
+  },
+  {
+    "id": "sector-airport_ot",
+    "file": "sector-airport_ot.webp",
+    "model": "gpt_image_2",
+    "aspect_ratio": "16:9",
+    "usage": "Decorative sector inspector image, with independent live HTML state",
+    "prompt": "CYBER RANGE COMMAND SYSTEM visual direction. Premium enterprise and government cyber exercise platform. Near-black navy and deep graphite materials, cool slate industrial surfaces, subtle restrained cyan telemetry accents, very limited amber warning accents. Photorealistic architectural miniature plus precise technical visualization hybrid. Soft overhead lighting, consistent elevated three-quarter isometric camera, 50mm equivalent lens. Quiet, credible, precise, no neon glow, no people, no hackers, no hooded figures, no Matrix code, no text, no labels, no logos, no charts, no UI controls. No explosions or damage spectacle. Wide composition with generous dark negative space. Show only a airport OT infrastructure with runway, terminal and control tower. Match the supplied hero reference lighting, grading and elevated camera exactly. One centered architectural scene on a graphite base. No implied compromise or healthy state.",
+    "delivery_dimensions": [
+      960,
+      543
+    ]
+  },
+  {
+    "id": "sector-datacenter_bms",
+    "file": "sector-datacenter_bms.webp",
+    "model": "gpt_image_2",
+    "aspect_ratio": "16:9",
+    "usage": "Decorative sector inspector image, with independent live HTML state",
+    "prompt": "CYBER RANGE COMMAND SYSTEM visual direction. Premium enterprise and government cyber exercise platform. Near-black navy and deep graphite materials, cool slate industrial surfaces, subtle restrained cyan telemetry accents, very limited amber warning accents. Photorealistic architectural miniature plus precise technical visualization hybrid. Soft overhead lighting, consistent elevated three-quarter isometric camera, 50mm equivalent lens. Quiet, credible, precise, no neon glow, no people, no hackers, no hooded figures, no Matrix code, no text, no labels, no logos, no charts, no UI controls. No explosions or damage spectacle. Wide composition with generous dark negative space. Show only a data center with server hall, cooling plant and redundant power infrastructure. Match the supplied hero reference lighting, grading and elevated camera exactly. One centered architectural scene on a graphite base. No implied compromise or healthy state.",
+    "delivery_dimensions": [
+      960,
+      543
+    ]
+  },
+  {
+    "id": "sector-hospital_ot",
+    "file": "sector-hospital_ot.webp",
+    "model": "gpt_image_2",
+    "aspect_ratio": "16:9",
+    "usage": "Decorative sector inspector image, with independent live HTML state",
+    "prompt": "CYBER RANGE COMMAND SYSTEM visual direction. Premium enterprise and government cyber exercise platform. Near-black navy and deep graphite materials, cool slate industrial surfaces, subtle restrained cyan telemetry accents, very limited amber warning accents. Photorealistic architectural miniature plus precise technical visualization hybrid. Soft overhead lighting, consistent elevated three-quarter isometric camera, 50mm equivalent lens. Quiet, credible, precise, no neon glow, no people, no hackers, no hooded figures, no Matrix code, no text, no labels, no logos, no charts, no UI controls. No explosions or damage spectacle. Wide composition with generous dark negative space. Show only a hospital OT infrastructure with clinical building, critical care wing and utility plant. Match the supplied hero reference lighting, grading and elevated camera exactly. One centered architectural scene on a graphite base. No implied compromise or healthy state.",
+    "delivery_dimensions": [
+      960,
+      543
+    ]
+  },
+  {
+    "id": "empty-no-incidents",
+    "file": "empty-no-incidents.webp",
+    "model": "gpt_image_2",
+    "aspect_ratio": "4:3",
+    "usage": "Small decorative empty-state illustration; HTML explains the state",
+    "prompt": "CYBER RANGE COMMAND SYSTEM visual direction. Premium enterprise and government cyber exercise platform. Near-black navy and deep graphite materials, cool slate industrial surfaces, subtle restrained cyan telemetry accents, very limited amber warning accents. Photorealistic architectural miniature plus precise technical visualization hybrid. Soft overhead lighting, consistent elevated three-quarter isometric camera, 50mm equivalent lens. Quiet, credible, precise, no neon glow, no people, no hackers, no hooded figures, no Matrix code, no text, no labels, no logos, no charts, no UI controls. No explosions or damage spectacle. Wide composition with generous dark negative space. Minimal understated technical illustration of a closed investigation folder beside a small evidence tray. Only two or three simple graphite objects, matte materials, low contrast, large negative space, no lettering, no status indicators. Match the supplied reference color language.",
+    "delivery_dimensions": [
+      480,
+      358
+    ]
+  },
+  {
+    "id": "empty-no-alerts",
+    "file": "empty-no-alerts.webp",
+    "model": "gpt_image_2",
+    "aspect_ratio": "4:3",
+    "usage": "Small decorative empty-state illustration; HTML explains the state",
+    "prompt": "CYBER RANGE COMMAND SYSTEM visual direction. Premium enterprise and government cyber exercise platform. Near-black navy and deep graphite materials, cool slate industrial surfaces, subtle restrained cyan telemetry accents, very limited amber warning accents. Photorealistic architectural miniature plus precise technical visualization hybrid. Soft overhead lighting, consistent elevated three-quarter isometric camera, 50mm equivalent lens. Quiet, credible, precise, no neon glow, no people, no hackers, no hooded figures, no Matrix code, no text, no labels, no logos, no charts, no UI controls. No explosions or damage spectacle. Wide composition with generous dark negative space. Minimal understated technical illustration of a quiet telemetry receiver and empty signal ring. Only two or three simple graphite objects, matte materials, low contrast, large negative space, no lettering, no status indicators. Match the supplied reference color language.",
+    "delivery_dimensions": [
+      480,
+      358
+    ]
+  },
+  {
+    "id": "empty-no-exercise",
+    "file": "empty-no-exercise.webp",
+    "model": "gpt_image_2",
+    "aspect_ratio": "4:3",
+    "usage": "Small decorative empty-state illustration; HTML explains the state",
+    "prompt": "CYBER RANGE COMMAND SYSTEM visual direction. Premium enterprise and government cyber exercise platform. Near-black navy and deep graphite materials, cool slate industrial surfaces, subtle restrained cyan telemetry accents, very limited amber warning accents. Photorealistic architectural miniature plus precise technical visualization hybrid. Soft overhead lighting, consistent elevated three-quarter isometric camera, 50mm equivalent lens. Quiet, credible, precise, no neon glow, no people, no hackers, no hooded figures, no Matrix code, no text, no labels, no logos, no charts, no UI controls. No explosions or damage spectacle. Wide composition with generous dark negative space. Minimal understated technical illustration of a prepared mission console with an unlit miniature infrastructure model. Only two or three simple graphite objects, matte materials, low contrast, large negative space, no lettering, no status indicators. Match the supplied reference color language.",
+    "delivery_dimensions": [
+      480,
+      358
+    ]
+  },
+  {
+    "id": "empty-no-replay",
+    "file": "empty-no-replay.webp",
+    "model": "gpt_image_2",
+    "aspect_ratio": "4:3",
+    "usage": "Small decorative empty-state illustration; HTML explains the state",
+    "prompt": "CYBER RANGE COMMAND SYSTEM visual direction. Premium enterprise and government cyber exercise platform. Near-black navy and deep graphite materials, cool slate industrial surfaces, subtle restrained cyan telemetry accents, very limited amber warning accents. Photorealistic architectural miniature plus precise technical visualization hybrid. Soft overhead lighting, consistent elevated three-quarter isometric camera, 50mm equivalent lens. Quiet, credible, precise, no neon glow, no people, no hackers, no hooded figures, no Matrix code, no text, no labels, no logos, no charts, no UI controls. No explosions or damage spectacle. Wide composition with generous dark negative space. Minimal understated technical illustration of an empty archive reel and timeline rail without markings. Only two or three simple graphite objects, matte materials, low contrast, large negative space, no lettering, no status indicators. Match the supplied reference color language.",
+    "delivery_dimensions": [
+      480,
+      358
+    ]
+  },
+  {
+    "id": "empty-offline",
+    "file": "empty-offline.webp",
+    "model": "gpt_image_2",
+    "aspect_ratio": "4:3",
+    "usage": "Small decorative empty-state illustration; HTML explains the state",
+    "prompt": "CYBER RANGE COMMAND SYSTEM visual direction. Premium enterprise and government cyber exercise platform. Near-black navy and deep graphite materials, cool slate industrial surfaces, subtle restrained cyan telemetry accents, very limited amber warning accents. Photorealistic architectural miniature plus precise technical visualization hybrid. Soft overhead lighting, consistent elevated three-quarter isometric camera, 50mm equivalent lens. Quiet, credible, precise, no neon glow, no people, no hackers, no hooded figures, no Matrix code, no text, no labels, no logos, no charts, no UI controls. No explosions or damage spectacle. Wide composition with generous dark negative space. Minimal understated technical illustration of a disconnected network junction with separated connector. Only two or three simple graphite objects, matte materials, low contrast, large negative space, no lettering, no status indicators. Match the supplied reference color language.",
+    "delivery_dimensions": [
+      480,
+      358
+    ]
+  },
+  {
+    "id": "live-atmosphere",
+    "file": "live-atmosphere.mp4",
+    "model": "seedance_2_0",
+    "aspect_ratio": "16:9",
+    "duration": 8,
+    "usage": "Optional user-enabled low opacity background; never autoplay with reduced motion",
+    "prompt": "CYBER RANGE COMMAND SYSTEM visual direction. Premium enterprise and government cyber exercise platform. Near-black navy and deep graphite materials, cool slate industrial surfaces, subtle restrained cyan telemetry accents, very limited amber warning accents. Photorealistic architectural miniature plus precise technical visualization hybrid. Soft overhead lighting, consistent elevated three-quarter isometric camera, 50mm equivalent lens. Quiet, credible, precise, no neon glow, no people, no hackers, no hooded figures, no Matrix code, no text, no labels, no logos, no charts, no UI controls. No explosions or damage spectacle. Wide composition with generous dark negative space. Eight-second ultra-subtle seamless atmospheric network environment. Almost static camera. Only sparse telemetry links drift very slowly between architectural digital twin silhouettes. Extremely low contrast, no flicker, no pulsing, no rapid motion, no audio. Designed behind readable functional UI."
+  },
+  {
+    "id": "login-sequence",
+    "file": "login-sequence.mp4",
+    "model": "seedance_2_0",
+    "aspect_ratio": "16:9",
+    "duration": 8,
+    "usage": "Optional login/landing sequence. CYBER RANGE COMMAND identity is live HTML overlay at end, never baked into video.",
+    "prompt": "CYBER RANGE COMMAND SYSTEM visual direction. Premium enterprise and government cyber exercise platform. Near-black navy and deep graphite materials, cool slate industrial surfaces, subtle restrained cyan telemetry accents, very limited amber warning accents. Photorealistic architectural miniature plus precise technical visualization hybrid. Soft overhead lighting, consistent elevated three-quarter isometric camera, 50mm equivalent lens. Quiet, credible, precise, no neon glow, no people, no hackers, no hooded figures, no Matrix code, no text, no labels, no logos, no charts, no UI controls. No explosions or damage spectacle. Wide composition with generous dark negative space. Eight-second cinematic sequence: start in a dark graphite environment, architectural infrastructure slowly materializes, then subtle cyan telemetry links activate, finally the separate infrastructure sectors form one unified cyber range. Slow measured camera movement, professional mission control tone, final frame has generous dark space for a separately rendered product identity. No text or logo inside the video, no audio."
+  }
+]

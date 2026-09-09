@@ -8,11 +8,11 @@ html, body, #root {
 }
 
 body {
-  font-family: "Rajdhani", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--cr-font);
 }
 
 .font-mono {
-  font-family: "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--cr-mono);
 }
 
 @media (prefers-reduced-motion: reduce) {

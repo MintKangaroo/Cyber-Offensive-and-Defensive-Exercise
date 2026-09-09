@@ -1,0 +1,162 @@
+# Cyber Range Command architecture
+
+2026-09-09 · Incremental migration of the existing cyber-range platform.
+
+## Decisions
+
+**ADR 01 — Retain the service architecture.** The existing FastAPI services, shared
+contracts, SQLite stores, isolated twins, scoring engine, challenge portal, and
+PostgreSQL-backed A/D engine remain authoritative. The new command UI does not run
+attacks, infer points, or write directly to service databases.
+
+**ADR 02 — Extend Instructor API with a command boundary.** `/command/*` verifies
+identity, checks capabilities, scopes records, and calls a fixed upstream allowlist.
+JWT sessions also pass Auth revocation verification. Static role tokens remain
+supported; unscoped Red/Blue tokens cannot access scoped exercise evidence. The new
+boundary explicitly ignores `RBAC_ALLOW_INSECURE_DEV` and never fails open.
+
+```mermaid
+flowchart LR
+  Browser[React command application] --> Gateway[Existing TLS gateway]
+  Gateway --> Auth[Auth / JWT verification]
+  Gateway --> Command[Instructor API /command]
+  Command --> Collector[Event collector / SSE + replay]
+  Command --> SOC[Incident / SIEM / EDR]
+  Command --> Exercise[Scenarios / Range Control / Injects]
+  Command --> Scoring[Existing score ledger]
+  Command --> AD[Existing scoped A/D projections]
+  Command --> Health[Observability / NOC / AAR]
+  Command --> Documents[Private drafts / review notes / AI policy]
+```
+
+**ADR 03 — Share source without replacing every workspace.**
+`dashboards/shared` exports `@cyber-range/command-system`, a local `file:` package.
+The new React application lives in the existing `dashboards/control-tower` path.
+The five specialist React applications adopt the shared tokens and workspace bar;
+their internal tools and routing remain available. No package registry, cloud
+hosting service, external font CDN, or new monorepo runner is needed. Run `npm ci`
+after changing shared source: `install-links=true` installs a package copy.
+
+**ADR 04 — Strict TypeScript and small route bundles.** Command models validate
+unknown JSON at the boundary. Complex workspaces load with React `lazy` and
+`Suspense`. Common transport handles headers, aborts, timeouts, non-JSON errors,
+and authorization failures. Secrets are held in memory or existing HTTP cookies,
+never URL query strings, local storage, drafts, or generated image prompts.
+
+**ADR 05 — Evidence and inventory are distinct.** The sector inventory names the
+existing 11 lab environments. Protocol labels describe configured capabilities;
+they are not a live probe. Asset state changes require explicit source events.
+Unknown initial state, unavailable service data, absent latency, and missing ATT&CK
+mappings remain unknown. Decorative generated imagery never supplies graph nodes,
+telemetry, severity, scores, labels, or controls.
+
+**ADR 06 — Bounded live updates.** Authenticated fetch SSE parses multiline frames,
+retains an in-memory resume cursor, batches UI updates at 150ms, and applies capped
+exponential reconnect delays. Buffers contain at most 5,000 events, 200 notices and
+20 pinned IDs. Event lists render an 18-row window. Durable snapshots reconcile
+non-streamed sources every 30s. Score, safety and phase notices invalidate only
+related snapshot sections. A scope change clears old evidence and rejects late
+responses. Observers use a delayed, sanitized durable snapshot; they never open
+privileged SSE. The collector's existing process-local ring still limits gap-free
+resume across restarts; snapshot reconciliation is necessary.
+
+**ADR 07 — Historical state has one clock.** Replay uses retained events, actual
+score ledger timestamps, and incident timeline entries at or before the cursor.
+Current assignee/status never backfill the past. Incident Service lacks scenario
+IDs, so a case needs an exact incident/alert/event link to be included. Historical
+patch verifications are observations, not inferred current patch configuration.
+The 50,000-event command replay limit is reported as partial when exceeded. AAR
+aggregate service metrics remain separate from reconstructed historical panes;
+platform-wide incident/inject/alert aggregates are explicitly identified.
+
+**ADR 08 — Author the existing YAML schema.** Visual edits operate on YAML syntax
+nodes, preserving unknown fields and comments. Switching modes never serializes.
+Multi-document sources remain intact. Validation uses the actual runtime loader,
+existing semantic linter and dry-run timeline. Publishing requires a reason,
+confirmation, a matching SHA-256 revision, and no affected active tracker. Sources
+are atomically written to `scenario_data:/data/authored` and restored at startup. Direct Studio publication also appends durable intent and
+completion records to `/data/authoring-audit.jsonl`.
+A process lock serializes writes in the supported single-worker scenario service.
+Multiple scenario-engine writers are not supported by this filesystem design.
+
+**ADR 09 — Commands remain human decisions.** Emergency stop, release, reset and
+scenario lifecycle actions require explicit confirmation and a reason. Instructor
+Audit records intent, completion, partial reset or failure. An upstream outage is
+not successful release or a healthy state. Cancellation buttons default to
+`type=button`. No automatic AI action executor exists.
+
+**ADR 10 — Optional local AI, transparent training evidence.** AI is disabled until
+`COMMAND_AI_URL`, `COMMAND_AI_MODEL` and instructor policy are configured. The
+adapter targets an administrator-configured Ollama-compatible `/api/chat` service.
+It sends server-selected, role-authorized context and treats telemetry as untrusted
+content. UI output is labeled AI-generated suggestions with source references.
+Policy controls trainee assistance; solutions/flags are never included as model
+context. A prompt is not a guarantee of model behavior: instructors must evaluate
+their chosen local model before enabling assistance. Training recommendations use
+published difficulty and completed team exercises. Missing individual attribution,
+latency, hints and quality evidence are reported; they are not opaque skill scores.
+
+## Command endpoints
+
+All paths below are relative to `/command` (gateway `/api/instructor/command`).
+
+| Endpoint | Contract / authority |
+|---|---|
+| `GET /session` | Actor, actual role, memberships, server capabilities, observer delay |
+| `GET /snapshot?scenario_id=&sections=` | Source status/data/provenance/time and static sector inventory |
+| `GET /stream?scenario_id=` | Authenticated, scoped SSE; `Last-Event-ID` header |
+| `GET /assets/{id}` | Existing sector and role-permitted training catalog context |
+| `GET /resources/{name}` | Fixed capability-checked service reads; no arbitrary URL proxy |
+| `GET /search?q=&scenario_id=` | Role-filtered catalog matches and partial-source indicator |
+| `GET /incidents/{id}` | Instructor or owning Blue team; other cases return 404 |
+| `POST /incidents/{id}/{transition,note,assign}` | Existing Incident Service lifecycle and audit |
+| `POST /promote` | Instructor promotion of an existing SIEM alert |
+| `POST /control` | Confirmed/reasoned fixed safety and scenario actions |
+| `GET /audit` | Instructor audit records |
+| `GET /replay`, `GET /aar` | Retained historical evidence / existing AAR report |
+| `GET/POST /annotations` | Persisted instructor AAR notes |
+| `GET /scenarios/{id}/source`, `POST /scenarios/validate` | Existing YAML and actual runtime validation |
+| `GET /drafts`, `POST /scenarios/{id}/{draft,publish}` | Private instructor drafts / explicit published source |
+| `POST /injects/dispatch`, `POST /injects/{id}/respond` | Existing inject service, instructor/own-team scope |
+| `GET /competition?match_id=` | Existing A/D observer/competitor/operator projections |
+| `GET /training` | Team completion evidence and transparent recommendations |
+| `GET/POST /copilot/policy`, `POST /copilot` | Instructor policy / optional non-executing suggestions |
+
+Source envelopes use `ready`, `unavailable`, `unauthorized`, or `error`. Missing
+values are `null` rather than successful zero measurements. UI loading, stale
+snapshot time, reconnect, degraded, empty, unauthorized and error states are explicit.
+
+## Role boundaries
+
+| Role | Command workspace access |
+|---|---|
+| Instructor | All command workflows, source authoring, global SOC and audit |
+| Blue | Own team/exercise events, own incidents, replay, inject inbox, training |
+| Red | Own Red events and authorized range training; no Blue incident/SOC data |
+| Observer | Allowlisted delayed event fields, sector inventory and public A/D projection |
+| Competitor | Membership-bound A/D projection, published training and optional policy assistance |
+| Operator | Existing privileged A/D command projection |
+
+There is no newly invented `admin` role. Existing platform administration remains
+with the instructor and the established A/D operator model. Blue global SIEM/EDR
+views are intentionally not granted by the new command boundary: these legacy
+services do not expose a sufficient team scope. See the roadmap for service-level
+migration work; command RBAC does not secure independent legacy URLs.
+
+## Deployment and rollback
+
+`make training-up` builds Control Tower and continues to serve port 5180. The
+production gateway builds all six React applications with the same local shared
+package and serves Command at `/control/`. Existing specialist paths and beginner
+startup remain. Back up the existing instructor audit volume and the new
+`scenario_data` volume before changing deployments. Drafts, annotations and AI policy
+are additive tables in the existing Instructor API database.
+
+Rollback the frontend/service image revisions together. Existing scoring and event
+schemas are unchanged; the collector only adds an optional bounded replay query.
+Keep `scenario_data` during rollback so authored sources can be exported/reapplied.
+Do not use `docker compose down -v` as a routine upgrade or rollback procedure.
+
+Production readiness still requires the legacy authorization and long-duration
+load work listed in `NEXTGEN_ROADMAP.md`. This migration is not a security
+certification or a declaration that every requested future capability is complete.
