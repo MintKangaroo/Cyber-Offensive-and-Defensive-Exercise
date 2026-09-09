@@ -17,6 +17,7 @@ PORTS = {
     "incident": 8095,
     "injects": 8096,
     "ingest_proxy": 8010,
+    "challenge_portal": 8060,
 }
 checks = 0
 
@@ -201,10 +202,50 @@ call(
     {"confirm": True, "reason": "isolated drill safety check"},
 )
 assert call("config_service", "/config/killswitch", token=admin)["killswitch"] is True
+call("challenge_portal", "/portal/training/me", expected=401)
+call("challenge_portal", "/portal/training/me", token=users["observer"], expected=403)
+practice = "/portal/training/challenges/WEB-001/start"
+started = call("challenge_portal", practice, "POST", users["redalpha"])
+assert (
+    call("challenge_portal", practice, "POST", users["redalpha"])["started_at"]
+    == started["started_at"]
+)
+result = call(
+    "challenge_portal",
+    "/portal/challenges/WEB-001/submit",
+    "POST",
+    users["redalpha"],
+    {
+        "team_id": "alpha",
+        "match_id": "scope-drill",
+        "subject": "forged-learner",
+        "fields": {"flag": "isolated-drill-incorrect-answer", "team_id": "bravo"},
+    },
+)
+assert result["passed"] is False
+personal = call(
+    "challenge_portal",
+    "/portal/training/me?team_id=bravo&subject=forged-learner",
+    token=users["redalpha"],
+)
+assert personal["subject"] == "redalpha" and personal["team_id"] == "alpha"
+assert (
+    personal["activity"][0]["attempts"] == 1
+    and personal["activity"][0]["completed"] is False
+)
+assert "value_hash" not in json.dumps(personal)
+assert (
+    call("challenge_portal", "/portal/training/me", token=users["bluebravo"])[
+        "activity"
+    ]
+    == []
+)
+call("challenge_portal", practice, "POST", users["observer"], expected=403)
 jti = jwt.decode(blue, options={"verify_signature": False})["jti"]
 call("auth", "/auth/revoke", "POST", admin, {"jti": jti})
 call("edr_backend", "/edr/hosts", token=blue, expected=401)
 call("event_collector", "/events", token=blue, expected=401)
+call("challenge_portal", "/portal/training/me", token=blue, expected=401)
 print(
-    f"{checks} real HTTP checks passed: scoped sensors, Auth revocation, own-team EDR/incident, confirmed safety; isolated fixture data only."
+    f"{checks} real HTTP checks passed: scoped sensors, Auth revocation, own-team EDR/incident, personal training attribution, confirmed safety; isolated fixture data only."
 )

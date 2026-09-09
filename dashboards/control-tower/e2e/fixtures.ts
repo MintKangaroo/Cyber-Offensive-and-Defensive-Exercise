@@ -140,7 +140,19 @@ export async function setup(
             ? instructorCaps
             : role === "blue"
               ? ["overview", "digital-twin", "events", "incidents", "replay"]
-              : ["overview", "digital-twin", "events", "competition"],
+              : role === "red"
+                ? [
+                    "overview",
+                    "digital-twin",
+                    "events",
+                    "competition",
+                    "challenges",
+                    "training",
+                    "replay",
+                    "injects",
+                    "copilot",
+                  ]
+                : ["overview", "digital-twin", "events", "competition"],
         observer_delay_sec: 30,
       });
     if (path === "/stream")

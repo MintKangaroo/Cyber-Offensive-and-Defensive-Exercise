@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import {
   Button,
+  DataTable,
+  object,
   EmptyState,
   ErrorState,
   Icon,
@@ -12,7 +14,7 @@ import {
   num,
   type JsonObject,
 } from "@cyber-range/command-system";
-import { api, display, workspaceUrl } from "../api";
+import { api, post, display, duration, workspaceUrl } from "../api";
 import { useCommand } from "../context";
 const STEPS = [
   "Briefing",
@@ -29,8 +31,27 @@ export default function Training() {
   const [step, setStep] = useState(0);
   const [profile, setProfile] = useState<JsonObject | null>(null);
   const [error, setError] = useState("");
+  const [starting, setStarting] = useState("");
+  const personal = object(profile?.individual);
+  const individual = personal.status === "ready" ? object(personal.data) : null;
+  const visible = individual || profile;
+  const isPersonal = individual?.scope === "individual";
+  async function begin(id: string) {
+    setStarting(id);
+    setError("");
+    try {
+      await post(`/training/challenges/${encodeURIComponent(id)}/start`, {});
+      navigate("challenges", id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Practice start failed");
+    } finally {
+      setStarting("");
+    }
+  }
   useEffect(() => {
     if (!session.team_id) return;
+    setProfile(null);
+    setError("");
     let cancelled = false;
     api("/training")
       .then((r) => {
@@ -42,7 +63,7 @@ export default function Training() {
     return () => {
       cancelled = true;
     };
-  }, [session.team_id]);
+  }, [session.actor, session.team_id, session.match_id, session.role]);
   return (
     <div className="training-workspace">
       <Panel title="Guided mission">
@@ -187,15 +208,33 @@ export default function Training() {
         ) : !session.team_id ? (
           <EmptyState
             title="Trainee membership required"
-            detail="Sign in as a trainee to view your team’s recorded completion coverage."
+            detail="Sign in with an assigned Red or Blue membership to view recorded training evidence."
           />
         ) : !profile ? (
           <Skeleton label="Loading recorded progress" />
         ) : (
           <div className="panel-padding">
-            <p className="muted">{str(profile.method)}</p>
+            <StatusBadge tone={isPersonal ? "operational" : "warning"}>
+              {isPersonal
+                ? "Personal exercise evidence"
+                : "Team completion evidence"}
+            </StatusBadge>
+            {personal.status != null && personal.status !== "ready" && (
+              <p role="status" className="muted">
+                Individual evidence is unavailable ({str(personal.status)}). The
+                values below describe team completion.
+              </p>
+            )}
+            {isPersonal && individual?.collection_enabled === false && (
+              <p role="status" className="text-warning">
+                Verified submission attribution is disabled in this
+                compatibility deployment. Personal attempt counts include only
+                previously verified records.
+              </p>
+            )}
+            <p className="muted">{str(visible?.method)}</p>
             <div className="skill-grid">
-              {objects(profile.domains).map((d) => (
+              {objects(visible?.domains).map((d) => (
                 <div className="skill-card" key={str(d.domain)}>
                   <strong>{str(d.domain)}</strong>
                   <span>
@@ -210,29 +249,67 @@ export default function Training() {
                   />
                   <small>
                     {display(d.completed)} / {display(d.available)} challenges ·
-                    team evidence
+                    {isPersonal ? "personal evidence" : "team evidence"}
                   </small>
                 </div>
               ))}
             </div>
             <h3>Suggested next exercises</h3>
-            {objects(profile.recommendations).map((r) => (
+            {objects(visible?.recommendations).map((r) => (
               <button
                 key={str(r.id)}
                 className="notice-row"
-                onClick={() => navigate("challenges", str(r.id))}
+                disabled={Boolean(starting)}
+                onClick={() =>
+                  isPersonal
+                    ? void begin(str(r.id))
+                    : navigate("challenges", str(r.id))
+                }
               >
                 <span>
                   <strong>{str(r.title)}</strong>
                   <small>{str(r.reason)}</small>
+                  {isPersonal && (
+                    <small>
+                      {starting === r.id
+                        ? "Recording practice start…"
+                        : "Start practice and open challenge"}
+                    </small>
+                  )}
                 </span>
                 <StatusBadge>{str(r.difficulty)}</StatusBadge>
               </button>
             ))}
+            {isPersonal && (
+              <>
+                <h3>Personal exercise history</h3>
+                <DataTable
+                  caption="Personal training evidence"
+                  rows={objects(individual?.activity).map((r) => ({
+                    challenge: str(r.title),
+                    status: (
+                      <StatusBadge tone={r.completed ? "healthy" : "neutral"}>
+                        {r.completed ? "Grader passed" : "In progress"}
+                      </StatusBadge>
+                    ),
+                    attempts: display(r.attempts),
+                    elapsed: duration(r.elapsed_sec),
+                  }))}
+                  columns={[
+                    { key: "challenge", label: "Challenge" },
+                    { key: "status", label: "Result" },
+                    { key: "attempts", label: "Evaluated attempts" },
+                    { key: "elapsed", label: "Start → first pass" },
+                  ]}
+                />
+              </>
+            )}
             <p className="muted">
-              Time, hints, attempts and response quality are not currently
-              available as reliable individual measurements. They are not
-              invented or used to modify competition scoring.
+              Unavailable measurements:{" "}
+              {Array.isArray(visible?.unavailable_inputs)
+                ? visible.unavailable_inputs.map(String).join(", ")
+                : "individual measurements"}
+              . No proficiency estimate modifies competition scoring.
             </p>
           </div>
         )}

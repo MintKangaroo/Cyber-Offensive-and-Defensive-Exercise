@@ -1526,6 +1526,47 @@ button.notice-row:hover {
 .stage-fields select {
   font-size: 11px;
 }
+.editor-controls {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.editor-controls:disabled {
+  opacity: 0.65;
+}
+.phase-card {
+  border: 1px solid var(--cr-border);
+  border-radius: var(--cr-radius, 5px);
+  margin-block: 16px;
+}
+.phase-card > summary {
+  padding: 16px;
+  cursor: pointer;
+}
+.phase-card > summary span {
+  display: block;
+  color: var(--cr-muted);
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+.phase-card summary strong {
+  overflow-wrap: anywhere;
+}
+.phase-editor fieldset,
+.studio fieldset.stage-fields {
+  border: 1px solid var(--cr-border);
+  margin-block: 16px;
+  min-width: 0;
+}
+.criteria-editor textarea {
+  font-family: var(--cr-mono);
+}
+.criteria-editor small {
+  display: block;
+  color: var(--cr-amber);
+  margin-top: 8px;
+}
 .mini-metrics {
   display: flex;
   gap: 10px;
@@ -2263,10 +2304,9 @@ button.notice-row:hover {
   }
   .event-table-heading,
   .virtual-event {
-    grid-template-columns: 70px minmax(130px, 1.4fr) minmax(
-        100px,
-        1fr
-      ) 90px 73px;
+    grid-template-columns:
+      70px minmax(130px, 1.4fr) minmax(100px, 1fr)
+      90px 73px;
     gap: 10px;
   }
   .challenge-grid {

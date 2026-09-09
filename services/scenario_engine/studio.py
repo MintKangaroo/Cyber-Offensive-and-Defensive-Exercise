@@ -5,20 +5,24 @@ YAML documents survive. Validation uses the actual runtime loader before publish
 """
 
 from __future__ import annotations
+
 import hashlib
 import json
-import time
 import os
 import re
 import threading
+import time
 from pathlib import Path
 
 import yaml
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field, ValidationError
+
 from shared.rbac import require_role
+
+from .authoring import collect_stages, dry_run
 from .loader import _load_doc
-from .authoring import dry_run
+from .phase_validation import inspect_phases
 
 
 class UniqueLoader(yaml.SafeLoader):
@@ -95,28 +99,8 @@ def validate(text: str) -> dict:
                 }
             )
         seen.add(sid)
-        phases = {
-            k: v
-            for k, v in raw.items()
-            if isinstance(k, str) and k.startswith("phase_") and isinstance(v, dict)
-        }
-        order = sorted(
-            phases,
-            key=lambda k: int(k.split("_")[1]) if k.split("_")[1].isdigit() else 999,
-        )
-        for name, phase in phases.items():
-            dependency = phase.get("locked_until")
-            if dependency:
-                parent = str(dependency).removesuffix(".completed")
-                if parent not in phases or order.index(parent) >= order.index(name):
-                    issues.append(
-                        {
-                            "level": "error",
-                            "code": "phase_dependency",
-                            "message": "Phase dependency must refer to a previous existing phase",
-                            "where": name,
-                        }
-                    )
+        phase_issues, phase_projection = inspect_phases(raw)
+        issues.extend(phase_issues)
         try:
             report = dry_run(raw)
         except (TypeError, ValueError, AttributeError, RecursionError):
@@ -136,9 +120,11 @@ def validate(text: str) -> dict:
                     "where": "stages",
                 }
             )
-        for stage in (
-            raw.get("stages", []) if isinstance(raw.get("stages", []), list) else []
-        ):
+        try:
+            stages = collect_stages(raw)
+        except (TypeError, AttributeError):
+            stages = []
+        for stage in stages:
             if (
                 isinstance(stage, dict)
                 and "expected_sec" in stage
@@ -157,6 +143,9 @@ def validate(text: str) -> dict:
                 )
         report["issues"] += issues
         report["ok"] = not any(i["level"] == "error" for i in report["issues"])
+        report["error_count"] = sum(i["level"] == "error" for i in report["issues"])
+        report["warning_count"] = sum(i["level"] == "warning" for i in report["issues"])
+        report["phase_projection"] = phase_projection
         report["scenario_id"] = sid
         reports.append(report)
     return {

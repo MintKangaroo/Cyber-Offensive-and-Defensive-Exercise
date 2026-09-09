@@ -1,5 +1,40 @@
 # Next-generation changelog
 
+
+## 2026-09-09 — Crossover Studio and personal training evidence
+
+- Added visual crossover phase creation with explicit IDs/dependencies, Red/Blue
+  actors, investigation submission/answer fields, phase evidence capture, final
+  stage controls and single-scenario Blue recovery objectives.
+- Applied typed evidence criteria explicitly; pending edits block save/validation
+  and mode changes. Existing shipped YAML documents receive fidelity regression
+  coverage. Planning fields are distinguished from executable runner conditions.
+- Corrected investigation-only validation and numeric phase projection; added
+  per-phase dependency/identity checks and honest completion-rule diagnostics.
+- Added verified personal attempt attribution to the existing portal audit, explicit
+  idempotent practice starts, scoped personal coverage/history and deterministic
+  next-exercise recommendations. Kept competition scores and legacy team APIs.
+- Prevented nested submission fields from overriding the Red grader's team;
+  routed Blue challenge navigation to the defensive catalog.
+- Resolved effective included-router templates under pinned production FastAPI
+  while preserving exact role/method grants and compatibility with flattened routes.
+- Provisioned PostgreSQL in CI so all six replica/concurrency/Stealth tests run.
+  Extended the isolated Docker drill to the real portal and personal-training API.
+- Updated README, architecture decisions, audit/roadmap and contract/deployment docs;
+  added [Studio guide](SCENARIO_STUDIO.md) and [personal evidence guide](PERSONAL_TRAINING.md).
+
+Validation: **687 Python tests passed with pinned runtime dependencies and PostgreSQL,
+no skipped tests** (existing dependency/test-key warnings remain). **54 Vitest tests**
+include all shipped scenario source fidelity cases; **17 Playwright flows** include
+crossover authoring, pending criteria, keyboard/tablet accessibility and personal
+training/fallback states. TypeScript, ESLint, the six-app gateway build and secret
+scan passed. **44 real HTTP Docker checks** passed with fresh credentials and data.
+User-owned Compose overrides and the running training stack were preserved.
+
+Remaining: specialist inner-page design migration, integrated complex inject/rubric
+editing, policy-aware hint records and reviewed defensive assessment, authoritative
+asset checkpoints, model evaluation and intended-hardware acceptance/soak testing.
+
 ## 2026-09-09 — Receiving-service scope and durable operations
 
 - Added strict production HTTP/WS/SSE role, team and exercise enforcement, including

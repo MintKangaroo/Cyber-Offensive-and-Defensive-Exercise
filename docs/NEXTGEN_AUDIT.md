@@ -187,3 +187,22 @@ compatibility warning still applies when strict scope is disabled. Implementatio
 limits and tests are specified in [SERVICE_SCOPE.md](SERVICE_SCOPE.md); uncompleted
 visual authoring, specialist UI, personal training and acceptance work remains in
 [NEXTGEN_ROADMAP.md](NEXTGEN_ROADMAP.md).
+
+
+## 2026-09-09 follow-up: authoring and individual evidence
+
+- Inspected crossover loader/tracker and shipped YAML before extending Studio. Found
+  investigation-only exercises were incorrectly rejected by the generic stage
+  linter, phase previews could disagree with numeric runtime order, and planning
+  fields could be mistaken for executable scoring/unlock rules. Added targeted
+  diagnostics and visual controls without changing the tracker or scoring semantics.
+- Inspected portal anti-cheat and solve attribution. Added verified personal attempt
+  records and explicit start timing. Old audit identity remains unknown; no retroactive
+  inference. Nested submitted team fields can no longer override the grader's team.
+- The previously skipped six A/D PostgreSQL tests passed in an isolated PostgreSQL
+  instance. CI now provisions that database automatically.
+- Real Docker testing exposed the production FastAPI included-router representation,
+  which differs from the older local installation. Scoped routing now matches actual
+  effective route templates with prefixes; nested/private sibling regressions are
+  covered. This reinforces the need for deployment-environment validation in addition
+  to local unit tests.

@@ -19,10 +19,20 @@ def collect_stages(s: dict) -> list[dict]:
     if s.get("stages"):
         return list(s["stages"])
     flat: list[dict] = []
-    for k, v in s.items():
-        if k.startswith("phase") and isinstance(v, dict) and v.get("stages"):
+    for k, v in ordered_phases(s):
+        if v.get("stages"):
             flat.extend(v["stages"])
     return flat
+
+
+def ordered_phases(s: dict) -> list[tuple[str, dict]]:
+    """Use the runtime loader's numeric phase order without rewriting source."""
+    return sorted(
+        ((k, v) for k, v in s.items()
+         if isinstance(k, str) and k.startswith("phase_") and isinstance(v, dict)),
+        key=lambda item: int(item[0].split("_")[1])
+        if item[0].split("_")[1].isdigit() else 999,
+    )
 
 
 def lint_scenario(s: dict) -> list[dict]:
@@ -33,7 +43,8 @@ def lint_scenario(s: dict) -> list[dict]:
             issues.append(_issue("error", "missing_field", f"필수 필드 누락: {f}", f))
     stages = collect_stages(s)
     if not stages:
-        issues.append(_issue("error", "missing_field", "stage 가 없음(stages 또는 phase_*.stages)", "stages"))
+        if not any(p.get("objectives") for _, p in ordered_phases(s)):
+            issues.append(_issue("error", "missing_field", "stage 또는 조사형 objective가 없음", "stages"))
         return issues
 
     single = bool(s.get("stages"))   # 단일 시나리오만 stage 번호 유일/순서 규칙 적용(크로스오버는 phase별 리셋)
@@ -70,7 +81,7 @@ def lint_scenario(s: dict) -> list[dict]:
 
     if not any(st.get("is_final") for st in stages):
         issues.append(_issue("warning", "no_final_stage", "is_final 로 표시된 최종 stage 가 없음"))
-    if not (s.get("blue_objectives")):
+    if not s.get("blue_objectives") and not any(p.get("actor") == "blue" for _, p in ordered_phases(s)):
         issues.append(_issue("warning", "no_blue_objectives", "blue_objectives 가 없어 방어 채점이 불가"))
     cb = s.get("chain_bonus") or {}
     if "within_sec" in cb and cb["within_sec"] <= 0:
@@ -101,6 +112,10 @@ def project_timeline(s: dict) -> list[dict]:
             tl.append({"stage": st.get("stage"), "name": st.get("name", ""),
                        "start_sec": cursor, "end_sec": cursor + dur, "points": st.get("points", 0)})
             cursor += dur
+    if not s.get("stages"):
+        owners = [name for name, phase in ordered_phases(s) for _ in phase.get("stages", [])]
+        for segment, phase in zip(tl, owners):
+            segment["phase"] = phase
     return tl
 
 

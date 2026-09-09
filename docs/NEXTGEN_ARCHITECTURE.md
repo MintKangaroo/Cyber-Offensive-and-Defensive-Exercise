@@ -95,8 +95,10 @@ content. UI output is labeled AI-generated suggestions with source references.
 Policy controls trainee assistance; solutions/flags are never included as model
 context. A prompt is not a guarantee of model behavior: instructors must evaluate
 their chosen local model before enabling assistance. Training recommendations use
-published difficulty and completed team exercises. Missing individual attribution,
-latency, hints and quality evidence are reported; they are not opaque skill scores.
+published difficulty and authenticated personal grader observations where available.
+The legacy team response remains as an explicitly labeled fallback. Hint usage,
+active working time and quality evidence remain unavailable, not opaque skill scores.
+See [Personal training](PERSONAL_TRAINING.md).
 
 ## Command endpoints
 
@@ -121,7 +123,8 @@ All paths below are relative to `/command` (gateway `/api/instructor/command`).
 | `GET /drafts`, `POST /scenarios/{id}/{draft,publish}` | Private instructor drafts / explicit published source |
 | `POST /injects/dispatch`, `POST /injects/{id}/respond` | Existing inject service, instructor/own-team scope |
 | `GET /competition?match_id=` | Existing A/D observer/competitor/operator projections |
-| `GET /training` | Team completion evidence and transparent recommendations |
+| `GET /training` | Team completion plus additive, scoped personal evidence source |
+| `POST /training/challenges/{cid}/start` | Explicit idempotent personal practice start |
 | `GET/POST /copilot/policy`, `POST /copilot` | Instructor policy / optional non-executing suggestions |
 
 Source envelopes use `ready`, `unavailable`, `unauthorized`, or `error`. Missing
@@ -185,3 +188,24 @@ in strict mode require confirmation/reason and an fsynced intent/outcome journal
 A reset does not clear this journal or the EDR action audit table. Native instructor
 confirmation uses the shared accessible dialog, and unknown emergency state no
 longer renders as an inactive stop in that workspace.
+
+
+**ADR 14 — Extend the visual editor against executable phase contracts.** Phase
+creation and investigation/recovery controls reuse the runtime YAML schema. Numeric
+phase IDs and explicit dependencies remain stable. The preview now distinguishes
+phase completion rules from projected event durations; planning-only fields are
+labeled instead of presented as automated rules. Unapplied typed criteria block
+save/validation/mode changes. See [Scenario Studio](SCENARIO_STUDIO.md).
+
+**ADR 15 — Separate individual evidence from competition scoring.** Nullable
+verified actor attribution is appended to the existing portal audit. Personal
+reads use actor + team + exercise + side; the original team solve and scoring
+contracts remain authoritative. Explicit start records support honest elapsed time;
+legacy attribution and uncollected measurements are not inferred.
+
+**ADR 16 — Verify actual deployment dependency behavior.** The production FastAPI
+version retains included routers. Receiving-service RBAC resolves its effective
+route contexts, including nested prefixes, while retaining support for the local
+flattened-route representation. Exact templates and methods still gate access;
+unknown/global sibling routes inherit no participant grant. Real Docker checks
+cover the new router. CI provisions PostgreSQL so A/D replica tests no longer skip.

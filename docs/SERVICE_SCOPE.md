@@ -120,3 +120,17 @@ internal network and no host ports. Its actual HTTP drill covers Auth login and
 revocation, sensor ingest, scoped EDR/incident operations and confirmed safety.
 Only that temporary project is removed. It does not reset the running training
 stack and does not claim a full physical range isolation or load certification.
+
+
+## Personal training and included-router compatibility
+
+The portal now records verified personal attribution on evaluated submissions and
+provides membership-bound `/portal/training/me` and explicit practice-start routes.
+These new reads/writes independently fail closed even in the compatibility profile;
+verified attempt capture requires scope enforcement. See [PERSONAL_TRAINING.md](PERSONAL_TRAINING.md).
+
+Receiving-service authorization supports both flattened routes and the included
+router contexts used by the pinned production FastAPI version. Effective prefixes,
+route order and HTTP methods are matched before applying the exact grant table.
+A participant grant never extends to a global sibling/export route. The isolated
+Docker drill includes the real portal router, grading, personal records and revocation.

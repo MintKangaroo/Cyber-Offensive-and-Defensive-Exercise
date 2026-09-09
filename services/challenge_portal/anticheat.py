@@ -64,7 +64,8 @@ def precheck(st: AntiCheatState, team: str, cid: str, now: float, cfg: Config):
 
 
 def record(st: AntiCheatState, audit: sqlite3.Connection | None, team: str, match: str,
-           cid: str, side: str, value_hash: str, passed: bool, now: float, cfg: Config) -> None:
+           cid: str, side: str, value_hash: str, passed: bool, now: float, cfg: Config,
+           *, verified_subject: str | None = None) -> None:
     """제출 1건 반영 — 윈도·연속실패·잠금 갱신 + 감사 기록."""
     key = (team, cid)
     st.attempts[key].append(now)
@@ -78,8 +79,8 @@ def record(st: AntiCheatState, audit: sqlite3.Connection | None, team: str, matc
             st.consecutive_fails[key] = 0   # 잠금 후 카운터 리셋(잠금 만료 뒤 재시도 여지)
     if audit is not None:
         audit.execute(
-            "INSERT INTO submissions(ts,team_id,match_id,cid,side,passed,value_hash) VALUES(?,?,?,?,?,?,?)",
-            (now, team, match, cid, side, 1 if passed else 0, value_hash))
+            "INSERT INTO submissions(ts,team_id,match_id,cid,side,passed,value_hash,verified_subject) VALUES(?,?,?,?,?,?,?,?)",
+            (now, team, match, cid, side, 1 if passed else 0, value_hash, verified_subject))
         audit.commit()
 
 
@@ -96,6 +97,13 @@ def init_audit(conn: sqlite3.Connection) -> None:
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         ts REAL, team_id TEXT, match_id TEXT, cid TEXT, side TEXT,
         passed INTEGER, value_hash TEXT)""")
+    if "verified_subject" not in {row[1] for row in conn.execute("PRAGMA table_info(submissions)")}:
+        conn.execute("ALTER TABLE submissions ADD COLUMN verified_subject TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sub_person ON submissions(verified_subject,match_id,team_id,side,cid)")
+    conn.execute("""CREATE TABLE IF NOT EXISTS training_starts(
+        subject TEXT NOT NULL, team_id TEXT NOT NULL, match_id TEXT NOT NULL,
+        cid TEXT NOT NULL, side TEXT NOT NULL, started_at REAL NOT NULL,
+        PRIMARY KEY(subject,team_id,match_id,cid,side))""")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_sub_cid_hash ON submissions(cid, value_hash)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_sub_team ON submissions(team_id)")
     conn.commit()

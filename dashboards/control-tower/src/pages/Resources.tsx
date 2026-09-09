@@ -31,7 +31,7 @@ const RESOURCE: Record<string, string> = {
   injects: "injects",
 };
 export default function Resources({ route }: { route: string }) {
-  const { data, scenarioId, navigate, session, notify, inspectAsset } =
+  const { data, entity, scenarioId, navigate, session, notify, inspectAsset } =
     useCommand();
   const [result, setResult] = useState<JsonObject | null>(null);
   const [loading, setLoading] = useState(false);
@@ -91,6 +91,9 @@ export default function Resources({ route }: { route: string }) {
     const timer = setInterval(() => setVersion((v) => v + 1), 30000);
     return () => clearInterval(timer);
   }, [route]);
+  useEffect(() => {
+    setQuery(route === "challenges" ? entity || "" : "");
+  }, [route, entity]);
   const refresh = () => setVersion((v) => v + 1);
   const filter = (rows: JsonObject[]) =>
     rows.filter(
@@ -582,7 +585,10 @@ export default function Resources({ route }: { route: string }) {
                 <p>{str(c.goal)}</p>
                 <footer>
                   <span>{str(c.category)}</span>
-                  <b>{display(c.dynamic_points ?? c.points_red)} points</b>
+                  <b>
+                    {display(c.dynamic_points ?? c.points_blue ?? c.points_red)}{" "}
+                    points
+                  </b>
                   <a
                     className="text-button"
                     href={workspaceUrl(

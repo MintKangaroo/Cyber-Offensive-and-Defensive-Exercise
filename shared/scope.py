@@ -6,20 +6,20 @@ remains available for isolated beginner exercises; it is not a multi-tenant mode
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import json
 import os
 import re
-from urllib.parse import parse_qs
+import time
 from contextvars import ContextVar
 from http.cookies import SimpleCookie
-
-import asyncio
-import time
+from urllib.parse import parse_qs
 
 import httpx
 from fastapi import HTTPException
 from starlette.responses import JSONResponse
+
 from .rbac import Identity, require_role
 
 _current: ContextVar[Identity | None] = ContextVar("range_identity", default=None)
@@ -371,6 +371,8 @@ _HUMAN_ROUTES = {
             "GET /portal/competitions/{sid}",
             "GET /portal/nice-coverage",
             "GET /portal/scoreboard",
+            "GET /portal/training/me",
+            "POST /portal/training/challenges/{cid}/start",
         ),
         **_grants({"red"}, "POST /portal/challenges/{cid}/submit"),
         **_grants(
@@ -394,6 +396,26 @@ _HUMAN_ROUTES = {
 
 def human_roles(service: str, path: str, method: str) -> set[str]:
     return {"instructor"} | _HUMAN_ROUTES.get(service, {}).get((method, path), set())
+
+
+def route_template(routes, request_scope) -> str:
+    """Resolve effective templates for both flattened and included FastAPI routers.
+
+    FastAPI 0.141 retains included routers instead of copying their APIRoutes.
+    Its effective contexts apply include prefixes and nested routing order. Match
+    those contexts, never broaden authorization with string-prefix checks.
+    """
+    from starlette.routing import Match
+
+    for route in routes:
+        contexts = getattr(route, "effective_route_contexts", None)
+        candidates = contexts() if callable(contexts) else (route,)
+        for candidate in candidates:
+            if candidate.matches(request_scope)[0] == Match.FULL:
+                return getattr(candidate, "path", "") or getattr(
+                    getattr(candidate, "starlette_route", None), "path", ""
+                )
+    return ""
 
 
 class ScopeMiddleware:
@@ -443,13 +465,7 @@ class ScopeMiddleware:
             ):
                 who = Identity(actor="range-service", role="instructor")
             else:
-                from starlette.routing import Match
-
-                template = ""
-                for route in self.routes:
-                    if route.matches(scope)[0] == Match.FULL:
-                        template = route.path
-                        break
+                template = route_template(self.routes, scope)
                 allowed = human_roles(self.service, template, method)
                 who = require_role(auth, allowed, allow_dev=False)
                 await verify_session(auth)

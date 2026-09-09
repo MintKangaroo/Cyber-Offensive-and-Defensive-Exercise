@@ -105,3 +105,23 @@ exercise and actor/defender team IDs. Do not copy `SERVICE_TOKEN` into twins. Se
 legacy compatibility, replay cursors and confirmed direct instructor operations.
 Run `python3 scripts/smoke_service_scope.py` for the isolated production service
 drill; it creates and removes its own project and never resets the training stack.
+
+
+### Continued Command authoring / personal training validation
+
+The CI unit job now provisions an isolated PostgreSQL 16 service and supplies
+`ATTACK_DEFENSE_TEST_POSTGRES_URL`; replica locking, concurrent scoring, patch job
+fencing, KOTH and Stealth tests run without database-dependent skips. Only use a
+fresh disposable database for these tests: their fixture truncates A/D test tables.
+
+`python3 scripts/smoke_service_scope.py` also builds the challenge portal in its own
+fresh Docker project and verifies the real personal-training router, authenticated
+practice start, failed grader attempt, own evidence and revocation. It creates no
+host service ports and never resets the running training stack. Unit tests should
+use `requirements-dev.txt`, including the pinned FastAPI/Starlette versions, to match
+included-router behavior in production.
+
+Studio and personal-training workflows are documented in
+[SCENARIO_STUDIO.md](docs/SCENARIO_STUDIO.md) and
+[PERSONAL_TRAINING.md](docs/PERSONAL_TRAINING.md). Portal data migration is additive;
+no extra cloud service, score reset or new production secret is required.

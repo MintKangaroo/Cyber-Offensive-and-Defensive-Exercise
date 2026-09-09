@@ -25,6 +25,7 @@ SERVICES = (
     "incident",
     "injects",
     "ingest_proxy",
+    "challenge_portal",
 )
 
 

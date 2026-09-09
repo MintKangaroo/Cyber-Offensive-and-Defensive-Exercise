@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { setup, now } from "./fixtures";
+import { parse } from "yaml";
 test("overview, evidence inspector and keyboard command palette", async ({
   page,
 }) => {
@@ -107,6 +108,116 @@ test("visual ↔ YAML does not rewrite source; validate gates publication", asyn
     page.getByRole("button", { name: "Publish scenario", exact: true }),
   ).toBeEnabled();
 });
+test("crossover phases and investigation keys survive visual source switching", async ({
+  page,
+}) => {
+  const updates = await setup(page);
+  await page.goto("/#studio");
+  await page.getByRole("button", { name: "New crossover draft" }).click();
+  await expect(page.getByLabel("New phase unlock condition")).toHaveValue(
+    "phase_1_operations.completed",
+  );
+  await page.getByRole("button", { name: "Add phase", exact: true }).click();
+  const objective = page.getByRole("group", {
+    name: "phase_2_investigation objective 1",
+    exact: true,
+  });
+  await objective
+    .getByLabel("Objective name", { exact: true })
+    .fill("Identify recovery evidence");
+  await objective
+    .getByLabel("Instructor answer key")
+    .fill("verified local event");
+  await objective.getByLabel("Objective points").fill("35");
+  await page.getByRole("button", { name: "YAML source", exact: true }).click();
+  const editor = page.getByLabel("Scenario YAML source");
+  const original = await editor.inputValue();
+  const raw = parse(original).crossover_scenario;
+  expect(raw.phase_2_investigation).toMatchObject({
+    actor: "blue",
+    locked_until: "phase_1_operations.completed",
+    objectives: [
+      {
+        name: "Identify recovery evidence",
+        points: 35,
+        answer: "verified local event",
+      },
+    ],
+  });
+  expect(raw.phase_1_operations.stages[0].stage).toBe(1);
+  await page
+    .getByRole("button", { name: "Visual editor", exact: true })
+    .click();
+  await page.getByRole("button", { name: "YAML source", exact: true }).click();
+  await expect(editor).toHaveValue(original);
+  await page.getByRole("button", { name: "Validate & dry run" }).click();
+  await expect(
+    page.getByRole("button", { name: "Publish scenario", exact: true }),
+  ).toBeEnabled();
+  expect(updates.find((u) => u.path === "/scenarios/validate")?.body.yaml).toBe(
+    original,
+  );
+});
+
+test("unapplied evidence blocks save and mode changes; keyboard applies typed criteria", async ({
+  page,
+}) => {
+  await setup(page);
+  await page.goto("/#studio");
+  const editor = page.getByLabel("Stage evidence criteria", { exact: true });
+  await editor.fill('{"metadata.rpm":');
+  await expect(
+    page.getByRole("button", { name: "Save draft", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Validate & dry run" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "YAML source", exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByRole("button", { name: "Apply stage evidence criteria" })
+    .click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await editor.fill('{"metadata.rpm": 1200, "metadata.verified": true}');
+  const apply = page.getByRole("button", {
+    name: "Apply stage evidence criteria",
+  });
+  await apply.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("button", { name: "Save draft", exact: true }),
+  ).toBeEnabled();
+  await page.getByRole("button", { name: "YAML source", exact: true }).click();
+  const raw = parse(
+    await page.getByLabel("Scenario YAML source").inputValue(),
+  ).scenario;
+  expect(raw.stages[0].match).toEqual({
+    "metadata.rpm": 1200,
+    "metadata.verified": true,
+  });
+});
+
+test("crossover authoring remains accessible and usable at tablet width", async ({
+  page,
+}) => {
+  await setup(page);
+  await page.setViewportSize({ width: 820, height: 1180 });
+  await page.goto("/#studio");
+  await page.getByRole("button", { name: "New crossover draft" }).click();
+  await page.getByRole("button", { name: "Add phase", exact: true }).click();
+  const accessibility = await new AxeBuilder({ page })
+    .include(".studio")
+    .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+    .analyze();
+  expect(accessibility.violations).toEqual([]);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+
 test("replay scrubbing synchronizes asset evidence and score", async ({
   page,
 }) => {
@@ -270,4 +381,91 @@ test("replay loads subsequent pages before enabling synchronized playback", asyn
   await expect(
     page.locator(".replay-asset").filter({ hasText: "Power grid / SCADA" }),
   ).toContainText("Recovered");
+});
+
+test("personal training distinguishes observed attempts and records an explicit start", async ({
+  page,
+}) => {
+  await setup(page, { role: "red" });
+  let starts = 0;
+  await page.route("**/command/training", (route) =>
+    route.fulfill({
+      json: {
+        scope: "team",
+        individual: {
+          status: "ready",
+          data: {
+            scope: "individual",
+            collection_enabled: true,
+            method: "Recorded personal grader results in this exercise.",
+            domains: [
+              { domain: "ICS/OT", available: 2, completed: 1, proficiency: 50 },
+            ],
+            activity: [
+              {
+                id: "ICS-TRAINING",
+                title: "Observed range recovery",
+                attempts: 2,
+                completed: true,
+                elapsed_sec: 60,
+              },
+            ],
+            recommendations: [
+              {
+                id: "ICS-NEXT",
+                title: "Next range exercise",
+                difficulty: "easy",
+                reason: "No recorded personal completion",
+              },
+            ],
+            unavailable_inputs: ["hint count", "response quality"],
+          },
+        },
+      },
+    }),
+  );
+  await page.route("**/command/training/challenges/ICS-NEXT/start", (route) => {
+    starts++;
+    return route.fulfill({ json: { started_at: now } });
+  });
+  await page.goto("/#training");
+  await expect(
+    page.getByText("Personal exercise evidence", { exact: false }),
+  ).toBeVisible();
+  const table = page.getByRole("table", { name: "Personal training evidence" });
+  await expect(table).toContainText("Observed range recovery");
+  await expect(table).toContainText("Grader passed");
+  await expect(
+    page.getByText("Unavailable measurements:", { exact: false }),
+  ).toContainText("hint count");
+  expect(starts).toBe(0);
+  await page.getByRole("button", { name: /Next range exercise/ }).click();
+  await expect(page).toHaveURL(/#challenges\/ICS-NEXT/);
+  expect(starts).toBe(1);
+});
+
+test("training keeps team evidence explicit when the personal source is unavailable", async ({
+  page,
+}) => {
+  await setup(page, { role: "red" });
+  await page.route("**/command/training", (route) =>
+    route.fulfill({
+      json: {
+        scope: "team",
+        domains: [],
+        recommendations: [],
+        individual: { status: "unavailable", data: null },
+      },
+    }),
+  );
+  await page.goto("/#training");
+  await expect(
+    page.getByText("Team completion evidence", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Individual evidence is unavailable", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("table", { name: "Personal training evidence" }),
+  ).toHaveCount(0);
 });

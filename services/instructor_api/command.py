@@ -190,13 +190,22 @@ async def snapshot(
                 "hosts": ("edr", "/edr/hosts", None),
             }
         )
-    if ident.role=="blue" and "soc" in capabilities(ident):
-        requests.update({"alerts":("siem","/alerts",{"limit":500}),"hosts":("edr","/edr/hosts",None),"patches":("config","/config/patches",None),"scores":("scoring","/scores",{"scenario_id":sid})})
+    if ident.role == "blue" and "soc" in capabilities(ident):
+        requests.update(
+            {
+                "alerts": ("siem", "/alerts", {"limit": 500}),
+                "hosts": ("edr", "/edr/hosts", None),
+                "patches": ("config", "/config/patches", None),
+                "scores": ("scoring", "/scores", {"scenario_id": sid}),
+            }
+        )
     if "incidents" in capabilities(ident):
         requests["incidents"] = (
             "incident",
             "/incidents",
-            {"team_id": ident.team_id, "scenario_id":sid} if ident.role != "instructor" else None,
+            {"team_id": ident.team_id, "scenario_id": sid}
+            if ident.role != "instructor"
+            else None,
         )
     if sections:
         requested = set(sections.split(","))
@@ -296,9 +305,10 @@ async def stream(
                         if not isinstance(data, dict):
                             continue
                         topic = fields.get("event", "events")
-                        if topic in {"stream-gap","session-ended"}:
+                        if topic in {"stream-gap", "session-ended"}:
                             yield f"event: {topic}\ndata: {json.dumps(data)}\n\n"
-                            if topic=="session-ended":return
+                            if topic == "session-ended":
+                                return
                             continue
                         if topic in {"events", "detections"}:
                             if data.get("scenario_id") != sid:
@@ -418,7 +428,7 @@ async def promote(
             "source": "siem",
             "host": raw.get("asset", ""),
             "team_id": raw.get("team_id", ""),
-            "scenario_id":raw.get("scenario_id", ""),
+            "scenario_id": raw.get("scenario_id", ""),
         },
     )
 
@@ -458,6 +468,8 @@ async def resources(
         params["team_id"] = ident.team_id
     if resource == "injects" and ident.role != "instructor":
         path = "/injects/inbox"
+    if resource == "challenges" and ident.role == "blue":
+        path = "/portal/blue/challenges"
     if resource == "siem" and text:
         params["text"] = text[:500]
     return await call(service, path, auth, params=params)
@@ -561,28 +573,76 @@ async def audit(
 
 
 @router.get("/replay/page")
-async def replay_page(scenario_id:str="default",cursor:str="",authorization:str=Header(default=""),cr_token:str|None=Cookie(default=None)):
-    ident,auth=await identify(authorization,cr_token);need(ident,"replay")
-    sid=scenario_scope(ident,scenario_id)
-    page=await call("events","/replay/page",auth,params={"scenario_id":sid,"cursor":cursor,"limit":5000})
-    page["events"]=[p for e in page.get("events",[]) if (p:=project_event(e,ident,now=time.time()))]
+async def replay_page(
+    scenario_id: str = "default",
+    cursor: str = "",
+    authorization: str = Header(default=""),
+    cr_token: str | None = Cookie(default=None),
+):
+    ident, auth = await identify(authorization, cr_token)
+    need(ident, "replay")
+    sid = scenario_scope(ident, scenario_id)
+    page = await call(
+        "events",
+        "/replay/page",
+        auth,
+        params={"scenario_id": sid, "cursor": cursor, "limit": 5000},
+    )
+    page["events"] = [
+        p
+        for e in page.get("events", [])
+        if (p := project_event(e, ident, now=time.time()))
+    ]
     return page
 
 
 @router.get("/replay")
-async def replay(scenario_id:str="default",paged:bool=False,authorization:str=Header(default=""),cr_token:str|None=Cookie(default=None)):
-    ident,auth=await identify(authorization,cr_token);need(ident,"replay")
-    sid=scenario_scope(ident,scenario_id)
-    events=await source("events","/replay/page" if paged else "/replay/events",auth,{"scenario_id":sid,"limit":5000 if paged else 50000})
+async def replay(
+    scenario_id: str = "default",
+    paged: bool = False,
+    authorization: str = Header(default=""),
+    cr_token: str | None = Cookie(default=None),
+):
+    ident, auth = await identify(authorization, cr_token)
+    need(ident, "replay")
+    sid = scenario_scope(ident, scenario_id)
+    events = await source(
+        "events",
+        "/replay/page" if paged else "/replay/events",
+        auth,
+        {"scenario_id": sid, "limit": 5000 if paged else 50000},
+    )
     if events["data"] is not None:
-        raw=events["data"]
-        events["data"]={"events":[p for e in raw.get("events",[]) if (p:=project_event(e,ident,now=time.time()))],"truncated":raw.get("truncated",False),"next_cursor":raw.get("next_cursor",""),"complete":raw.get("complete",not raw.get("truncated",False))}
-    result={"events":events}
-    if ident.role=="instructor" or "soc" in capabilities(ident):
-        result["scores"]=await source("scoring","/scores/history",auth,{"scenario_id":sid})
-        result["incidents"]=await source("incident","/incidents",auth,{"scenario_id":sid})
-        result["configuration"]=await source("config","/config/history",auth,{"scenario_id":sid})
-    return {"scenario_id":sid,"sources":result,"limits":["Unknown initial asset state remains unknown. Historical cases without a scenario ID require explicit event/alert evidence.","Configuration history includes only changes whose exercise ownership was recorded at mutation time."]}
+        raw = events["data"]
+        events["data"] = {
+            "events": [
+                p
+                for e in raw.get("events", [])
+                if (p := project_event(e, ident, now=time.time()))
+            ],
+            "truncated": raw.get("truncated", False),
+            "next_cursor": raw.get("next_cursor", ""),
+            "complete": raw.get("complete", not raw.get("truncated", False)),
+        }
+    result = {"events": events}
+    if ident.role == "instructor" or "soc" in capabilities(ident):
+        result["scores"] = await source(
+            "scoring", "/scores/history", auth, {"scenario_id": sid}
+        )
+        result["incidents"] = await source(
+            "incident", "/incidents", auth, {"scenario_id": sid}
+        )
+        result["configuration"] = await source(
+            "config", "/config/history", auth, {"scenario_id": sid}
+        )
+    return {
+        "scenario_id": sid,
+        "sources": result,
+        "limits": [
+            "Unknown initial asset state remains unknown. Historical cases without a scenario ID require explicit event/alert evidence.",
+            "Configuration history includes only changes whose exercise ownership was recorded at mutation time.",
+        ],
+    }
 
 
 @router.get("/aar")
@@ -759,6 +819,7 @@ async def training(
     data = await call(
         "portal", "/portal/challenges", auth, params={"team_id": ident.team_id}
     )
+    individual = await source("portal", "/portal/training/me", auth)
     challenges = data.get("challenges", [])
     mapping = {
         "web": "Web",
@@ -802,6 +863,7 @@ async def training(
         ),
     )
     return {
+        "individual": individual,
         "scope": "team",
         "team_id": ident.team_id,
         "domains": list(domains.values()),
@@ -823,6 +885,24 @@ async def training(
             "response quality",
         ],
     }
+
+
+@router.post("/training/challenges/{cid}/start")
+async def start_training(
+    cid: str,
+    authorization: str = Header(default=""),
+    cr_token: str | None = Cookie(default=None),
+):
+    ident, auth = await identify(authorization, cr_token)
+    need(ident, "training")
+    if ident.role not in {"red", "blue"} or not ident.team_id or not ident.match_id:
+        raise HTTPException(403, "Practice requires a Red or Blue exercise membership")
+    return await call(
+        "portal",
+        f"/portal/training/challenges/{quote(cid, safe='')}/start",
+        auth,
+        method="POST",
+    )
 
 
 DEFAULT_POLICY = {

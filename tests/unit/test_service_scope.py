@@ -46,6 +46,32 @@ def sensor(asset):
     }
 
 
+def test_nested_router_prefixes_keep_exact_receiving_service_grants():
+    from fastapi import APIRouter, FastAPI
+
+    app = FastAPI()
+    child = APIRouter(prefix="/training")
+
+    @child.get("/me")
+    def own_record():
+        return {"actor": scope.identity().actor}
+
+    @child.get("/export")
+    def global_export():
+        return {"private": "instructor only"}
+
+    parent = APIRouter()
+    parent.include_router(child, prefix="/portal")
+    scope.install(app, "portal")
+    app.include_router(parent)
+    client = TestClient(app)
+    assert client.get("/portal/training/me").status_code == 401
+    response = client.get("/portal/training/me", headers=auth("red"))
+    assert response.status_code == 200 and response.json()["actor"] == "red-user"
+    assert client.get("/portal/training/export", headers=auth("red")).status_code == 403
+    assert client.post("/portal/training/me", headers=auth("red")).status_code == 403
+
+
 @pytest.fixture(autouse=True)
 def strict(monkeypatch, tmp_path):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))

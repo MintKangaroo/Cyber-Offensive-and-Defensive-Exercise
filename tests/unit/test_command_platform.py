@@ -66,6 +66,46 @@ def test_new_reads_fail_closed(client, path):
     assert client.get("/command" + path).status_code == 401
 
 
+def test_personal_training_is_additive_and_forwards_caller_identity(client, monkeypatch):
+    calls = []
+
+    async def fake(service, path, auth, **kwargs):
+        calls.append((service, path, auth, kwargs))
+        if path == "/portal/training/me":
+            return {"scope": "individual", "subject": "red-user", "domains": [], "activity": []}
+        return {"challenges": []}
+
+    monkeypatch.setattr(command, "upstream", fake)
+    auth = headers("red", "alpha", "exercise-one")
+    response = client.get("/command/training", headers=auth)
+    assert response.status_code == 200
+    assert response.json()["scope"] == "team"  # Retain existing callers' team contract.
+    assert response.json()["individual"]["data"]["scope"] == "individual"
+    response = client.post("/command/training/challenges/WEB-001/start", headers=auth)
+    assert response.status_code == 200
+    assert calls[-1][0:2] == ("portal", "/portal/training/challenges/WEB-001/start")
+    assert calls[-1][2] == auth["Authorization"]
+    assert calls[-1][3]["method"] == "POST"
+
+
+def test_practice_start_cannot_use_an_unassigned_or_observer_identity(client):
+    for role in ("red", "observer", "instructor", "operator"):
+        assert client.post("/command/training/challenges/WEB-001/start", headers=headers(role)).status_code == 403
+
+
+def test_blue_challenge_navigation_uses_the_defensive_catalog(client, monkeypatch):
+    calls = []
+
+    async def fake(service, path, auth, **kwargs):
+        calls.append(path)
+        return {"challenges": []}
+
+    monkeypatch.setattr(command, "upstream", fake)
+    response = client.get("/command/resources/challenges", headers=headers("blue", "alpha", "exercise-one"))
+    assert response.status_code == 200
+    assert calls[-1] == "/portal/blue/challenges"
+
+
 def test_command_ignores_insecure_dev_bypass(client, monkeypatch):
     for role in ("INSTRUCTOR", "OPERATOR", "COMPETITOR", "RED", "BLUE", "OBSERVER"):
         monkeypatch.delenv(role + "_TOKEN")

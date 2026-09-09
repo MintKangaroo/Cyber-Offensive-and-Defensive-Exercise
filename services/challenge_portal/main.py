@@ -474,7 +474,7 @@ async def submit(cid: str, req: SubmitReq, authorization: str = Header(default="
     if not allowed:
         raise HTTPException(429, f"제출 제한: {retry}초 후 재시도(rate-limit/lockout). 반복 오답이 감지되었습니다.")
 
-    submission = {"team_id": eff_team, **(req.fields or {})}
+    submission = {**(req.fields or {}), "team_id": eff_team}
     context = {"challenge_dir": e["dir"]}
     try:
         result = gmod.grade_red(submission, context)
@@ -490,7 +490,7 @@ async def submit(cid: str, req: SubmitReq, authorization: str = Header(default="
     vhash = anticheat.flag_hash(flag_val)
     conn = _ac_db()
     try:
-        anticheat.record(_AC_STATE, conn, eff_team, req.match_id or "", cid, "red", vhash, passed, now, _AC_CFG)
+        anticheat.record(_AC_STATE, conn, eff_team, req.match_id or "", cid, "red", vhash, passed, now, _AC_CFG, verified_subject=range_scope.identity().actor if range_scope.is_team() else None)
         shared_with = anticheat.detect_sharing(conn, cid, vhash, eff_team) if passed else []
     finally:
         conn.close()
@@ -848,7 +848,7 @@ async def blue_submit(cid: str, req: BlueSubmitReq):
     conn = _ac_db()
     try:
         anticheat.record(_AC_STATE, conn, req.team_id, req.match_id or "", cid, "blue",
-                         anticheat.flag_hash(req.rule_yaml), passed, now, _AC_CFG)
+                         anticheat.flag_hash(req.rule_yaml), passed, now, _AC_CFG, verified_subject=range_scope.identity().actor if range_scope.is_team() else None)
     finally:
         conn.close()
     already = cid in _BLUE_SOLVES.get(key, {})
@@ -952,6 +952,11 @@ async def _emit_blue_solve(team_id: str, e: dict) -> None:
 
 
 _load_solves()  # 볼륨에 저장된 solve 복원(P0-3)
+
+
+# Personal training reads are independently authenticated in both deployment profiles.
+from services.challenge_portal.training import build_router as _training_router
+app.include_router(_training_router({"db": lambda: _ac_db(), "red": lambda: CATALOG, "blue": lambda: BLUE_CATALOG}))
 
 
 if __name__ == "__main__":

@@ -141,3 +141,22 @@ paired actor/defender event attribution, `/replay/page`, `/config/history` and
 confirmed dangerous actions are specified in [SERVICE_SCOPE.md](docs/SERVICE_SCOPE.md).
 The existing event IDs, score award/dedup rules and Attack/Defense API semantics are
 retained. Historical records without ownership are not automatically reassigned.
+
+
+## Personal training extension (2026-09)
+
+- `GET /portal/training/me` returns the authenticated Red/Blue actor's own
+  `scope`, `subject`, `team_id`, `match_id`, `side`, `collection_enabled`, `domains`,
+  `activity`, `recommendations`, `method` and `unavailable_inputs`.
+- `POST /portal/training/challenges/{cid}/start` returns `challenge_id`,
+  `started_at` and `scope`; repeated calls preserve the original timestamp.
+- `/command/training` retains its team fields and adds an `individual` source
+  envelope. `/command/training/challenges/{cid}/start` forwards the caller identity.
+- Personal evidence uses verified actor + team + match + side. Missing elapsed time,
+  hints and quality stay null; no flag/answer hashes leave the personal API.
+- Scenario validation adds `phase_projection` while preserving the event timeline.
+  Crossover stage segments include their `phase`; numeric runtime order is respected.
+  Investigation-only scenarios need no invented event timeline.
+
+See [personal evidence](docs/PERSONAL_TRAINING.md) and
+[authoring semantics](docs/SCENARIO_STUDIO.md) for measurement and execution limits.
