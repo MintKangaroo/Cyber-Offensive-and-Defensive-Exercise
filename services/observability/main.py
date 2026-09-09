@@ -56,6 +56,8 @@ def _targets() -> dict[str, str]:
 
 
 app = FastAPI(title="Platform Observability")
+from shared import scope as range_scope
+range_scope.install(app, "observability")
 
 
 async def _scrape_one(client: httpx.AsyncClient, name: str, base: str) -> dict:

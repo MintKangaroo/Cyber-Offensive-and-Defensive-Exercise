@@ -45,6 +45,7 @@ class NormalizedEvent(BaseModel):
     # Live Fire 상관용(트윈 소스일 때)
     trace_id: Optional[str] = None
     vuln_id: Optional[str] = None
+    scenario_id: Optional[str] = None
     team_id: Optional[str] = None
 
     message: str = ""

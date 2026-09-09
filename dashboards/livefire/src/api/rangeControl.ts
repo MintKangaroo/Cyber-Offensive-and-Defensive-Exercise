@@ -8,7 +8,7 @@ export interface SafetyStatus {
   internet_egress: string;
   cross_team_traffic: string;
   docker_socket_exposure: string;
-  active_emergency_stop: boolean;
+  active_emergency_stop: boolean | null;
   paused_teams: string[];
   range_containment_score: string;
   design_intent?: Record<string, string>;
@@ -25,22 +25,22 @@ async function j<T>(url: string, init?: RequestInit): Promise<T> {
 }
 const auth = (token: string) => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json" });
 
-export const fetchSafetyStatus = () => j<{ safety: SafetyStatus }>(`${RANGE}/safety/status`);
+export const fetchSafetyStatus = (token="") => j<{ safety: SafetyStatus }>(`${RANGE}/safety/status`,{headers:auth(token)});
 export const emergencyStop = (reason: string, token: string) =>
-  j(`${RANGE}/safety/emergency-stop`, { method: "POST", headers: auth(token), body: JSON.stringify({ reason }) });
+  j(`${RANGE}/safety/emergency-stop`, { method: "POST", headers: auth(token), body: JSON.stringify({ reason, confirm:true }) });
 export const releaseEmergencyStop = (reason: string, token: string) =>
-  j(`${RANGE}/safety/emergency-stop/release`, { method: "POST", headers: auth(token), body: JSON.stringify({ reason }) });
+  j(`${RANGE}/safety/emergency-stop/release`, { method: "POST", headers: auth(token), body: JSON.stringify({ reason, confirm:true }) });
 export const teamPause = (team_id: string, paused: boolean, token: string) =>
   j(`${RANGE}/safety/team-pause`, { method: "POST", headers: auth(token), body: JSON.stringify({ team_id, paused }) });
 
 export const resetRange = (rangeId: string, reason: string, token: string) =>
-  j(`${RANGE}/ranges/${encodeURIComponent(rangeId)}/reset`, { method: "POST", headers: auth(token), body: JSON.stringify({ reason }) });
-export const verifyBaseline = (rangeId: string, token: string) =>
+  j(`${RANGE}/ranges/${encodeURIComponent(rangeId)}/reset`, { method: "POST", headers: auth(token), body: JSON.stringify({ reason, confirm:true }) });
+export const verifyBaseline = (rangeId: string, token: string, reason: string) =>
   j<{ passed: boolean; verdict: string; checks: Record<string, unknown> }>(
-    `${RANGE}/ranges/${encodeURIComponent(rangeId)}/verify-baseline`, { method: "POST", headers: auth(token), body: "{}" });
+    `${RANGE}/ranges/${encodeURIComponent(rangeId)}/verify-baseline`, { method: "POST", headers: auth(token), body: JSON.stringify({reason,confirm:true}) });
 export const snapshotRange = (rangeId: string, reason: string, token: string) =>
-  j(`${RANGE}/ranges/${encodeURIComponent(rangeId)}/snapshot`, { method: "POST", headers: auth(token), body: JSON.stringify({ reason }) });
+  j(`${RANGE}/ranges/${encodeURIComponent(rangeId)}/snapshot`, { method: "POST", headers: auth(token), body: JSON.stringify({ reason, confirm:true }) });
 
-export const fetchMatches = () => j<{ matches: Match[]; count: number }>(`${RANGE}/matches`);
+export const fetchMatches = (token="") => j<{ matches: Match[]; count: number }>(`${RANGE}/matches`,{headers:auth(token)});
 export const createMatch = (m: Partial<Match>, token: string) =>
   j(`${RANGE}/matches`, { method: "POST", headers: auth(token), body: JSON.stringify(m) });

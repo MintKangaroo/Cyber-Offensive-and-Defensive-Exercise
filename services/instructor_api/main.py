@@ -43,12 +43,14 @@ def _require_instructor(authorization: str) -> str:
 
 
 class ScenarioStartRequest(BaseModel):
+    confirm: bool = False
     scenario_id: str
     team_ids: list[str] = []
     reason: str
 
 
 class ScenarioEndRequest(BaseModel):
+    confirm: bool = False
     scenario_id: str
     reason: str
 
@@ -85,7 +87,7 @@ async def scenario_start(req: ScenarioStartRequest, authorization: str = Header(
         async with httpx.AsyncClient(timeout=5.0) as client:
             r = await client.post(
                 f"{SCENARIO_ENGINE_URL}/scenario/activate",
-                json={"scenario_id": req.scenario_id, "team_ids": req.team_ids},
+                json=req.model_dump(),
                 headers={"Authorization": authorization},
             )
             r.raise_for_status()
@@ -106,7 +108,7 @@ async def scenario_end(req: ScenarioEndRequest, authorization: str = Header(defa
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             r = await client.post(
-                f"{SCENARIO_ENGINE_URL}/scenario/deactivate", json={"scenario_id": req.scenario_id},
+                f"{SCENARIO_ENGINE_URL}/scenario/deactivate", json=req.model_dump(),
                 headers={"Authorization": authorization}
             )
             r.raise_for_status()

@@ -5,6 +5,11 @@
 # SERVICE_TOKEN 을 보유하지 않는다(팝된 트윈이 토큰을 유출할 수 없음).
 # ${SERVICE_TOKEN} 은 nginx 이미지의 envsubst 가 기동 시 치환한다($remote_addr 등 nginx
 # 변수는 env에 없으므로 보존됨).
+map $http_authorization $sensor_authorization {
+    "~^RangeAgent " $http_authorization;
+    default "${INGEST_FALLBACK_AUTH}";
+}
+
 server {
     listen 8010;
 
@@ -20,9 +25,10 @@ server {
 
     # 트윈은 /events(POST) 만 사용. 프록시가 인증 헤더를 주입.
     location = /events {
+        limit_except POST { deny all; }
         set $ingest_upstream event_collector;
         proxy_pass http://$ingest_upstream:8010/events;
-        proxy_set_header Authorization "Bearer ${SERVICE_TOKEN}";
+        proxy_set_header Authorization $sensor_authorization;
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header Host $host;
         proxy_connect_timeout 2s;

@@ -85,6 +85,8 @@ with _ac_db() as _c0:
 _c0.close()
 
 app = FastAPI(title="Red Challenge Portal")
+from shared import scope as range_scope
+range_scope.install(app,"portal")
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|(\d{1,3}\.){3}\d{1,3}|[\w-]+\.ts\.net)(:\d+)?",
@@ -139,6 +141,7 @@ TEAMS = _load_teams()
 @app.get("/portal/teams")
 def list_teams(side: Optional[str] = None):
     items = [t for t in TEAMS if not side or t.get("side") == side]
+    if range_scope.is_team():items=[t for t in items if t["team_id"]==range_scope.identity().team_id]
     return {"teams": items}
 
 
@@ -320,6 +323,7 @@ def _effective_team(team_id: str, match_id: Optional[str]) -> str:
     """매치별 플래그 회전(P3) — match_id가 있으면 팀 키를 매치로 네임스페이스한다.
     그레이더는 HMAC(SECRET, f"{ID}:{team}")로 플래그를 만들므로, team을 "match::team"으로 주면
     같은 팀이라도 매치마다 플래그가 달라진다(그레이더/시크릿 변경 없이 매치별 회전)."""
+    if range_scope.is_team():team_id,match_id=range_scope.pair(team_id if team_id!="default" else None,match_id)
     return f"{match_id}::{team_id}" if match_id else team_id
 
 
@@ -335,6 +339,7 @@ class SubmitReq(BaseModel):
 
 def _submitter_subject(authorization: str, explicit: Optional[str]) -> str:
     """제출자 개인 식별. 우선순위: 명시 subject > JWT sub > 'anonymous'."""
+    if range_scope.identity():return range_scope.identity().actor
     if explicit and explicit.strip():
         return explicit.strip()
     try:
@@ -380,6 +385,7 @@ def nice_coverage():
 
 @app.get("/portal/challenges")
 def list_challenges(team_id: Optional[str] = None):
+    if range_scope.is_team():team_id=_effective_team(team_id or "",None)
     solved = _SOLVES.get(team_id or "", {})
     items = []
     for e in CATALOG.values():
@@ -396,6 +402,7 @@ def list_challenges(team_id: Optional[str] = None):
 
 @app.get("/portal/challenges/{cid}")
 def get_challenge(cid: str, team_id: Optional[str] = None):
+    if range_scope.is_team():team_id=_effective_team(team_id or "",None)
     e = CATALOG.get(cid)
     if not e:
         raise HTTPException(404, "challenge not found")
@@ -444,6 +451,7 @@ def get_artifact(cid: str, team_id: str = "default", match_id: Optional[str] = N
 
 @app.post("/portal/challenges/{cid}/submit")
 async def submit(cid: str, req: SubmitReq, authorization: str = Header(default="")):
+    if range_scope.is_team():req.team_id,req.match_id=range_scope.pair(req.team_id,req.match_id)
     e = CATALOG.get(cid)
     if not e:
         raise HTTPException(404, "challenge not found")
@@ -504,7 +512,7 @@ async def submit(cid: str, req: SubmitReq, authorization: str = Header(default="
         "grader_points": got,
         "already_solved": already,
         "detail": detail,
-        "flag_sharing_suspected": shared_with,   # 같은 플래그를 먼저 낸 다른 팀(있으면 담합 의심)
+        "flag_sharing_suspected": [] if range_scope.is_team() else shared_with,   # 같은 플래그를 먼저 낸 다른 팀(있으면 담합 의심)
     }
 
 
@@ -521,6 +529,7 @@ def portal_admin_reset():
 def scoreboard():
     rows = []
     for team, solves in _SOLVES.items():
+        if range_scope.is_team() and team!=_effective_team("",None):continue
         rows.append({
             "team_id": team,
             "solved": len(solves),
@@ -542,6 +551,7 @@ def dynamic_scoreboard():
            for cid in CATALOG}
     rows = []
     for team, solves in _SOLVES.items():
+        if range_scope.is_team() and team!=_effective_team("",None):continue
         pts = sum(dyn.get(cid, s.get("points", 0)) for cid, s in solves.items())
         rows.append({
             "team_id": team,
@@ -567,6 +577,7 @@ def list_competitions():
 
 @app.get("/portal/competitions/{sid}")
 def get_competition(sid: str, team_id: Optional[str] = None):
+    if range_scope.is_team():team_id=_effective_team(team_id or "",None)
     """대회 세트의 문제 목록(공개 필드) + 밸런스 요약. team_id 시 solved 표시."""
     c = COMPETITIONS.get(sid)
     if not c:
@@ -660,14 +671,14 @@ def anticheat_audit(cid: Optional[str] = None, team_id: Optional[str] = None, li
 
 
 @app.get("/portal/anticheat/flagged")
-def anticheat_flagged():
+def anticheat_flagged(match_id: str = ""):
     """(P1-5) 담합 의심: 같은 챌린지에 '정답'으로 동일 플래그 해시를 낸 팀이 2개 이상인 건."""
     conn = _ac_db()
     rows = conn.execute(
         """SELECT cid, value_hash, COUNT(DISTINCT team_id) AS teams,
                   GROUP_CONCAT(DISTINCT team_id) AS team_list, MIN(ts) AS first_ts
-           FROM submissions WHERE passed=1
-           GROUP BY cid, value_hash HAVING teams >= 2 ORDER BY first_ts""").fetchall()
+           FROM submissions WHERE passed=1 AND (?='' OR match_id=?)
+           GROUP BY cid, value_hash HAVING teams >= 2 ORDER BY first_ts""",(match_id,match_id)).fetchall()
     conn.close()
     return {"flagged": [dict(r) for r in rows]}
 
@@ -680,7 +691,7 @@ async def _emit_solve(team_id: str, e: dict) -> None:
         "timestamp": time.time(),
         "actor": "red",
         "team_id": team_id,
-        "scenario_id": "default",
+        "scenario_id": (range_scope.identity().match_id if range_scope.is_team() else "default"),
         "target_asset": e.get("category", "ctf"),
         "vuln_id": None,
         "phase": "objective",
@@ -748,12 +759,14 @@ def _ensure_datasets(cdir: Path) -> None:
 
 
 class BlueSubmitReq(BaseModel):
+    match_id: Optional[str] = None
     team_id: str
     rule_yaml: str
 
 
 @app.get("/portal/blue/challenges")
 def blue_list(team_id: Optional[str] = None):
+    if range_scope.is_team():team_id=_effective_team(team_id or "",None)
     solved = _BLUE_SOLVES.get(team_id or "", {})
     items = []
     order = {"easy": 0, "medium": 1, "hard": 2, "insane": 3}
@@ -785,6 +798,8 @@ def blue_dataset(cid: str, which: str = "attack"):
 
 @app.post("/portal/blue/challenges/{cid}/submit")
 async def blue_submit(cid: str, req: BlueSubmitReq):
+    if range_scope.is_team():req.team_id,req.match_id=range_scope.pair(req.team_id,req.match_id)
+    key=_effective_team(req.team_id,req.match_id)
     e = BLUE_CATALOG.get(cid)
     if not e:
         raise HTTPException(404, "challenge not found")
@@ -832,13 +847,13 @@ async def blue_submit(cid: str, req: BlueSubmitReq):
     # (P1-5) 감사 기록(규칙 해시). 블루는 규칙이라 공유탐지는 신호로만.
     conn = _ac_db()
     try:
-        anticheat.record(_AC_STATE, conn, req.team_id, "", cid, "blue",
+        anticheat.record(_AC_STATE, conn, req.team_id, req.match_id or "", cid, "blue",
                          anticheat.flag_hash(req.rule_yaml), passed, now, _AC_CFG)
     finally:
         conn.close()
-    already = cid in _BLUE_SOLVES.get(req.team_id, {})
+    already = cid in _BLUE_SOLVES.get(key, {})
     if passed and not already:
-        _BLUE_SOLVES.setdefault(req.team_id, {})[cid] = {"points": e["points_blue"], "at": time.time()}
+        _BLUE_SOLVES.setdefault(key, {})[cid] = {"points": e["points_blue"], "at": time.time(), "by":range_scope.identity().actor if range_scope.identity() else "anonymous"}
         _persist_solves()
         await _emit_blue_solve(req.team_id, e)
     return {
@@ -853,6 +868,7 @@ async def blue_submit(cid: str, req: BlueSubmitReq):
 def blue_scoreboard():
     rows = []
     for team, solves in _BLUE_SOLVES.items():
+        if range_scope.is_team() and team!=_effective_team("",None):continue
         rows.append({
             "team_id": team, "solved": len(solves),
             "points": sum(s["points"] for s in solves.values()),
@@ -870,7 +886,7 @@ _VULN_CATALOG_PATH = REPO_ROOT / "shared" / "vuln_catalog.json"
 
 
 @app.get("/portal/blue/patches")
-async def blue_patches():
+async def blue_patches(authorization: str = Header(default="")):
     """전체 취약점 카탈로그(60종) + config_service 라이브 패치 상태 병합 → 패치 보드용."""
     import json as _json
     try:
@@ -881,12 +897,13 @@ async def blue_patches():
     live: dict = {}
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
-            r = await client.get(f"{CONFIG_SERVICE_URL}/config/patches")
+            r = await client.get(f"{CONFIG_SERVICE_URL}/config/patches",headers={"Authorization":authorization} if authorization else service_headers())
             live = r.json() if r.status_code == 200 else {}
     except httpx.HTTPError:
         live = {}
     board: dict[str, dict[str, bool]] = {}
     for asset, vulns in catalog.items():
+        if range_scope.is_team() and not range_scope.owns(range_scope.asset_owner(asset)):continue
         board[asset] = {}
         for v in vulns:
             vid = v.get("id")
@@ -904,6 +921,7 @@ class PatchReq(BaseModel):
 
 @app.post("/portal/blue/patch")
 async def blue_patch(req: PatchReq):
+    if range_scope.is_team():range_scope.check(range_scope.asset_owner(req.asset))
     """패치 토글 → config_service로 프록시(dev-mode에선 토큰 없이 통과)."""
     headers = {"Authorization": f"Bearer {INSTRUCTOR_TOKEN}"} if INSTRUCTOR_TOKEN else {}
     try:

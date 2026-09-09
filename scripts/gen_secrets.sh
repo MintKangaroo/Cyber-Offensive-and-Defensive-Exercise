@@ -30,4 +30,5 @@ fill ATTACK_DEFENSE_MANAGEMENT_TOKEN
 fill AD_POSTGRES_PASSWORD
 fill PCAP_ANONYMIZATION_SECRET
 fill PCAP_WATERMARK_SECRET
+python3 scripts/gen_sensor_tokens.py .env
 echo "✅ 완료 — .env 를 안전하게 보관하세요(커밋 금지)."

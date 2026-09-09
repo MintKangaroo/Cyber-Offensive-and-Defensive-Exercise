@@ -9,6 +9,7 @@ solve 기록 형식(challenge_portal _SOLVES):
     { team_key: { challenge_id: {"points": int, "at": float, "by": subject} } }
 team_key 는 "match::team" 복합키일 수 있어 team 부분만 추출해 표시한다.
 """
+
 from __future__ import annotations
 
 
@@ -29,8 +30,16 @@ def individual_leaderboard(solves: dict[str, dict[str, dict]]) -> list[dict]:
         for cid, rec in chals.items():
             subject = (rec or {}).get("by") or "anonymous"
             key = (subject, team)
-            slot = agg.setdefault(key, {"subject": subject, "team": team,
-                                        "solved": 0, "points": 0, "challenges": []})
+            slot = agg.setdefault(
+                key,
+                {
+                    "subject": subject,
+                    "team": team,
+                    "solved": 0,
+                    "points": 0,
+                    "challenges": [],
+                },
+            )
             slot["solved"] += 1
             slot["points"] += int((rec or {}).get("points", 0))
             slot["challenges"].append(cid)
@@ -45,7 +54,11 @@ def individual_leaderboard(solves: dict[str, dict[str, dict]]) -> list[dict]:
 
 def team_contribution(solves: dict[str, dict[str, dict]], team_key: str) -> dict:
     """특정 팀의 개인별 기여 분해(팀 내부 평가용)."""
-    members = [r for r in individual_leaderboard(solves) if r["team"] == _team_of(team_key)]
+    members = [
+        r
+        for r in individual_leaderboard({team_key: solves.get(team_key, {})})
+        if r["team"] == _team_of(team_key)
+    ]
     total = sum(r["points"] for r in members)
     for r in members:
         r["share_pct"] = round(100 * r["points"] / total) if total else 0

@@ -218,3 +218,56 @@ test("cancelling a completed safety confirmation does not send an action", async
   await expect(page.getByRole("dialog")).toBeHidden();
   expect(updates).toHaveLength(0);
 });
+
+test("replay loads subsequent pages before enabling synchronized playback", async ({
+  page,
+}) => {
+  await setup(page);
+  let pages = 0;
+  await page.route(/\/command\/replay(?:\/page)?(?:\?|$)/, async (route) => {
+    const url = new URL(route.request().url());
+    const event = (id: string, offset: number, type: string) => ({
+      event_id: id,
+      timestamp: now + offset,
+      event_type: type,
+      actor: "red",
+      team_id: "team-blue",
+      scenario_id: "TRAINING-01",
+      target_asset: "power_plant",
+      metadata: {},
+    });
+    const source = (data: unknown) => ({
+      status: "ready",
+      source: "test",
+      data,
+      observed_at: now,
+    });
+    const body = url.pathname.endsWith("/page")
+      ? (pages++,
+        {
+          events: [event("last-page-recovery", 300, "asset_recovered")],
+          next_cursor: "",
+          complete: true,
+        })
+      : {
+          sources: {
+            events: source({
+              events: [event("first-page-compromise", 0, "asset_compromised")],
+              next_cursor: "fixture-cursor",
+            }),
+            scores: source({ achievements: [] }),
+            incidents: source({ incidents: [] }),
+          },
+          limits: [],
+        };
+    await route.fulfill({ json: body });
+  });
+  await page.goto("/#replay");
+  const slider = page.getByRole("slider", { name: "Scrub exercise timeline" });
+  await expect(slider).toHaveAttribute("max", String(now + 300));
+  expect(pages).toBe(1);
+  await slider.fill(String(now + 300));
+  await expect(
+    page.locator(".replay-asset").filter({ hasText: "Power grid / SCADA" }),
+  ).toContainText("Recovered");
+});

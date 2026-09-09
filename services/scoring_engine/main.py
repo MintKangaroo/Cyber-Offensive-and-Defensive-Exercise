@@ -34,6 +34,8 @@ SCOREABLE_EVENT_TYPES = {
 }
 
 app = FastAPI(title="Scoring Engine")
+from shared import scope as range_scope
+range_scope.install(app, "scoring")
 
 # Live Fire 대시보드(로컬 dev 5174 등)가 브라우저에서 직접 /scores 등을 조회하므로 CORS 필요.
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
@@ -312,15 +314,19 @@ def score_ingest(event: IncomingEvent, authorization: str = Header(default="")):
 @app.get("/scores")
 def get_scores(scenario_id: str = "default", authorization: str = Header(default="")):
     require_read(authorization)  # 관전자 read 게이트(OBSERVER_READ_ENFORCE 시 유효)
+    team_id, scenario_id = range_scope.pair(scenario=scenario_id)
     conn = get_db()
-    rows = conn.execute(
-        "SELECT team_id, actor, score FROM team_scores WHERE scenario_id=? ORDER BY team_id, actor",
-        (scenario_id,),
-    ).fetchall()
+    query="SELECT team_id, actor, score FROM team_scores WHERE scenario_id=?"
+    params=[scenario_id]
+    if team_id:
+        query+=" AND team_id=?";params.append(team_id)
+    if range_scope.identity() and range_scope.identity().role=='red':
+        query+=" AND actor='red'"
+    rows=conn.execute(query+" ORDER BY team_id,actor",params).fetchall()
     conn.close()
     result: dict[str, dict[str, int]] = {}
     for r in rows:
-        result.setdefault(r["team_id"], {"red": 0, "blue": 0})[r["actor"]] = r["score"]
+        result.setdefault(r["team_id"], {"red": 0} if range_scope.identity() and range_scope.identity().role=="red" else {"red": 0, "blue": 0})[r["actor"]] = r["score"]
     return {"scenario_id": scenario_id, "teams": result}
 
 
@@ -328,11 +334,14 @@ def get_scores(scenario_id: str = "default", authorization: str = Header(default
 def get_history(scenario_id: str = "default", team_id: Optional[str] = None, authorization: str = Header(default="")):
     require_read(authorization)  # 관전자 read 게이트
     conn = get_db()
+    team_id, scenario_id = range_scope.pair(team_id,scenario_id)
     query = "SELECT * FROM achievements WHERE scenario_id=?"
     params = [scenario_id]
     if team_id:
         query += " AND team_id=?"
         params.append(team_id)
+    if range_scope.identity() and range_scope.identity().role=="red":
+        query += " AND actor='red'"
     query += " ORDER BY created_at ASC"
     rows = [dict(r) for r in conn.execute(query, params).fetchall()]
     conn.close()

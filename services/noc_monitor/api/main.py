@@ -19,6 +19,8 @@ import sys
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 from services.noc_monitor.health_poller import HealthPoller  # noqa: E402
 from services.core.recovery_watcher import RecoveryWatcher  # noqa: E402
+from shared.service_auth import service_headers
+from shared import scope as range_scope
 from shared.lifespan import on_startup  # noqa: E402
 
 TWIN_HEALTH_URLS = {
@@ -28,6 +30,7 @@ TWIN_HEALTH_URLS = {
 }
 
 app = FastAPI(title="NOC Monitoring API")
+range_scope.install(app,"noc")
 poller = HealthPoller(TWIN_HEALTH_URLS)
 # Recovery Watcher는 같은 poller 인스턴스를 공유해야 한다(콜백이 인메모리이기 때문).
 # asset_compromised 이벤트는 Event Collector의 WS를 구독하는 별도 태스크가
@@ -54,14 +57,14 @@ async def _subscribe_compromise_events() -> None:
     import json
     while True:
         try:
-            async with websockets.connect(EVENT_COLLECTOR_WS_URL) as ws:
+            async with websockets.connect(EVENT_COLLECTOR_WS_URL, extra_headers=service_headers()) as ws:
                 async for message in ws:
                     event = json.loads(message)
                     if event.get("event_type") == "asset_compromised":
                         recovery_watcher.record_compromise(
                             asset=event.get("target_asset"),
                             vuln_id=event.get("vuln_id", "unknown"),
-                            team_id=event.get("team_id", "default"),
+                            team_id=(event.get("metadata") or {}).get("defender_team_id") or event.get("team_id", "default"),
                             scenario_id=event.get("scenario_id", "default"),
                         )
         except Exception:
@@ -81,7 +84,7 @@ def health():
 
 @app.get("/noc/status")
 def status():
-    result = poller.current_status()
+    result = {asset:value for asset,value in poller.current_status().items() if range_scope.owns(range_scope.asset_owner(asset))}
     for asset in result:
         result[asset]["uptime_pct_1h"] = poller.uptime_pct(asset, window_sec=3600)
         result[asset]["error_rate_5m"] = poller.error_rate(asset, window_sec=300)
@@ -90,6 +93,7 @@ def status():
 
 @app.get("/noc/history")
 def history(asset: str, window_sec: int = 3600):
+    range_scope.check(range_scope.asset_owner(asset))
     if asset not in TWIN_HEALTH_URLS:
         return {"error": f"unknown asset '{asset}'"}
     return {"asset": asset, "samples": poller.history(asset, window_sec)}
@@ -97,8 +101,9 @@ def history(asset: str, window_sec: int = 3600):
 
 async def _broadcast(payload: dict) -> None:
     dead = set()
-    for ws in _ws_clients:
+    for ws in list(_ws_clients):
         try:
+            if range_scope.enforced() and not range_scope.owns(range_scope.asset_owner(payload.get("asset","")),ws.scope.get("state",{}).get("range_identity")):continue
             if ws.client_state == WebSocketState.CONNECTED:
                 await ws.send_json(payload)
         except Exception:
@@ -111,8 +116,7 @@ async def noc_stream(websocket: WebSocket):
     await websocket.accept()
     _ws_clients.add(websocket)
     try:
-        while True:
-            await websocket.receive_text()
+        await range_scope.receive_while_authorized(websocket)
     except WebSocketDisconnect:
         _ws_clients.discard(websocket)
 

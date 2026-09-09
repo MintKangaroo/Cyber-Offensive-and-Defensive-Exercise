@@ -61,6 +61,8 @@ HEALTH_TARGETS = {
 
 STATE_PATH = Path(os.environ.get("RANGE_STATE", str(Path(os.environ.get("DATA_DIR","/tmp"))/"range_baselines.json")))
 app = FastAPI(title="Range Control")
+from shared import scope as range_scope
+range_scope.install(app,"range")
 app.add_middleware(
     CORSMiddleware, allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|(\d{1,3}\.){3}\d{1,3}|[\w-]+\.ts\.net)(:\d+)?",
     allow_methods=["*"], allow_headers=["*"], allow_credentials=False,
@@ -98,20 +100,21 @@ def _current_state() -> dict:
 
 def _count_events() -> int:
     try:
-        return len(requests.get(f"{EVENT}/events?limit=1000", timeout=4).json().get("events", []))
+        return len(requests.get(f"{EVENT}/events?limit=1000", headers=_hdr(), timeout=4).json().get("events", []))
     except requests.RequestException:
         return -1
 
 
 def _count_patched() -> int:
     try:
-        d = requests.get(f"{CONFIG}/config/patches", timeout=4).json()
+        d = requests.get(f"{CONFIG}/config/patches", headers=_hdr(), timeout=4).json()
         return sum(1 for a in d.values() for v in a.values() if v)
     except requests.RequestException:
         return -1
 
 
 class RangeReq(BaseModel):
+    confirm: bool = False
     reason: str = "range control"
 
 
@@ -226,7 +229,7 @@ def reset(range_id: str, req: RangeReq, authorization: str = Header(default=""))
     results = {}
     for label, url in RESET_TARGETS:
         try:
-            r = requests.post(url, headers=_hdr(), json={}, timeout=6)
+            r = requests.post(url, headers=_hdr(), json=req.model_dump(), timeout=6)
             results[label] = r.json() if r.status_code < 400 else {"error": r.status_code, "body": r.text[:120]}
         except requests.RequestException as e:
             results[label] = {"error": str(e)}
@@ -249,7 +252,7 @@ def drift(range_id: str):
 
 
 @app.post("/ranges/{range_id}/verify-baseline")
-def verify_baseline(range_id: str, authorization: str = Header(default="")):
+def verify_baseline(range_id: str, req: RangeReq = RangeReq(), authorization: str = Header(default="")):
     """리셋 후 다음 훈련 시작 가능 여부를 검증한다.
     순서: ① 전 서비스 health → ② probe 전 이벤트=0(클린) 확인 → ③ safe_probe 전수(전부
     VULNERABLE=baseline) → ④ probe가 발생시킨 이벤트를 정리(event_collector reset)해 클린 유지."""
@@ -277,7 +280,7 @@ def verify_baseline(range_id: str, authorization: str = Header(default="")):
     time.sleep(3)
     for url in (f"{EVENT}/admin/reset", f"{SCORING}/admin/reset"):
         try:
-            requests.post(url, headers=_hdr(), json={}, timeout=5)
+            requests.post(url, headers=_hdr(), json=req.model_dump(), timeout=5)
         except requests.RequestException:
             pass
     passed = health_ok and all_vulnerable and clean_events
@@ -305,7 +308,7 @@ _PAUSED_TEAMS: set[str] = set()
 
 def _killswitch_active() -> bool | None:
     try:
-        r = requests.get(f"{CONFIG}/config/killswitch", timeout=3)
+        r = requests.get(f"{CONFIG}/config/killswitch", headers=_hdr(), timeout=3)
         if r.status_code != 200:
             return None
         d = r.json()
@@ -349,6 +352,7 @@ def safety_status():
 
 
 class SafetyReq(BaseModel):
+    confirm: bool = False
     reason: str = "instructor safety action"
 
 
@@ -358,7 +362,7 @@ def emergency_stop(req: SafetyReq, authorization: str = Header(default="")):
     _auth(authorization)
     try:
         r = requests.post(f"{CONFIG}/instructor/killswitch", headers=_hdr(),
-                          json={"reason": req.reason}, timeout=5)
+                          json=req.model_dump(), timeout=5)
         r.raise_for_status()
         ok = True
     except requests.RequestException as e:
@@ -371,7 +375,7 @@ def emergency_stop_release(req: SafetyReq, authorization: str = Header(default="
     _auth(authorization)
     try:
         r = requests.post(f"{CONFIG}/instructor/killswitch/release", headers=_hdr(),
-                      json={"reason": req.reason}, timeout=5)
+                      json=req.model_dump(), timeout=5)
         r.raise_for_status()
     except requests.RequestException as e:
         raise HTTPException(502, f"release 실패: {e}")

@@ -7,6 +7,7 @@ capabilities to an A/D operator or expose unscoped SOC sources to competitors.
 from __future__ import annotations
 import json
 from shared.rbac import Identity
+from shared.scope import enforced
 
 BASE = {"overview", "digital-twin", "events", "competition", "challenges", "training"}
 CAPABILITIES = {
@@ -42,7 +43,9 @@ PUBLIC_EVENTS = {
 
 
 def capabilities(identity: Identity) -> list[str]:
-    return sorted(CAPABILITIES.get(identity.role, set()))
+    values=set(CAPABILITIES.get(identity.role, set()))
+    if enforced() and identity.role=="blue" and identity.team_id and identity.match_id:values.add("soc")
+    return sorted(values)
 
 
 def metadata(event: dict) -> dict:
@@ -70,7 +73,9 @@ def project_event(
     if identity.match_id and match and match != identity.match_id:
         return None
     if identity.role in {"red", "blue"}:
-        if not identity.team_id or event.get("team_id") != identity.team_id:
+        owns_actor=event.get("team_id")==identity.team_id
+        owns_defense=enforced() and identity.role=="blue" and (event.get("defender_team_id") or md.get("defender_team_id"))==identity.team_id
+        if not identity.team_id or not (owns_actor or owns_defense):
             return None
         if (
             identity.match_id
@@ -112,5 +117,5 @@ def scope_incidents(rows: list[dict], identity: Identity) -> list[dict]:
     if identity.role == "instructor":
         return rows
     if identity.role == "blue" and identity.team_id:
-        return [r for r in rows if r.get("team_id") == identity.team_id]
+        return [r for r in rows if r.get("team_id") == identity.team_id and (not enforced() or r.get("scenario_id")==identity.match_id)]
     return []

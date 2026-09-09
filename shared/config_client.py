@@ -12,6 +12,7 @@ import os
 import time
 import threading
 import requests
+from .service_auth import range_agent_headers
 
 CONFIG_SERVICE_URL = os.environ.get("CONFIG_SERVICE_URL", "http://config_service:8030")
 _POLL_INTERVAL_SEC = 4
@@ -36,11 +37,14 @@ class ConfigClient:
 
     def _poll_once(self) -> None:
         try:
-            r = requests.get(f"{CONFIG_SERVICE_URL}/config/patches", params={"asset": self.asset}, timeout=_TIMEOUT)
+            r = requests.get(f"{CONFIG_SERVICE_URL}/config/patches", params={"asset": self.asset}, headers=range_agent_headers(self.asset), timeout=_TIMEOUT)
+            r.raise_for_status()
             patches = r.json()
-            r2 = requests.get(f"{CONFIG_SERVICE_URL}/config/quarantine", params={"asset": self.asset}, timeout=_TIMEOUT)
+            r2 = requests.get(f"{CONFIG_SERVICE_URL}/config/quarantine", params={"asset": self.asset}, headers=range_agent_headers(self.asset), timeout=_TIMEOUT)
+            r2.raise_for_status()
             quarantined = bool(r2.json().get("quarantined", False))
-            r3 = requests.get(f"{CONFIG_SERVICE_URL}/config/killswitch", timeout=_TIMEOUT)
+            r3 = requests.get(f"{CONFIG_SERVICE_URL}/config/killswitch", headers=range_agent_headers(self.asset), timeout=_TIMEOUT)
+            r3.raise_for_status()
             killswitch = bool(r3.json().get("killswitch", False))
             with self._lock:
                 self._patch_cache = patches

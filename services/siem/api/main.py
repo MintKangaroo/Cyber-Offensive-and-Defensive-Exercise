@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
-from fastapi import FastAPI, Header, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Header, Query, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 import sys
@@ -64,6 +64,8 @@ NOISE_ENABLED = os.environ.get("SIEM_NOISE_ENABLED", "false").lower() == "true"
 NOISE_EPS = float(os.environ.get("SIEM_NOISE_EPS", "2.0"))
 
 app = FastAPI(title="SIEM API (M5 통합)")
+from shared import scope as range_scope
+range_scope.install(app, "siem")
 
 # SIEM 대시보드(로컬 dev 5175 등)가 브라우저에서 직접 /search·/alerts·/stats를 조회하므로 CORS 필요.
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
@@ -121,8 +123,11 @@ def _touch_source_health(key: str, error: bool = False) -> None:
 
 async def _broadcast(clients: set[WebSocket], payload: dict) -> None:
     dead = set()
-    for ws in clients:
+    for ws in list(clients):
         try:
+            who=ws.scope.get("state",{}).get("range_identity")
+            record=payload.get("event") or payload.get("matched_event") or payload
+            if range_scope.enforced() and not range_scope.owns(record,who):continue
             if ws.client_state == WebSocketState.CONNECTED:
                 await ws.send_json(payload)
         except Exception:
@@ -132,32 +137,39 @@ async def _broadcast(clients: set[WebSocket], payload: dict) -> None:
 
 async def _process_event(event) -> None:
     """정규화된 이벤트 하나를 저장 + 탐지평가 + 알림처리 + 브로드캐스트."""
+    if range_scope.enforced():
+        owner=range_scope.asset_owner(event.asset or "")
+        event.team_id=owner.get("team_id")
+        event.scenario_id=owner.get("scenario_id")
     await backend.index(event)
     await _broadcast(_ws_log_clients, {"type": "log", "event": event.model_dump(mode="json")})
 
     alerts = detection_engine.evaluate(event.model_dump(mode="json"))
     for alert in alerts:
-        alert_store.save(alert.rule_id, alert.title, alert.severity, alert.mitre,
+        alert_id=alert_store.save(alert.rule_id, alert.title, alert.severity, alert.mitre,
                          alert.timestamp, alert.detail, alert.matched_event)
         await _broadcast(_ws_alert_clients, {
             "type": "alert", "rule_id": alert.rule_id, "title": alert.title,
+            "id":alert_id,"timestamp":alert.timestamp,"matched_event":alert.matched_event,
             "severity": alert.severity, "mitre": alert.mitre, "detail": alert.detail,
         })
         if PUSH_TO_LIVEFIRE:
             asyncio.create_task(_push_detection_to_livefire(alert, event))
         if INCIDENT_AUTO_PROMOTE and alert.severity >= INCIDENT_MIN_SEVERITY:
-            asyncio.create_task(_promote_to_incident(alert, event))
+            asyncio.create_task(_promote_to_incident(alert, event, alert_id))
 
 
-async def _promote_to_incident(alert, event) -> None:
+async def _promote_to_incident(alert, event, alert_id: str = "") -> None:
     """고심각도 SIEM 알림 → 인시던트 자동 승격. (rule_id:asset) 로 dedup(자산당 위협 1건)."""
     asset = getattr(event, "asset", None) or "unknown"
     payload = {
-        "alert_id": f"{alert.rule_id}:{asset}",   # incident 서비스가 이 키로 중복 승격 방지
+        "alert_id": f"{alert.rule_id}:{asset}" if not event.scenario_id else f"{event.scenario_id}:{event.team_id}:{alert.rule_id}:{asset}",
+        "evidence_alert_id": alert_id,   # incident 서비스가 이 키로 중복 승격 방지
         "title": f"[SIEM] {alert.title}",
         "severity": _SEV_MAP.get(alert.severity, "medium"),
         "source": "siem", "host": asset,
         "team_id": getattr(event, "team_id", None) or "default",
+        "scenario_id":getattr(event,"scenario_id",None) or "",
     }
     headers = {"Authorization": f"Bearer {INCIDENT_TOKEN}"} if INCIDENT_TOKEN else {}
     try:
@@ -175,6 +187,7 @@ async def _push_detection_to_livefire(alert, event) -> None:
         "actor": "blue",
         "target_asset": event.asset or "unknown",
         "team_id": event.team_id or "default",
+        "scenario_id":event.scenario_id or "default",
         "vuln_id": event.vuln_id,
         "matched_event_id": event.trace_id,  # 04번 문서 dwell time 계산의 재료(trace_id로 상관)
         "metadata": {"rule_id": alert.rule_id, "mitre": alert.mitre, "siem_severity": alert.severity},
@@ -286,7 +299,9 @@ async def search(
     limit: int = Query(default=100, le=1000),
     offset: int = 0,
 ):
+    team_id,scenario_id=range_scope.pair()
     query = SearchQuery(
+        team_id=team_id or None,scenario_id=scenario_id or None,
         text=text, source_type=source_type, asset=asset,
         severity_min=severity_min, mitre=mitre, limit=limit, offset=offset,
     )
@@ -296,12 +311,27 @@ async def search(
 
 
 @app.get("/alerts")
-def get_alerts(status: Optional[str] = None, severity_min: Optional[int] = None, limit: int = 100):
-    return {"alerts": alert_store.list_alerts(status=status, severity_min=severity_min, limit=limit)}
+def get_alerts(status:Optional[str]=None,severity_min:Optional[int]=None,limit:int=100,offset:int=0,team_id:Optional[str]=None,scenario_id:Optional[str]=None):
+    team_id,scenario_id=range_scope.pair(team_id,scenario_id)
+    limit=max(1,min(limit,1000))
+    rows=alert_store.list_alerts(status=status,severity_min=severity_min,limit=limit+1,offset=offset,team_id=team_id,scenario_id=scenario_id)
+    return {"alerts":rows[:limit],"has_more":len(rows)>limit,"next_offset":max(0,offset)+min(limit,len(rows))}
+
+
+@app.get("/alerts/{alert_id}")
+def alert_detail(alert_id: str):
+    row=alert_store.get(alert_id)
+    if not row:raise HTTPException(404,"Alert not found")
+    range_scope.check(row)
+    return row
 
 
 @app.post("/alerts/{alert_id}")
 def update_alert(alert_id: str, status: str):
+    if range_scope.enforced():
+        row=alert_store.get(alert_id)
+        if not row:raise HTTPException(404,"Alert not found")
+        range_scope.check(row)
     if status not in ("open", "ack", "closed"):
         return {"error": "status must be open|ack|closed"}
     ok = alert_store.update_status(alert_id, status)
@@ -310,10 +340,11 @@ def update_alert(alert_id: str, status: str):
 
 @app.get("/stats")
 async def stats():
-    all_query = SearchQuery(limit=1)
+    team_id,scenario_id=range_scope.pair()
+    all_query = SearchQuery(limit=1,team_id=team_id or None,scenario_id=scenario_id or None)
     by_source = await backend.aggregate("source_type", all_query)
-    by_severity = alert_store.stats_by_severity()
-    top_sigs = alert_store.top_signatures()
+    by_severity = alert_store.stats_by_severity(team_id,scenario_id)
+    top_sigs = alert_store.top_signatures(team_id=team_id,scenario_id=scenario_id)
     return {"events_by_source": by_source, "alerts_by_severity": by_severity, "top_signatures": top_sigs}
 
 
@@ -357,6 +388,13 @@ def sources_health():
 def attack_coverage():
     """22번 문서 6절: 로드된 규칙들의 mitre 태그를 집계해 커버리지 매트릭스 생성."""
     coverage: dict[str, list[str]] = {}
+    if range_scope.is_team():
+        team,scenario=range_scope.pair()
+        for row in alert_store.list_alerts(team_id=team,scenario_id=scenario,limit=10000):
+            for technique in row.get("mitre",[]):coverage.setdefault(technique,[])
+            for technique in row.get("mitre",[]):
+                if row["rule_id"] not in coverage[technique]:coverage[technique].append(row["rule_id"])
+        return {"technique_coverage":coverage,"scope":"observed alerts in your exercise", "limit":10000}
     for rule in detection_engine.rules:
         for technique in rule.mitre:
             coverage.setdefault(technique, []).append(rule.id)
@@ -368,9 +406,10 @@ async def ws_logs(websocket: WebSocket):
     await websocket.accept()
     _ws_log_clients.add(websocket)
     try:
-        while True:
-            await websocket.receive_text()
+        await range_scope.receive_while_authorized(websocket)
     except WebSocketDisconnect:
+        pass
+    finally:
         _ws_log_clients.discard(websocket)
 
 
@@ -379,9 +418,10 @@ async def ws_alerts(websocket: WebSocket):
     await websocket.accept()
     _ws_alert_clients.add(websocket)
     try:
-        while True:
-            await websocket.receive_text()
+        await range_scope.receive_while_authorized(websocket)
     except WebSocketDisconnect:
+        pass
+    finally:
         _ws_alert_clients.discard(websocket)
 
 

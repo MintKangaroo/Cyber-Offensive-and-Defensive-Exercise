@@ -28,7 +28,11 @@ class SearchQuery:
         time_to: Optional[datetime] = None,
         limit: int = 100,
         offset: int = 0,
+        team_id: Optional[str] = None,
+        scenario_id: Optional[str] = None,
     ):
+        self.team_id = team_id
+        self.scenario_id = scenario_id
         self.text = text
         self.source_type = source_type
         self.asset = asset

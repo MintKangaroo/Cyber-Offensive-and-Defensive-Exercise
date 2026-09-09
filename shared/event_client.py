@@ -54,9 +54,9 @@ def emit_event(
     }
     try:
         # 감사 3.1: 내부 S2S 토큰(SERVICE_TOKEN 미설정 dev면 빈 헤더).
-        from shared.service_auth import service_headers
+        from shared.service_auth import range_agent_headers
         requests.post(f"{EVENT_COLLECTOR_URL}/events", json=payload,
-                      headers=service_headers(), timeout=_TIMEOUT)
+                      headers=range_agent_headers(target_asset), timeout=_TIMEOUT)
     except requests.exceptions.RequestException:
         # Event Collector 다운 시에도 트윈 서비스 자체 응답은 지연/실패하면 안 됨
         pass

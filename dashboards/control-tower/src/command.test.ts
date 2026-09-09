@@ -106,13 +106,11 @@ describe("stream transport", () => {
 });
 describe("typed API client", () => {
   it("carries authorization in headers, never query strings", async () => {
-    const fn = vi
-      .fn()
-      .mockResolvedValue(
-        new Response('{"ok":true}', {
-          headers: { "content-type": "application/json" },
-        }),
-      );
+    const fn = vi.fn().mockResolvedValue(
+      new Response('{"ok":true}', {
+        headers: { "content-type": "application/json" },
+      }),
+    );
     vi.stubGlobal("fetch", fn);
     await createClient("/api", () => "authorized-token")("/events");
     expect(fn.mock.calls[0][0]).toBe("/api/events");
@@ -136,14 +134,12 @@ describe("typed API client", () => {
   it("keeps 403 distinct from empty data", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response('{"detail":"Forbidden"}', {
-            status: 403,
-            headers: { "content-type": "application/json" },
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        new Response('{"detail":"Forbidden"}', {
+          status: 403,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
     );
     await expect(createClient("/api")("/snapshot")).rejects.toMatchObject({
       status: 403,
@@ -285,4 +281,48 @@ describe("role-aware navigation", () => {
       expect(ids).not.toContain("siem");
     },
   );
+});
+
+it("reconstructs attributed incident and configuration changes without future state", () => {
+  const input = {
+    scenarioId: "s",
+    events: [event()],
+    scores: [],
+    incidents: [
+      {
+        id: "attributed",
+        scenario_id: "s",
+        created_at: 5,
+        timeline: [{ ts: 25, action: "transition:closed" }],
+      },
+      { id: "other", scenario_id: "another", created_at: 5, timeline: [] },
+    ],
+    configuration: [
+      {
+        audit_id: "patch",
+        timestamp: 15,
+        asset: "power_plant",
+        vuln_id: "PP-001",
+        after: true,
+      },
+      {
+        audit_id: "rollback",
+        timestamp: 30,
+        asset: "power_plant",
+        vuln_id: "PP-001",
+        after: false,
+      },
+    ],
+  };
+  expect(reconstructReplay(input, 10).configuration).toEqual({});
+  expect(
+    reconstructReplay(input, 20).configuration["power_plant:PP-001"].after,
+  ).toBe(true);
+  expect(
+    reconstructReplay(input, 35).configuration["power_plant:PP-001"].after,
+  ).toBe(false);
+  expect(
+    reconstructReplay(input, 20).incidents.map((i) => [i.id, i.status]),
+  ).toEqual([["attributed", "new"]]);
+  expect(reconstructReplay(input, 35).incidents[0].status).toBe("closed");
 });

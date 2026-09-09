@@ -34,12 +34,14 @@ from shared.rbac import require_role, require_read  # noqa: E402
 from shared.lifespan import on_startup  # noqa: E402
 from shared.service_auth import service_headers  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import model  # noqa: E402
+from services.incident import model  # noqa: E402
 
 DB_PATH = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent))) / "incidents.db"
 EVENT_COLLECTOR_URL = os.environ.get("EVENT_COLLECTOR_URL", "http://event_collector:8010")
 
 app = FastAPI(title="Incident Case Management")
+from shared import scope as range_scope
+range_scope.install(app, "incident")
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|(\d{1,3}\.){3}\d{1,3}|[\w-]+\.ts\.net)(:\d+)?",
@@ -62,6 +64,11 @@ def _init():
         id TEXT PRIMARY KEY, title TEXT, severity TEXT, status TEXT,
         source_alert_id TEXT, source TEXT, host TEXT, team_id TEXT, assignee TEXT,
         created_at REAL, acknowledged_at REAL, closed_at REAL, timeline TEXT)""")
+    if "scenario_id" not in {r[1] for r in c.execute("PRAGMA table_info(incidents)")}:
+        c.execute("ALTER TABLE incidents ADD COLUMN scenario_id TEXT")
+    if "evidence_alert_id" not in {r[1] for r in c.execute("PRAGMA table_info(incidents)")}:
+        c.execute("ALTER TABLE incidents ADD COLUMN evidence_alert_id TEXT")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_inc_scope ON incidents(team_id,scenario_id)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_inc_status ON incidents(status)")
     c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_inc_alert ON incidents(source_alert_id)")
     c.commit(); c.close()
@@ -90,11 +97,11 @@ def _save(c, inc: dict):
     c.commit()
 
 
-async def _emit(team_id: str, title: str, sev: str):
+async def _emit(team_id: str, title: str, sev: str, scenario_id: str = "", incident_id: str = "", alert_id: str = "", asset: str = "soc"):
     ev = {"event_id": str(uuid.uuid4()), "event_type": "blue_detection_success",
           "timestamp": time.time(), "actor": "blue", "team_id": team_id or "default",
-          "scenario_id": "default", "target_asset": "soc", "phase": "objective",
-          "metadata": {"source": "incident", "title": title, "severity": sev}}
+          "scenario_id": scenario_id or "default", "target_asset": asset or "soc", "phase": "objective",
+          "metadata": {"source": "incident", "title": title, "severity": sev, "incident_id": incident_id, "alert_id": alert_id}}
     try:
         async with httpx.AsyncClient(timeout=2.0) as cl:
             await cl.post(f"{EVENT_COLLECTOR_URL}/events", json=ev, headers=service_headers())
@@ -109,6 +116,8 @@ class FromAlertReq(BaseModel):
     source: str = "siem"        # siem | edr | manual
     host: str = ""
     team_id: str = ""
+    scenario_id: str = ""
+    evidence_alert_id: str = ""
 
 
 class TransitionReq(BaseModel):
@@ -135,10 +144,28 @@ async def from_alert(req: FromAlertReq, authorization: str = Header(default=""))
     ident = require_role(authorization, {"blue", "instructor"})
     if req.severity.lower() not in ("critical", "high", "medium", "low"):
         raise HTTPException(400, "severity must be critical|high|medium|low")
+    if range_scope.is_team():
+        req.team_id,req.scenario_id=range_scope.pair(req.team_id,req.scenario_id)
+        if req.source not in {"siem","edr"}:raise HTTPException(400,"Promote an existing scoped SIEM or EDR alert")
+        from urllib.parse import quote
+        endpoint=(os.environ.get("SIEM_API_URL","http://siem_api:8040")+"/alerts/" if req.source=="siem" else os.environ.get("EDR_BACKEND_URL","http://edr_backend:8080")+"/edr/alerts/")+quote(req.alert_id,safe="")
+        try:
+            async with httpx.AsyncClient(timeout=4) as client:
+                response=await client.get(endpoint,headers={"Authorization":authorization})
+                response.raise_for_status()
+                evidence=response.json()
+        except httpx.HTTPStatusError as exc:
+            raise HTTPException(404,"Alert not found in your exercise scope") from exc
+        except (httpx.HTTPError,ValueError) as exc:
+            raise HTTPException(503,"Alert evidence unavailable") from exc
+        range_scope.check(evidence)
+        req.host=evidence.get("asset") or (evidence.get("matched_event") or {}).get("asset") or ""
+        req.evidence_alert_id=req.alert_id
     c = _db()
-    dup = c.execute("SELECT id FROM incidents WHERE source_alert_id=?", (req.alert_id,)).fetchone()
+    dup = c.execute("SELECT * FROM incidents WHERE source_alert_id=?", (req.alert_id,)).fetchone()
     if dup:
         c.close()
+        range_scope.check(dict(dup))
         raise HTTPException(409, f"이미 승격된 알림입니다: incident {dup['id']}")
     iid = "INC-" + uuid.uuid4().hex[:8]
     now = time.time()
@@ -149,16 +176,20 @@ async def from_alert(req: FromAlertReq, authorization: str = Header(default=""))
                  VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
               (iid, req.title, req.severity.lower(), "new", req.alert_id, req.source, req.host,
                req.team_id, None, now, None, None, json.dumps(tl)))
+    c.execute("UPDATE incidents SET scenario_id=?, evidence_alert_id=? WHERE id=?",(req.scenario_id or None,req.evidence_alert_id or req.alert_id,iid))
     c.commit(); c.close()
-    await _emit(req.team_id, req.title, req.severity)
+    await _emit(req.team_id, req.title, req.severity, req.scenario_id, iid, req.alert_id, req.host)
     return {"id": iid, "status": "new", "severity": req.severity.lower()}
 
 
 @app.get("/incidents")
-def list_incidents(status: str = "", team_id: str = "", authorization: str = Header(default="")):
-    require_read(authorization)
+def list_incidents(status: str = "", team_id: str = "", authorization: str = Header(default=""), scenario_id: str = ""):
+    if not range_scope.enforced(): require_read(authorization)
     c = _db()
+    team_id,scenario_id=range_scope.pair(team_id,scenario_id)
     q = "SELECT * FROM incidents"; cond = []; p = []
+    if scenario_id:
+        cond.append("scenario_id=?");p.append(scenario_id)
     if status:
         cond.append("status=?"); p.append(status)
     if team_id:
@@ -179,14 +210,18 @@ def _get(c, iid: str) -> dict:
     if not r:
         c.close()
         raise HTTPException(404, "incident not found")
-    return _row_to_dict(r)
+    record=_row_to_dict(r)
+    try: range_scope.check(record)
+    except HTTPException:
+        c.close();raise
+    return record
 
 
 @app.get("/incidents/sla")
 def sla_report(authorization: str = Header(default="")):
-    require_read(authorization)
+    if not range_scope.enforced(): require_read(authorization)
     c = _db()
-    rows = [_row_to_dict(r) for r in c.execute("SELECT * FROM incidents").fetchall()]
+    rows = [_row_to_dict(r) for r in c.execute("SELECT * FROM incidents").fetchall() if range_scope.owns(dict(r))]
     c.close()
     now = time.time()
     breached = []
@@ -201,7 +236,7 @@ def sla_report(authorization: str = Header(default="")):
 
 @app.get("/incidents/{iid}")
 def get_incident(iid: str, authorization: str = Header(default="")):
-    require_read(authorization)
+    if not range_scope.enforced(): require_read(authorization)
     c = _db(); inc = _get(c, iid); c.close()
     inc["sla"] = model.sla_breaches(inc, time.time())
     inc["metrics"] = model.compute_metrics(inc)
@@ -250,12 +285,12 @@ def assign(iid: str, req: AssignReq, authorization: str = Header(default="")):
 
 @app.get("/incidents/{iid}/aar")
 def aar(iid: str, authorization: str = Header(default="")):
-    require_read(authorization)
+    if not range_scope.enforced(): require_read(authorization)
     c = _db(); inc = _get(c, iid); c.close()
     now = time.time()
     return {
         "id": inc["id"], "title": inc["title"], "severity": inc["severity"],
-        "status": inc["status"], "team_id": inc["team_id"], "assignee": inc.get("assignee"),
+        "status": inc["status"], "team_id": inc["team_id"], "scenario_id":inc.get("scenario_id"), "assignee": inc.get("assignee"),
         "source": {"alert_id": inc["source_alert_id"], "type": inc["source"], "host": inc["host"]},
         "metrics": model.compute_metrics(inc),
         "sla": model.sla_breaches(inc, now),

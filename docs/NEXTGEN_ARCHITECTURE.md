@@ -57,17 +57,19 @@ exponential reconnect delays. Buffers contain at most 5,000 events, 200 notices 
 non-streamed sources every 30s. Score, safety and phase notices invalidate only
 related snapshot sections. A scope change clears old evidence and rejects late
 responses. Observers use a delayed, sanitized durable snapshot; they never open
-privileged SSE. The collector's existing process-local ring still limits gap-free
-resume across restarts; snapshot reconciliation is necessary.
+privileged SSE. The collector now journals source events transactionally and uses its existing
+process-local bus as a wake-up signal. Retained cursors survive restart; reset or
+retention gaps trigger an explicit reload. See [service ownership](SERVICE_SCOPE.md).
 
 **ADR 07 — Historical state has one clock.** Replay uses retained events, actual
 score ledger timestamps, and incident timeline entries at or before the cursor.
-Current assignee/status never backfill the past. Incident Service lacks scenario
-IDs, so a case needs an exact incident/alert/event link to be included. Historical
-patch verifications are observations, not inferred current patch configuration.
-The 50,000-event command replay limit is reported as partial when exceeded. AAR
-aggregate service metrics remain separate from reconstructed historical panes;
-platform-wide incident/inject/alert aggregates are explicitly identified.
+Current assignee/status never backfill the past. Scenario-attributed cases use their
+persisted ownership; older cases require exact evidence links. Configuration changes
+come from scoped patch/isolation audit records, independently of patch verification
+events. Signed, snapshot-bound collector pages replace the Command UI's 50,000-event
+window. AAR requests select scenario-owned service evidence and page alert records.
+Unknown initial asset state and unrecorded configuration remain unavailable.
+
 
 **ADR 08 — Author the existing YAML schema.** Visual edits operate on YAML syntax
 nodes, preserving unknown fields and comments. Switching modes never serializes.
@@ -110,10 +112,10 @@ All paths below are relative to `/command` (gateway `/api/instructor/command`).
 | `GET /search?q=&scenario_id=` | Role-filtered catalog matches and partial-source indicator |
 | `GET /incidents/{id}` | Instructor or owning Blue team; other cases return 404 |
 | `POST /incidents/{id}/{transition,note,assign}` | Existing Incident Service lifecycle and audit |
-| `POST /promote` | Instructor promotion of an existing SIEM alert |
+| `POST /promote` | Instructor or scoped Blue promotion of a verified SIEM alert |
 | `POST /control` | Confirmed/reasoned fixed safety and scenario actions |
 | `GET /audit` | Instructor audit records |
-| `GET /replay`, `GET /aar` | Retained historical evidence / existing AAR report |
+| `GET /replay`, `GET /replay/page`, `GET /aar` | Snapshot-bound history pages / exercise-scoped AAR |
 | `GET/POST /annotations` | Persisted instructor AAR notes |
 | `GET /scenarios/{id}/source`, `POST /scenarios/validate` | Existing YAML and actual runtime validation |
 | `GET /drafts`, `POST /scenarios/{id}/{draft,publish}` | Private instructor drafts / explicit published source |
@@ -138,10 +140,10 @@ snapshot time, reconnect, degraded, empty, unauthorized and error states are exp
 | Operator | Existing privileged A/D command projection |
 
 There is no newly invented `admin` role. Existing platform administration remains
-with the instructor and the established A/D operator model. Blue global SIEM/EDR
-views are intentionally not granted by the new command boundary: these legacy
-services do not expose a sufficient team scope. See the roadmap for service-level
-migration work; command RBAC does not secure independent legacy URLs.
+with the instructor and the established A/D operator model. Scoped Blue SIEM/EDR
+views are enabled only when receiving-service scope is active and the JWT has team
+and exercise membership. Global SOC and platform aggregates remain instructor-only.
+The local compatibility profile retains its established isolated-range assumptions.
 
 ## Deployment and rollback
 
@@ -152,11 +154,34 @@ startup remain. Back up the existing instructor audit volume and the new
 `scenario_data` volume before changing deployments. Drafts, annotations and AI policy
 are additive tables in the existing Instructor API database.
 
-Rollback the frontend/service image revisions together. Existing scoring and event
-schemas are unchanged; the collector only adds an optional bounded replay query.
+Rollback the frontend/service image revisions together. Score rules are unchanged. Ownership columns, stream journal and configuration
+history are additive migrations; retain these databases and safety audit journals.
+An old service image cannot enforce the new production scope, so a rollback must
+restore the previously isolated deployment boundary as well.
 Keep `scenario_data` during rollback so authored sources can be exported/reapplied.
 Do not use `docker compose down -v` as a routine upgrade or rollback procedure.
 
-Production readiness still requires the legacy authorization and long-duration
+Production readiness still requires the acceptance and long-duration
 load work listed in `NEXTGEN_ROADMAP.md`. This migration is not a security
 certification or a declaration that every requested future capability is complete.
+
+
+**ADR 11 — Enforce ownership in the receiving services.** The production profile
+turns on shared ASGI identity/scope checks, including WebSockets. Durable ownership
+columns and SQL filters protect reads and mutations. Unknown ownership does not
+become the caller's team. Blue SOC capability is enabled only with this rollout and
+valid team/exercise membership. Receiving services recheck JWT revocation; frontend
+navigation remains a convenience rather than authority.
+
+**ADR 12 — Keep service secrets out of compromised lab processes.** Each sensor
+gets a domain-separated credential for its own asset. The production ingest proxy
+forwards that identity. Its privileges cover only own-asset telemetry and agent
+operations, not global reads or administration. Paired Red/Blue inventory keeps
+actor score attribution distinct from defensive ownership. See SERVICE_SCOPE.md
+for deployment and retained compatibility rules.
+
+**ADR 13 — Preserve safety intent across reset.** Direct dangerous legacy operations
+in strict mode require confirmation/reason and an fsynced intent/outcome journal.
+A reset does not clear this journal or the EDR action audit table. Native instructor
+confirmation uses the shared accessible dialog, and unknown emergency state no
+longer renders as an inactive stop in that workspace.

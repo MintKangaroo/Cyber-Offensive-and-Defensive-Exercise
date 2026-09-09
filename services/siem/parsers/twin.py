@@ -74,6 +74,7 @@ def parse_twin_log_line(raw_line: str, source_ip_fallback: Optional[str] = None)
             trace_id=data.get("trace_id"),
             vuln_id=vuln_id,
             team_id=data.get("team_id"),
+            scenario_id=data.get("scenario_id") or data.get("match_id"),
             message=(f"{data.get('method','?')} {data.get('endpoint','?')} -> {status} "
                     f"(team={data.get('team_id','?')}, vuln={vuln_id or 'n/a'})"),
             raw=data,

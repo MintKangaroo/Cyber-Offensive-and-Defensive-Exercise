@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { Dialog, Button } from "@cyber-range/command-system";
 import { usePolling } from "../../api/client";
 import {
   fetchSafetyStatus, emergencyStop, releaseEmergencyStop,
@@ -10,8 +11,10 @@ import {
  * range_control(8055) 백엔드를 호출. 조작 계열은 교관 토큰 필요.
  */
 export function RangeControlPanel({ token, reason }: { token: string; reason: string }) {
-  const { data: safety } = usePolling(fetchSafetyStatus, 4000);
-  const { data: matches, reload: reloadMatches } = usePolling(fetchMatches, 6000);
+  const getSafety=useCallback(()=>fetchSafetyStatus(token),[token]);
+  const getMatches=useCallback(()=>fetchMatches(token),[token]);
+  const { data: safety } = usePolling(getSafety, 4000);
+  const { data: matches, reload: reloadMatches } = usePolling(getMatches, 6000);
   const [rangeId, setRangeId] = useState("range_1");
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -21,9 +24,14 @@ export function RangeControlPanel({ token, reason }: { token: string; reason: st
   const [mBlue, setMBlue] = useState("blue_alpha");
   const [mTwins, setMTwins] = useState("refinery_plant,power_plant");
 
+  const [pending,setPending]=useState<{label:string;fn:()=>Promise<unknown>}|null>(null);
   async function run(label: string, fn: () => Promise<unknown>, needReason = true) {
-    if (needReason && !reason.trim()) { setStatus("사유를 입력해야 합니다(감사 로그)."); return; }
-    setBusy(true); setStatus(`${label}…`);
+    if ((needReason || label==="베이스라인 검증") && reason.trim().length<3) { setStatus("사유를 입력해야 합니다(감사 로그)."); return; }
+    if(["초기화","긴급정지 발동","긴급정지 해제","베이스라인 검증"].includes(label)){setPending({label,fn});return;}
+    await execute(label,fn);
+  }
+  async function execute(label:string,fn:()=>Promise<unknown>) {
+    setPending(null);setBusy(true); setStatus(`${label}…`);
     try {
       const r = await fn();
       setStatus(`${label} ✓ ${typeof r === "object" && r ? JSON.stringify(r).slice(0, 120) : ""}`);
@@ -36,6 +44,12 @@ export function RangeControlPanel({ token, reason }: { token: string; reason: st
 
   return (
     <div className="flex flex-col">
+      {pending && <Dialog title={`${pending.label} 확인`} onClose={()=>setPending(null)}>
+        <p>승인된 훈련 범위: {rangeId}. 이 작업은 훈련 서비스나 저장된 기록을 변경할 수 있습니다.</p>
+        <p>사유: {reason}</p>
+        <Button onClick={()=>setPending(null)}>취소</Button>
+        <Button onClick={()=>void execute(pending.label,pending.fn)} tone="critical">확인 후 실행</Button>
+      </Dialog>}
       {/* ── #11 Safety Status ── */}
       <div className="p-3 border-b border-[#1E2A3F] flex flex-col gap-2">
         <div className="flex items-center justify-between">
@@ -50,7 +64,7 @@ export function RangeControlPanel({ token, reason }: { token: string; reason: st
             <Row k="Internet egress" v={s.internet_egress} good={triState(s.internet_egress, "BLOCKED")} />
             <Row k="Cross-team traffic" v={s.cross_team_traffic} good={triState(s.cross_team_traffic, "BLOCKED")} />
             <Row k="Docker socket" v={s.docker_socket_exposure} good={triState(s.docker_socket_exposure, "NONE")} />
-            <Row k="Emergency stop" v={estop ? "ACTIVE" : "off"} good={!estop} />
+            <Row k="Emergency stop" v={estop == null ? "UNKNOWN" : estop ? "ACTIVE" : "off"} good={estop==null ? null : !estop} />
             {s.paused_teams.length > 0 && <Row k="Paused teams" v={s.paused_teams.join(",")} good={false} />}
           </div>
         )}
@@ -75,7 +89,7 @@ export function RangeControlPanel({ token, reason }: { token: string; reason: st
           <button disabled={busy} onClick={() => run("초기화", () => resetRange(rangeId, reason || "reset", token))}
             className="flex-1 text-[11px] py-1 rounded bg-[#F5A623]/15 border border-[#F5A623]/50 text-[#F5A623]">초기화</button>
           <button disabled={busy} onClick={() => run("베이스라인 검증", async () => {
-            const v = await verifyBaseline(rangeId, token); return v.verdict; }, false)}
+            const v = await verifyBaseline(rangeId, token, reason); return v.verdict; }, false)}
             className="flex-1 text-[11px] py-1 rounded bg-[#22D3EE]/15 border border-[#22D3EE]/50 text-[#22D3EE]">검증</button>
         </div>
       </div>

@@ -62,6 +62,9 @@ class SqliteBackend(StorageBackend):
             CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
             """
         )
+        if 'scenario_id' not in {r[1] for r in conn.execute('PRAGMA table_info(events)')}:
+            conn.execute('ALTER TABLE events ADD COLUMN scenario_id TEXT')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_siem_scope ON events(team_id,scenario_id,timestamp)')
         conn.commit()
         conn.close()
 
@@ -102,6 +105,7 @@ class SqliteBackend(StorageBackend):
                 event.message, json.dumps(event.raw), json.dumps(event.tags),
             ),
         )
+        conn.execute("UPDATE events SET scenario_id=? WHERE event_id=?",(event.scenario_id,event.event_id))
         rowid = conn.execute("SELECT rowid FROM events WHERE event_id=?", (event.event_id,)).fetchone()[0]
         conn.execute(
             "INSERT INTO events_fts (rowid, message, raw) VALUES (?, ?, ?)",
@@ -126,7 +130,7 @@ class SqliteBackend(StorageBackend):
             mitre=json.loads(row["mitre"] or "[]"),
             trace_id=row["trace_id"],
             vuln_id=row["vuln_id"],
-            team_id=row["team_id"],
+            team_id=row["team_id"],scenario_id=row["scenario_id"],
             message=row["message"] or "",
             raw=json.loads(row["raw"] or "{}"),
             tags=json.loads(row["tags"] or "[]"),
@@ -136,6 +140,10 @@ class SqliteBackend(StorageBackend):
         """WHERE 키워드 없이 조건절 리스트만 반환(호출부가 필요에 맞게 조합)."""
         conditions = []
         params: list[Any] = []
+        for key in ('team_id','scenario_id'):
+            value=getattr(query,key,None)
+            if value:
+                conditions.append(key+' = ?');params.append(value)
         if query.source_type:
             conditions.append("source_type = ?")
             params.append(query.source_type)

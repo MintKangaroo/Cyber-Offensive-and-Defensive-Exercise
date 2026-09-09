@@ -132,3 +132,12 @@ flag, event and delayed/stealth competition semantics are unchanged. Collector
 adds `source_status` and `source_scope`; a failed dependency is not a measured zero.
 Scenario activate/deactivate require instructor authorization; Instructor API
 forwards the caller's authenticated authorization.
+
+
+### Additive ownership and history contracts (2026-09-09)
+
+Production service scope, optional ownership columns, `RangeAgent` credentials,
+paired actor/defender event attribution, `/replay/page`, `/config/history` and
+confirmed dangerous actions are specified in [SERVICE_SCOPE.md](docs/SERVICE_SCOPE.md).
+The existing event IDs, score award/dedup rules and Attack/Defense API semantics are
+retained. Historical records without ownership are not automatically reassigned.

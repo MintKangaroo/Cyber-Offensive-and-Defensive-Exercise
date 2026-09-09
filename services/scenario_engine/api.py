@@ -33,6 +33,8 @@ CONFIG_SERVICE_URL = os.environ.get("CONFIG_SERVICE_URL", "http://config_service
 INSTRUCTOR_TOKEN = os.environ.get("INSTRUCTOR_TOKEN", "")
 
 app = FastAPI(title="Scenario Engine API")
+from shared import scope as range_scope
+range_scope.install(app, "scenario")
 
 _all_scenarios: dict[str, LoadedScenario] = {}
 _active_trackers: dict[str, object] = {}  # scenario_id -> Single/CrossoverScenarioTracker
@@ -106,7 +108,7 @@ async def _event_stream_loop() -> None:
     backoff = 1.0
     while True:
         try:
-            async with websockets.connect(EVENT_COLLECTOR_WS_URL) as ws:
+            async with websockets.connect(EVENT_COLLECTOR_WS_URL, extra_headers=service_headers()) as ws:
                 backoff = 1.0
                 async for message in ws:
                     event = json.loads(message)
@@ -180,6 +182,7 @@ async def deactivate_scenario(req: DeactivateRequest, authorization: str = Heade
 
 @app.get("/scenario/{scenario_id}/progress")
 def scenario_progress(scenario_id: str, team_id: str = "default"):
+    if range_scope.is_team():team_id,scenario_id=range_scope.pair(team_id if team_id!="default" else None,scenario_id)
     tracker = _active_trackers.get(scenario_id)
     if tracker is None:
         raise HTTPException(404, f"scenario '{scenario_id}' is not active")
@@ -204,6 +207,7 @@ class ObjectiveSubmitReq(BaseModel):
 async def submit_objective(scenario_id: str, req: ObjectiveSubmitReq):
     """감사 4.9: 크로스오버(조사형) 목표 제출 API. 정답은 서버측 objective.answer에서 조회해
     채점한다(정답을 클라이언트가 넘기지 않음). 크로스오버 트래커에만 존재."""
+    if range_scope.is_team():req.team_id,scenario_id=range_scope.pair(req.team_id if req.team_id!="default" else None,scenario_id)
     tracker = _active_trackers.get(scenario_id)
     if tracker is None:
         raise HTTPException(404, f"scenario '{scenario_id}' is not active")

@@ -178,6 +178,22 @@ export function useCommandData(session: Session, scenarioId: string) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         const parser = new SSEParser((frame) => {
+          if (frame.topic === "stream-gap") {
+            cursor = "";
+            batch = [];
+            setEvents([]);
+            void refresh();
+            setError(
+              "Stream history changed. Reloading retained exercise evidence.",
+            );
+            return;
+          }
+          if (frame.topic === "session-ended") {
+            stopped = true;
+            setConnection("unauthorized");
+            controller?.abort();
+            return;
+          }
           if (frame.topic === "degraded")
             throw new Error("Upstream disconnected");
           const value: unknown = JSON.parse(frame.data);
@@ -232,7 +248,7 @@ export function useCommandData(session: Session, scenarioId: string) {
       clearTimeout(flushTimer);
       clearTimeout(sourceTimer);
     };
-  }, [scenarioId, session.role, session.capabilities]);
+  }, [scenarioId, session.role, session.capabilities, refresh]);
   return {
     snapshot,
     events,

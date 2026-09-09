@@ -50,3 +50,15 @@ def require_service_token(authorization: str) -> None:
         detail="ingest not configured (fail-closed): set SERVICE_TOKEN, "
                "or RBAC_ALLOW_INSECURE_DEV=true for local dev only",
     )
+
+
+def range_agent_signature(master: str, asset: str) -> str:
+    """Domain-separated credential for one lab sensor, never the service master."""
+    import hashlib
+    import hmac
+    return hmac.new(master.encode(), ('range-agent-v1:'+asset).encode(), hashlib.sha256).hexdigest()
+
+
+def range_agent_headers(asset: str) -> dict[str, str]:
+    token=os.environ.get('RANGE_AGENT_TOKEN','')
+    return {'Authorization': f'RangeAgent {asset}:{token}'} if token else service_headers()

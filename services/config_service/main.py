@@ -30,6 +30,8 @@ DB_PATH = Path(os.environ.get("DATA_DIR", str(APP_DIR))) / "config_service.db"  
 INSTRUCTOR_TOKEN = os.environ.get("INSTRUCTOR_TOKEN", "")  # 배포 시 반드시 설정, 기본값 미허용 정책은 배포 스크립트에서 강제
 
 app = FastAPI(title="Config Service")
+from shared import scope as range_scope
+range_scope.install(app, "config")
 
 # EDR 콘솔(5173) + Live Fire 대시보드(5174)가 브라우저에서 직접 조회하므로 CORS 필요
 # (격리상태/패치상태 fetch). 로컬 개발/훈련 범위이므로 localhost 전 포트 허용.
@@ -75,6 +77,9 @@ def init_db():
         );
         """
     )
+    for col in ("team_id","scenario_id"):
+        if col not in {r[1] for r in conn.execute("PRAGMA table_info(audit_log)")}:conn.execute("ALTER TABLE audit_log ADD COLUMN "+col+" TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_config_history_scope ON audit_log(team_id,scenario_id,timestamp)")
     conn.execute(
         "INSERT OR IGNORE INTO global_state (key, value) VALUES ('killswitch', 'false')"
     )
@@ -92,14 +97,22 @@ def _require_instructor(authorization: str) -> str:
 
 
 def _audit(actor: str, action: str, target: str, before, after, reason: str, ip: str = "") -> None:
-    conn = get_db()
-    conn.execute(
-        "INSERT INTO audit_log (audit_id, timestamp, actor, action, target, before, after, reason, ip) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (str(uuid.uuid4()), time.time(), actor, action, target, str(before), str(after), reason, ip),
-    )
-    conn.commit()
-    conn.close()
+    owner=range_scope.asset_owner(target.split(":",1)[0])
+    conn=get_db()
+    conn.execute("INSERT INTO audit_log (audit_id,timestamp,actor,action,target,before,after,reason,ip,team_id,scenario_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)",(str(uuid.uuid4()),time.time(),actor,action,target,str(before),str(after),reason,ip,owner.get("team_id"),owner.get("scenario_id")))
+    conn.commit();conn.close()
+
+
+@app.get("/config/history")
+def configuration_history(scenario_id:str="default"):
+    team,scenario=range_scope.pair(scenario=scenario_id)
+    query="SELECT * FROM audit_log WHERE scenario_id=? AND action IN ('patch_toggle','quarantine_toggle')";params=[scenario]
+    if team:query+=" AND team_id=?";params.append(team)
+    conn=get_db();rows=[dict(r) for r in conn.execute(query+" ORDER BY timestamp,audit_id",params).fetchall()];conn.close()
+    for r in rows:
+        asset,_,vuln=r["target"].partition(":")
+        r.update(asset=asset,vuln_id=vuln,before=r["before"]=="True",after=r["after"]=="True")
+    return {"changes":rows,"scenario_id":scenario}
 
 
 class PatchToggleRequest(BaseModel):
@@ -130,6 +143,9 @@ def health():
 
 @app.get("/config/patches")
 def get_patches(asset: Optional[str] = None):
+    if asset:
+        range_scope.check_agent_asset(asset)
+        if range_scope.is_team():range_scope.check(range_scope.asset_owner(asset))
     conn = get_db()
     if asset:
         rows = conn.execute("SELECT vuln_id, patched FROM patch_state WHERE asset=?", (asset,)).fetchall()
@@ -140,12 +156,16 @@ def get_patches(asset: Optional[str] = None):
         return {r["vuln_id"]: bool(r["patched"]) for r in rows}
     result: dict[str, dict[str, bool]] = {}
     for r in rows:
+        if not range_scope.owns(range_scope.asset_owner(r["asset"])):continue
         result.setdefault(r["asset"], {})[r["vuln_id"]] = bool(r["patched"])
     return result
 
 
 @app.get("/config/quarantine")
 def get_quarantine(asset: Optional[str] = None):
+    if asset:
+        range_scope.check_agent_asset(asset)
+        if range_scope.is_team():range_scope.check(range_scope.asset_owner(asset))
     conn = get_db()
     if asset:
         row = conn.execute("SELECT quarantined FROM quarantine_state WHERE asset=?", (asset,)).fetchone()
@@ -153,7 +173,7 @@ def get_quarantine(asset: Optional[str] = None):
         return {"asset": asset, "quarantined": bool(row["quarantined"]) if row else False}
     rows = conn.execute("SELECT asset, quarantined FROM quarantine_state").fetchall()
     conn.close()
-    return {r["asset"]: bool(r["quarantined"]) for r in rows}
+    return {r["asset"]: bool(r["quarantined"]) for r in rows if range_scope.owns(range_scope.asset_owner(r["asset"]))}
 
 
 @app.get("/config/killswitch")

@@ -28,28 +28,28 @@ services:
 
   # --- prod 보안 기본값: 관전자 read 게이트 ON (read도 인증 요구) ---
   scoring_engine:
-    environment: [ "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}", "SERVICE_TOKEN=${SERVICE_TOKEN:?prod requires SERVICE_TOKEN}" ]
+    environment: [ "RANGE_SCOPE_ENFORCE=true",  "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}", "SERVICE_TOKEN=${SERVICE_TOKEN:?prod requires SERVICE_TOKEN}" ]
   edr_backend:
-    environment: [ "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
+    environment: [ "SERVICE_TOKEN=${SERVICE_TOKEN:?prod requires SERVICE_TOKEN}", "RANGE_ASSET_SCOPES=${RANGE_ASSET_SCOPES:-}",  "RANGE_SCOPE_ENFORCE=true",  "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
 
   event_collector:
-    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET}", "SERVICE_TOKEN=${SERVICE_TOKEN:?prod requires SERVICE_TOKEN — run ./scripts/gen_secrets.sh}" ]
+    environment: [ "RANGE_ASSET_SCOPES=${RANGE_ASSET_SCOPES:-}",  "RANGE_SCOPE_ENFORCE=true",  "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET}", "SERVICE_TOKEN=${SERVICE_TOKEN:?prod requires SERVICE_TOKEN — run ./scripts/gen_secrets.sh}" ]
   config_service:
-    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
+    environment: [ "SERVICE_TOKEN=${SERVICE_TOKEN:?prod requires SERVICE_TOKEN}", "RANGE_ASSET_SCOPES=${RANGE_ASSET_SCOPES:-}",  "RANGE_SCOPE_ENFORCE=true",  "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
   instructor_api:
-    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
+    environment: [ "RANGE_SCOPE_ENFORCE=true",  "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
   challenge_portal:
-    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
+    environment: [ "RANGE_ASSET_SCOPES=${RANGE_ASSET_SCOPES:-}",  "RANGE_SCOPE_ENFORCE=true",  "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
   range_control:
-    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
+    environment: [ "RANGE_SCOPE_ENFORCE=true",  "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
   siem_api:
-    environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
+    environment: [ "SERVICE_TOKEN=${SERVICE_TOKEN:?prod requires SERVICE_TOKEN}", "RANGE_ASSET_SCOPES=${RANGE_ASSET_SCOPES:-}",  "RANGE_SCOPE_ENFORCE=true",  "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
   auth:
     environment: [ "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
   incident:
-    environment: [ "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
+    environment: [ "RANGE_SCOPE_ENFORCE=true",  "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
   injects:
-    environment: [ "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
+    environment: [ "RANGE_SCOPE_ENFORCE=true",  "OBSERVER_READ_ENFORCE=true", "AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET — run ./scripts/gen_secrets.sh}" ]
 
   # --- prod fail-fast 전면화: A/D·PCAP·DB 시크릿도 미설정이면 부팅 실패(base의 dev 기본값 override) ---
   attack_defense:
@@ -66,7 +66,66 @@ services:
 
   # 감사 3.2: ingest 프록시도 동일 S2S 토큰 주입(fail-fast).
   ingest_proxy:
-    environment: [ "SERVICE_TOKEN=${SERVICE_TOKEN:?prod requires SERVICE_TOKEN — run ./scripts/gen_secrets.sh}" ]
+    environment: [ "INGEST_FALLBACK_AUTH=", "SERVICE_TOKEN=${SERVICE_TOKEN:?prod requires SERVICE_TOKEN — run ./scripts/gen_secrets.sh}" ]
+
+  scenario_engine:
+    environment:
+      - RANGE_SCOPE_ENFORCE=true
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET}
+      - SERVICE_TOKEN=${SERVICE_TOKEN:?prod requires SERVICE_TOKEN}
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:?prod requires INSTRUCTOR_TOKEN}
+  aar_report:
+    environment:
+      - RANGE_SCOPE_ENFORCE=true
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET}
+      - SERVICE_TOKEN=${SERVICE_TOKEN:?prod requires SERVICE_TOKEN}
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:?prod requires INSTRUCTOR_TOKEN}
+  observability:
+    environment:
+      - RANGE_SCOPE_ENFORCE=true
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET}
+      - SERVICE_TOKEN=${SERVICE_TOKEN:?prod requires SERVICE_TOKEN}
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:?prod requires INSTRUCTOR_TOKEN}
+  noc_monitor:
+    environment:
+      - RANGE_ASSET_SCOPES=${RANGE_ASSET_SCOPES:-}
+      - RANGE_SCOPE_ENFORCE=true
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:?prod requires AUTH_JWT_SECRET}
+      - SERVICE_TOKEN=${SERVICE_TOKEN:?prod requires SERVICE_TOKEN}
+      - INSTRUCTOR_TOKEN=${INSTRUCTOR_TOKEN:?prod requires INSTRUCTOR_TOKEN}
+  ground_station:
+    environment:
+      - RANGE_AGENT_TOKEN=${RANGE_AGENT_GROUND_STATION:?run ./scripts/gen_secrets.sh for scoped sensor credentials}
+  power_plant:
+    environment:
+      - RANGE_AGENT_TOKEN=${RANGE_AGENT_POWER_PLANT:?run ./scripts/gen_secrets.sh for scoped sensor credentials}
+  defense_network:
+    environment:
+      - RANGE_AGENT_TOKEN=${RANGE_AGENT_DEFENSE_NETWORK:?run ./scripts/gen_secrets.sh for scoped sensor credentials}
+  refinery_plant:
+    environment:
+      - RANGE_AGENT_TOKEN=${RANGE_AGENT_REFINERY_PLANT:?run ./scripts/gen_secrets.sh for scoped sensor credentials}
+  smart_factory:
+    environment:
+      - RANGE_AGENT_TOKEN=${RANGE_AGENT_SMART_FACTORY:?run ./scripts/gen_secrets.sh for scoped sensor credentials}
+  water_utility:
+    environment:
+      - RANGE_AGENT_TOKEN=${RANGE_AGENT_WATER_UTILITY:?run ./scripts/gen_secrets.sh for scoped sensor credentials}
+  lng_terminal:
+    environment:
+      - RANGE_AGENT_TOKEN=${RANGE_AGENT_LNG_TERMINAL:?run ./scripts/gen_secrets.sh for scoped sensor credentials}
+  railway_signaling:
+    environment:
+      - RANGE_AGENT_TOKEN=${RANGE_AGENT_RAILWAY_SIGNALING:?run ./scripts/gen_secrets.sh for scoped sensor credentials}
+  airport_ot:
+    environment:
+      - RANGE_AGENT_TOKEN=${RANGE_AGENT_AIRPORT_OT:?run ./scripts/gen_secrets.sh for scoped sensor credentials}
+  datacenter_bms:
+    environment:
+      - RANGE_AGENT_TOKEN=${RANGE_AGENT_DATACENTER_BMS:?run ./scripts/gen_secrets.sh for scoped sensor credentials}
+  hospital_ot:
+    environment:
+      - RANGE_AGENT_TOKEN=${RANGE_AGENT_HOSPITAL_OT:?run ./scripts/gen_secrets.sh for scoped sensor credentials}
 
 volumes:
   gateway_certs: {}

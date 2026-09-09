@@ -15,6 +15,7 @@ EDR Backend는 별도 프로세스/컨테이너라 트윈의 pid 네임스페이
 """
 from __future__ import annotations
 import os
+from .service_auth import range_agent_headers
 import time
 import threading
 from typing import Optional
@@ -68,26 +69,27 @@ def _snapshot_processes() -> list[dict]:
 
 
 def _send_snapshot(asset: str, processes: list[dict]) -> None:
-    payload = {"asset": asset, "timestamp": time.time(), "server_pid": SERVER_PID, "processes": processes}
+    payload = {"asset": asset, "timestamp": time.time(), "server_pid": SERVER_PID, "processes": processes, "team_id": os.environ.get("RANGE_TEAM_ID", ""), "scenario_id": os.environ.get("RANGE_SCENARIO_ID", "")}
     try:
-        requests.post(f"{EDR_BACKEND_URL}/edr/ingest", json=payload, timeout=_TIMEOUT)
+        requests.post(f"{EDR_BACKEND_URL}/edr/ingest", json=payload, headers=range_agent_headers(asset), timeout=_TIMEOUT)
     except requests.exceptions.RequestException:
         pass  # EDR Backend 다운이어도 트윈 서비스 자체는 절대 영향받지 않음
 
 
 def _fetch_pending_kill_commands(asset: str) -> list[dict]:
     try:
-        r = requests.get(f"{EDR_BACKEND_URL}/edr/hosts/{asset}/kill-commands/pending", timeout=_TIMEOUT)
+        r = requests.get(f"{EDR_BACKEND_URL}/edr/hosts/{asset}/kill-commands/pending", headers=range_agent_headers(asset), timeout=_TIMEOUT)
         return r.json().get("commands", [])
     except requests.exceptions.RequestException:
         return []
 
 
-def _ack_kill_command(command_id: str, status: str, detail: str) -> None:
+def _ack_kill_command(command_id: str, status: str, detail: str, asset: str = "") -> None:
     try:
         requests.post(
             f"{EDR_BACKEND_URL}/edr/kill-commands/{command_id}/ack",
             json={"status": status, "result_detail": detail},
+            headers=range_agent_headers(asset),
             timeout=_TIMEOUT,
         )
     except requests.exceptions.RequestException:
@@ -128,7 +130,7 @@ def _execute_kill(pid: int) -> tuple[str, str]:
 def _process_pending_kills(asset: str) -> None:
     for cmd in _fetch_pending_kill_commands(asset):
         status, detail = _execute_kill(cmd["pid"])
-        _ack_kill_command(cmd["id"], status, detail)
+        _ack_kill_command(cmd["id"], status, detail, asset)
 
 
 def _agent_loop(asset: str) -> None:

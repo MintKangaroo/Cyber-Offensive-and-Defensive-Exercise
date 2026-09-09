@@ -28,6 +28,17 @@ jobs:
   # 1b) clean install 검증(감사 1.1) — 런타임 requirements.txt 만으로 핵심 임포트가
   #     되는지. python-dotenv 누락으로 clean 호스트 기동이 깨지던 회귀(S-6)를 막는다.
   # ---------------------------------------------------------------------------
+  service-scope-drill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify production service ownership with isolated Docker data
+        run: python3 scripts/smoke_service_scope.py
+
   clean-install:
     runs-on: ubuntu-latest
     steps:

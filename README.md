@@ -22,27 +22,30 @@
 - **Incident Workbench**: 큐 → 조사 → 근거의 3단 구성, SLA, 담당자·노트·기존 상태 전이.
 - **Scenario Studio**: 주석·확장 필드·다중 문서를 보존하는 Visual↔YAML 편집, 실제 엔진 검증,
   드라이런, 개인 초안, 버전 충돌 검사와 명시적 게시.
-- **Replay / AAR**: 한 재생 시각으로 이벤트·관측 자산·점수 원장·연결된 인시던트 이력을 재구성하고,
-  주요 시점과 교관 주석을 검토합니다. 누락된 과거 상태를 현재 값으로 채우지 않습니다.
+- **서비스 권한**: 운영 프로필에서 HTTP·WS·SSE의 역할·팀·훈련 범위를 직접 검사합니다.
+  트윈은 자기 자산용 센서 자격증명만 보유하며, Blue SOC 접근과 인시던트 조작도 범위를 검사합니다.
+- **Replay / AAR**: 재시작 후 스트림 복구와 5만 건 초과 페이지 로딩을 지원합니다. 한 재생 시각으로 이벤트·관측 자산·점수 원장·연결된 인시던트 이력을 재구성하고,
+  실제 패치·격리 변경 이력, 주요 시점과 교관 주석을 검토합니다. 누락된 과거 상태를 현재 값으로 채우지 않습니다.
 - **운영 UX**: Ctrl/Cmd+K 검색, 알림, 고대비, War Room, 모바일 긴급 제어, 사유·확인·감사 로그.
 - **선택형 AI**: 관리자 설정과 교관 정책이 있을 때만 로컬 모델이 근거 요약과 방어 조사 제안을
   제공합니다. 자동 실행이나 AI 경쟁 채점은 없습니다.
 - **Higgsfield 브랜드 자산 19개**: 이미지·영상은 분위기 표현에만 사용하며, 지도·차트·계측을 대체하지 않습니다.
 
-**검증 범위:** 백엔드 623개 통과 / 6개 PostgreSQL 환경 의존 건너뜀, Command Vitest 34개,
-Playwright 11개 흐름, 기존 LiveFire 테스트와 6개 React 빌드, TypeScript·ESLint,
-게이트웨이 Docker 빌드를 검증합니다. 원격 CI 결과는 아래 워크플로에서 확인하세요.
+**검증 범위:** 백엔드 657개 통과 / 6개 PostgreSQL 환경 의존 건너뜀, Command Vitest 35개,
+Playwright 12개 흐름, 기존 LiveFire 테스트와 6개 React 빌드, TypeScript·ESLint,
+게이트웨이 Docker 빌드를 검증했습니다. 분리된 운영 프로필 Docker 검사에서 실제 HTTP 35건도 통과했습니다. 원격 CI 결과는 아래 워크플로에서 확인하세요.
 
 [![CI](https://github.com/MintKangaroo/Cyber-Offensive-and-Defensive-Exercise/actions/workflows/ci.yml/badge.svg)](https://github.com/MintKangaroo/Cyber-Offensive-and-Defensive-Exercise/actions/workflows/ci.yml)
 
 **이번 변경은 단계적 전환입니다.** 새 Command API는 서버에서 역할·팀·훈련 범위를 검사합니다.
-기존 독립 API의 읽기 권한 정비, 모든 전문 화면의 내부 디자인 통합, 완전한 역사 체크포인트,
+운영 프로필의 서비스 권한 정비를 추가했습니다. 모든 전문 화면의 내부 디자인 통합, 완전한 역사 체크포인트,
 개인별 숙련도 모델과 장시간 운영 부하 검증은 남아 있습니다. 전사·공공기관 실운영 완료나
 보안 인증을 의미하지 않습니다. 상세한 완료/유지/후속 항목은
 [로드맵](docs/NEXTGEN_ROADMAP.md)과 [저장소 감사](docs/NEXTGEN_AUDIT.md)에 기록했습니다.
 
 문서: [구조와 API](docs/NEXTGEN_ARCHITECTURE.md) · [디자인 시스템](docs/design/DESIGN_SYSTEM.md) ·
-[Higgsfield 프롬프트](docs/design/HIGGSFIELD_PROMPTS.md) · [변경·검증 이력](docs/NEXTGEN_CHANGELOG.md)
+[Higgsfield 프롬프트](docs/design/HIGGSFIELD_PROMPTS.md) · [변경·검증 이력](docs/NEXTGEN_CHANGELOG.md) ·
+[운영 권한·센서 설정](docs/SERVICE_SCOPE.md)
 
 **최근 개선 (2026-08)**
 - **네트워크 계층 배경 트래픽(G-11)** — `traffic_generator`가 트윈 양성 엔드포인트로 실 HTTP를 흘려
@@ -1607,7 +1610,7 @@ cr_platform_services_up 5
 ```
 
 > Prometheus/Grafana 는 `observability:8097/metrics`(또는 gateway `/metrics`)를 스크레이프 타깃으로
-> 등록하면 된다. 배포 시 `/metrics` 는 내부 ops 네트워크로 제한 권장.
+> 등록하면 됩니다. 운영에서는 내부 스크레이퍼에 서비스 인증을 설정하며, 게이트웨이 `/metrics`도 인증을 요구합니다.
 
 ### #16 시나리오 저작 지원 (Authoring, P1-3)
 교관이 시나리오 YAML 을 **저장·실행 전에 검증**한다. 스키마(형식) 너머의 **의미**를 잡고,

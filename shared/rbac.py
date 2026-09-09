@@ -133,6 +133,9 @@ def require_read(authorization: str) -> Identity | None:
       무효/누락 토큰은 401, 유효 토큰이면 역할 무관 통과. 즉 '관전자 이상'이면 읽기 가능.
     - dev 모드(토큰 자체가 미설정): authenticate()가 dev_mode로 통과.
     """
+    from . import scope
+    if scope.enforced() and scope.identity() is not None:
+        return scope.identity()
     if not read_enforced():
         return None
     return require_role(authorization, set(ROLES))

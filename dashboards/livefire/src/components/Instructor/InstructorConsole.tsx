@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Dialog, Button } from "@cyber-range/command-system";
 import { scenarioStart, scenarioEnd, scoreAdjust, fetchAudit, usePolling } from "../../api/client";
 import { useRangeStore } from "../../store/rangeStore";
 import { RangeControlPanel } from "./RangeControlPanel";
@@ -48,12 +49,16 @@ export function InstructorConsole() {
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const [pending,setPending]=useState<(()=>Promise<unknown>)|null>(null);
   async function run(fn: () => Promise<unknown>) {
-    if (!reason.trim()) {
+    if (reason.trim().length<3) {
       setStatus("사유를 입력해야 합니다(감사 로그 필수).");
       return;
     }
-    setBusy(true);
+    setPending(()=>fn);
+  }
+  async function execute(fn:()=>Promise<unknown>) {
+    setPending(null);setBusy(true);
     try {
       await fn();
       setStatus("완료");
@@ -66,6 +71,12 @@ export function InstructorConsole() {
 
   return (
     <div className="flex flex-col h-full">
+      {pending && <Dialog title="교관 작업 확인" onClose={()=>setPending(null)}>
+        <p>훈련: {scenarioId} · 사유: {reason}</p>
+        <p>시나리오 상태 또는 점수 변경을 확인하십시오. 실행 요청은 감사 기록에 남습니다.</p>
+        <Button onClick={()=>setPending(null)}>취소</Button>
+        <Button onClick={()=>void execute(pending)} tone="critical">확인 후 실행</Button>
+      </Dialog>}
       <div className="p-3 border-b border-[#1E2A3F] flex flex-col gap-2">
         <input
           value={token}

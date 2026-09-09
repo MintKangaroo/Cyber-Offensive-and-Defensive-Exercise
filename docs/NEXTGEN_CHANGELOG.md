@@ -1,5 +1,34 @@
 # Next-generation changelog
 
+## 2026-09-09 — Receiving-service scope and durable operations
+
+- Added strict production HTTP/WS/SSE role, team and exercise enforcement, including
+  JWT revocation checks and sensor-specific credentials. No service master is sent
+  to lab twins. Blue SOC navigation opens only with verified scoped service support.
+- Persisted incident, inject, SIEM and EDR ownership; verified alert promotion,
+  retained automatic incident deduplication and distinguished actor score attribution
+  from defensive asset ownership in paired Red/Blue exercises.
+- Added transactionally durable event stream cursors and signed snapshot-bound
+  replay pages. Control Tower loads beyond 50,000 events and detects stale cursors.
+- Reconstructed scenario-attributed incidents and actual configuration audit changes
+  at playback time. AAR selects exercise evidence rather than platform aggregates.
+- Added direct dangerous-action confirmation, reason and persistent intent/outcome
+  audit. Existing instructor panels use shared confirmation dialogs. EDR reset keeps
+  its action audit, and unavailable emergency state stays unknown.
+- Fixed personal contribution aggregation mixing the same team across exercises;
+  strict portal submissions use authenticated identity rather than supplied subjects.
+- Added an isolated production-profile Docker contract drill with temporary
+  credentials, no host ports and no changes to the running training stack.
+
+Validation: **657 Python tests passed, 6 PostgreSQL-dependent skips**; 34 direct
+service scope tests are included. **35 Command Vitest tests, 12 Playwright flows,
+19 existing LiveFire tests** passed. Command TypeScript/ESLint, LiveFire build, the
+six-application gateway Docker build, nginx syntax and the secret scan passed.
+The isolated production Docker drill passed **35 actual HTTP checks**, including
+scoped sensor forwarding and denial through the ingress proxy. Existing training
+containers and the user-owned Compose override were preserved.
+
+
 ## 2026-09-09 — Cyber Range Command migration
 
 - Audited the actual repository before replacing the legacy Control Tower HTML.

@@ -53,7 +53,7 @@ export async function scenarioStart(scenarioId: string, teamIds: string[], reaso
   return j(`${INSTRUCTOR_API}/instructor/scenario/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ scenario_id: scenarioId, team_ids: teamIds, reason }),
+    body: JSON.stringify({ scenario_id: scenarioId, team_ids: teamIds, reason, confirm:true }),
   });
 }
 
@@ -61,7 +61,7 @@ export async function scenarioEnd(scenarioId: string, reason: string, token: str
   return j(`${INSTRUCTOR_API}/instructor/scenario/end`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ scenario_id: scenarioId, reason }),
+    body: JSON.stringify({ scenario_id: scenarioId, reason, confirm:true }),
   });
 }
 

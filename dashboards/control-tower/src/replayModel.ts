@@ -11,6 +11,8 @@ export interface ReplayInput {
   events: RangeEvent[];
   scores: JsonObject[];
   incidents: JsonObject[];
+  scenarioId?: string;
+  configuration?: JsonObject[];
 }
 /** One clock and one deterministic projection for every replay pane. */
 export function reconstructReplay(input: ReplayInput, at: number) {
@@ -30,7 +32,10 @@ export function reconstructReplay(input: ReplayInput, at: number) {
   }
   const incidents = input.incidents
     .filter(
-      (i) => scopeIds.has(str(i.id)) || scopeIds.has(str(i.source_alert_id)),
+      (i) =>
+        (input.scenarioId && i.scenario_id === input.scenarioId) ||
+        scopeIds.has(str(i.id)) ||
+        scopeIds.has(str(i.source_alert_id)),
     )
     .filter((i) => (num(i.created_at) ?? Infinity) <= at)
     .map((i) => {
@@ -76,6 +81,15 @@ export function reconstructReplay(input: ReplayInput, at: number) {
         timestamp: event.timestamp,
         vuln_id: event.vuln_id,
       };
+  const configuration: Record<string, JsonObject> = {};
+  for (const change of [...(input.configuration || [])].sort(
+    (a, b) => (num(a.timestamp) ?? 0) - (num(b.timestamp) ?? 0),
+  )) {
+    if ((num(change.timestamp) ?? Infinity) > at) continue;
+    configuration[
+      `${str(change.asset)}:${str(change.vuln_id) || "quarantine"}`
+    ] = change;
+  }
   const phaseEvent = [...events]
     .reverse()
     .find((e) =>
@@ -90,6 +104,7 @@ export function reconstructReplay(input: ReplayInput, at: number) {
     scores,
     incidents,
     patches,
+    configuration,
     detections: events.filter((e) => e.event_type === "blue_detection_success"),
     phase: phaseEvent
       ? `${phaseEvent.event_type}${object(phaseEvent.metadata).stage ? " · " + str(object(phaseEvent.metadata).stage, String(object(phaseEvent.metadata).stage)) : ""}`

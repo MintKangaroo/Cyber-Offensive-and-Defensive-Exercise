@@ -31,6 +31,7 @@ export default function Replay({ mode }: { mode: string }) {
   const [input, setInput] = useState<ReplayInput | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadedCount, setLoadedCount] = useState(0);
   const [at, setAt] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -42,16 +43,41 @@ export default function Replay({ mode }: { mode: string }) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setLoadedCount(0);
     setPlaying(false);
     setError("");
-    api(`/replay?scenario_id=${encodeURIComponent(scenarioId)}`)
-      .then((result) => {
+    api(`/replay?scenario_id=${encodeURIComponent(scenarioId)}&paged=true`)
+      .then(async (result) => {
         if (cancelled) return;
         const sources = object(result.sources);
         const eventsSource = object(sources.events);
         if (eventsSource.status !== "ready")
           throw new Error("Replay event source is unavailable");
-        const e = objects(object(eventsSource.data).events)
+        const retained = objects(object(eventsSource.data).events);
+        let cursor = str(object(eventsSource.data).next_cursor);
+        const cursors = new Set<string>();
+        while (cursor && !cancelled) {
+          if (cursors.has(cursor))
+            throw new Error("Replay cursor did not advance");
+          cursors.add(cursor);
+          setLoadedCount(retained.length);
+          const page = await api(
+            `/replay/page?scenario_id=${encodeURIComponent(scenarioId)}&cursor=${encodeURIComponent(cursor)}`,
+          );
+          if (
+            !Array.isArray(page.events) ||
+            typeof page.next_cursor !== "string" ||
+            typeof page.complete !== "boolean" ||
+            page.complete === Boolean(page.next_cursor)
+          )
+            throw new Error(
+              "Replay page contract is invalid; history is incomplete",
+            );
+          retained.push(...objects(page.events));
+          cursor = page.next_cursor;
+        }
+        if (cancelled) return;
+        const e = retained
           .map(normalizeEvent)
           .filter((e): e is RangeEvent => e !== null)
           .sort((a, b) => a.timestamp - b.timestamp);
@@ -61,7 +87,15 @@ export default function Replay({ mode }: { mode: string }) {
         const incidents = objects(
           object(object(sources.incidents).data).incidents,
         ).map(incidentFrom);
-        setInput({ events: e, scores, incidents });
+        setInput({
+          events: e,
+          scores,
+          incidents,
+          scenarioId,
+          configuration: objects(
+            object(object(sources.configuration).data).changes,
+          ),
+        });
         setAt(
           e.find((ev) => ev.event_id === entity)?.timestamp ??
             e[0]?.timestamp ??
@@ -125,7 +159,12 @@ export default function Replay({ mode }: { mode: string }) {
     [input, at],
   );
   const moments = useMemo(() => keyMoments(input?.events || []), [input]);
-  if (loading) return <Skeleton label="Loading recorded exercise" />;
+  if (loading)
+    return (
+      <Skeleton
+        label={`Loading recorded exercise · ${loadedCount.toLocaleString()} events received`}
+      />
+    );
   if (error) return <ErrorState message={error} />;
   if (!input?.events.length || !projection)
     return (
@@ -310,6 +349,29 @@ export default function Replay({ mode }: { mode: string }) {
                 ...scores,
               }))}
             />
+          </Panel>
+          <Panel title="Recorded configuration at playback time">
+            <DataTable
+              caption="Last recorded patch and isolation changes at the cursor"
+              columns={[
+                { key: "asset", label: "Asset" },
+                { key: "change", label: "Change" },
+                { key: "state", label: "Recorded state" },
+                { key: "at", label: "Time" },
+              ]}
+              rows={Object.values(projection.configuration).map((c) => ({
+                asset: str(c.asset),
+                change: str(c.vuln_id) || "Isolation",
+                state: c.after === true ? "Enabled" : "Disabled",
+                at: time(c.timestamp),
+              }))}
+            />
+            {!Object.keys(projection.configuration).length && (
+              <p className="panel-padding muted">
+                No attributed configuration changes retained at this time.
+                Initial configuration is unavailable.
+              </p>
+            )}
           </Panel>
           <Panel title="Historical incident lifecycle">
             <DataTable

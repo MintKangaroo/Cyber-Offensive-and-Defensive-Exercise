@@ -32,8 +32,8 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 from shared.rbac import require_role, require_read  # noqa: E402
 from shared.service_auth import service_headers  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import model  # noqa: E402
-import engine  # noqa: E402
+from services.injects import model  # noqa: E402
+from services.injects import engine  # noqa: E402
 
 DB_PATH = Path(os.environ.get("DATA_DIR", str(Path(__file__).parent))) / "injects.db"
 EVENT_COLLECTOR_URL = os.environ.get("EVENT_COLLECTOR_URL", "http://event_collector:8010")
@@ -86,6 +86,8 @@ EXAMPLE_CAMPAIGN_SPECS = [
 ]
 
 app = FastAPI(title="Non-technical Injects")
+from shared import scope as range_scope
+range_scope.install(app, "injects")
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|(\d{1,3}\.){3}\d{1,3}|[\w-]+\.ts\.net)(:\d+)?",
@@ -108,10 +110,16 @@ def _init():
         body TEXT, team_id TEXT, delivered_at REAL, deadline_at REAL, rubric TEXT,
         response_text TEXT, response_at REAL, score INTEGER, max_score INTEGER,
         rubric_scores TEXT, feedback TEXT, status TEXT)""")
+    for table in ("injects", "campaigns"):
+        if "scenario_id" not in {r[1] for r in c.execute("PRAGMA table_info("+table+")")}:
+            if table=="injects":c.execute("ALTER TABLE injects ADD COLUMN scenario_id TEXT")
     c.execute("CREATE INDEX IF NOT EXISTS idx_inj_team ON injects(team_id)")
     c.execute("""CREATE TABLE IF NOT EXISTS campaigns(
         id TEXT PRIMARY KEY, name TEXT, start_time REAL, team_ids TEXT,
         specs TEXT, fired TEXT, status TEXT, created_at REAL)""")
+    if "scenario_id" not in {r[1] for r in c.execute("PRAGMA table_info(campaigns)")}:
+        c.execute("ALTER TABLE campaigns ADD COLUMN scenario_id TEXT")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_inj_scope ON injects(team_id,scenario_id)")
     c.commit(); c.close()
 
 
@@ -130,7 +138,7 @@ def _state(inc: dict, now: float) -> str:
 
 
 def _insert_inject(c, *, template_id, channel, sender, subject, body, team,
-                   now, deadline, rubric) -> str:
+                   now, deadline, rubric, scenario_id="") -> str:
     """인젝트 한 건을 인박스에 배달(INSERT)하고 id 반환. dispatch·tick 공용."""
     iid = "INJ-" + uuid.uuid4().hex[:8]
     c.execute("""INSERT INTO injects(id,template_id,channel,sender,subject,body,team_id,
@@ -138,10 +146,12 @@ def _insert_inject(c, *, template_id, channel, sender, subject, body, team,
                  rubric_scores,feedback,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
               (iid, template_id, channel, sender, subject, body, team, now, deadline,
                json.dumps(rubric), None, None, None, None, None, None, "delivered"))
+    c.execute("UPDATE injects SET scenario_id=? WHERE id=?", (scenario_id,iid))
     return iid
 
 
 class DispatchReq(BaseModel):
+    scenario_id: str = ""
     template_id: str = ""       # 라이브러리 id (있으면 우선)
     team_ids: list[str] = []
     deadline_min: int = 0       # 0 이면 템플릿/기본값 사용
@@ -165,6 +175,7 @@ class ScoreReq(BaseModel):
 
 
 class CampaignReq(BaseModel):
+    scenario_id: str = ""
     name: str = "ransomware-crisis"
     team_ids: list[str] = []
     specs: list[dict] = []        # 비우면 내장 예시 캠페인 사용
@@ -210,7 +221,7 @@ async def dispatch(req: DispatchReq, authorization: str = Header(default="")):
     for team in req.team_ids:
         iid = _insert_inject(c, template_id=req.template_id, channel=channel, sender=sender,
                              subject=subject, body=body, team=team, now=now, deadline=deadline,
-                             rubric=rubric)
+                             rubric=rubric, scenario_id=req.scenario_id)
         created.append({"id": iid, "team_id": team})
     c.commit(); c.close()
     return {"dispatched": len(created), "deadline_min": dl_min, "injects": created}
@@ -221,10 +232,12 @@ def inbox(team_id: str, authorization: str = Header(default="")):
     require_read(authorization)
     if not team_id:
         raise HTTPException(400, "team_id 필요")
+    team_id,scenario_id=range_scope.pair(team=team_id)
     now = time.time()
     c = _db()
-    rows = [_row(r) for r in c.execute(
-        "SELECT * FROM injects WHERE team_id=? ORDER BY delivered_at DESC", (team_id,)).fetchall()]
+    query="SELECT * FROM injects WHERE team_id=?";params=[team_id]
+    if scenario_id:query+=" AND scenario_id=?";params.append(scenario_id)
+    rows = [_row(r) for r in c.execute(query+" ORDER BY delivered_at DESC",params).fetchall()]
     c.close()
     out = []
     for r in rows:
@@ -241,12 +254,16 @@ def _get(c, iid: str) -> dict:
     r = c.execute("SELECT * FROM injects WHERE id=?", (iid,)).fetchone()
     if not r:
         c.close(); raise HTTPException(404, "inject not found")
-    return _row(r)
+    record=_row(r)
+    try:range_scope.check(record)
+    except HTTPException:c.close();raise
+    return record
 
 
 @app.post("/injects/{iid}/respond")
 def respond(iid: str, req: RespondReq, authorization: str = Header(default="")):
     require_role(authorization, {"red", "blue", "instructor"})
+    range_scope.pair(team=req.team_id)
     c = _db(); inj = _get(c, iid)
     if inj["team_id"] != req.team_id:
         c.close(); raise HTTPException(403, "이 인젝트는 해당 팀의 것이 아닙니다.")
@@ -271,15 +288,15 @@ async def score(iid: str, req: ScoreReq, authorization: str = Header(default="")
     c.execute("UPDATE injects SET score=?, max_score=?, rubric_scores=?, feedback=?, status=? WHERE id=?",
               (final, max_total, json.dumps(req.scores), req.feedback, "scored", iid))
     c.commit(); c.close()
-    await _emit(inj["team_id"], inj["subject"], final, max_total)
+    await _emit(inj["team_id"], inj["subject"], final, max_total, inj.get("scenario_id") or "")
     return {"id": iid, "score": final, "max_score": max_total, "raw_total": total,
             "late": late, "late_penalty_applied": late}
 
 
-async def _emit(team_id: str, subject: str, score_: int, max_: int):
+async def _emit(team_id: str, subject: str, score_: int, max_: int, scenario_id: str = ""):
     ev = {"event_id": str(uuid.uuid4()), "event_type": "stage_completed",
           "timestamp": time.time(), "actor": "blue", "team_id": team_id or "default",
-          "scenario_id": "default", "target_asset": "crisis_comms", "phase": "objective",
+          "scenario_id": scenario_id or "default", "target_asset": "crisis_comms", "phase": "objective",
           "metadata": {"source": "injects", "subject": subject, "points": score_,
                        "stage": "inject_response", "max": max_}}
     try:
@@ -309,10 +326,10 @@ def list_all(team_id: str = "", status: str = "", authorization: str = Header(de
 
 
 @app.get("/injects/scoreboard")
-def scoreboard(authorization: str = Header(default="")):
+def scoreboard(authorization: str = Header(default=""), scenario_id: str = ""):
     require_read(authorization)
     now = time.time()
-    c = _db(); rows = [_row(r) for r in c.execute("SELECT * FROM injects").fetchall()]; c.close()
+    c = _db(); rows = [_row(r) for r in c.execute("SELECT * FROM injects"+(" WHERE scenario_id=?" if scenario_id else ""),[scenario_id] if scenario_id else []).fetchall()]; c.close()
     agg: dict[str, dict] = {}
     for r in rows:
         a = agg.setdefault(r["team_id"], {"team_id": r["team_id"], "delivered": 0, "responded": 0,
@@ -368,7 +385,7 @@ def _tick_campaign(c, camp: dict, now: float) -> list[dict]:
             iid = _insert_inject(c, template_id=resolved["template_id"], channel=resolved["channel"],
                                  sender=resolved["sender"], subject=resolved["subject"],
                                  body=resolved["body"], team=team, now=now, deadline=deadline,
-                                 rubric=resolved["rubric"])
+                                 rubric=resolved["rubric"], scenario_id=camp.get("scenario_id") or "")
             team_fired[sid] = iid
             trig = specs_by_id[sid].get("trigger") or {}
             out.append({"campaign_id": camp["id"], "team_id": team, "spec_id": sid,
@@ -409,6 +426,7 @@ def load_campaign(req: CampaignReq, authorization: str = Header(default="")):
                  VALUES(?,?,?,?,?,?,?,?)""",
               (cid, req.name, start, json.dumps(req.team_ids, ensure_ascii=False),
                json.dumps(specs, ensure_ascii=False), "{}", "running", now))
+    c.execute("UPDATE campaigns SET scenario_id=? WHERE id=?", (req.scenario_id,cid))
     c.commit(); c.close()
     return {"campaign_id": cid, "name": req.name, "team_ids": req.team_ids,
             "specs": len(specs), "start_time": start, "status": "running"}

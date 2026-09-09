@@ -17,12 +17,13 @@ from typing import Optional
 
 import time
 import httpx
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header, Request, Cookie
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header, Request, Cookie, HTTPException
 from fastapi.responses import StreamingResponse
 from starlette.websockets import WebSocketState
 
 import sys
 sys.path.append(str(Path(__file__).parent.parent.parent))  # repo root (shared/ 위치)
+from services.event_collector import journal
 from shared.event_schema import Event  # noqa: E402
 from shared.lifespan import on_startup, on_shutdown  # noqa: E402
 
@@ -63,6 +64,8 @@ def _claims_from(authorization: str, cookie: str | None) -> tuple[str, str]:
         return "observer", ""   # 무효 토큰 → 가장 제한적(관전자·지연)
 
 app = FastAPI(title="Event Collector")
+from shared import scope as range_scope
+range_scope.install(app, "collector")
 
 # Live Fire 대시보드(로컬 dev 5174 등)가 브라우저에서 직접 이 API로 fetch 하므로 CORS 필요.
 # 로컬 개발/훈련 범위이므로 localhost 전 포트를 허용(운영에선 리버스프록시/명시 origin 권장).
@@ -73,6 +76,7 @@ app.add_middleware(
 )
 
 _ws_clients: set[WebSocket] = set()
+_stream_loop = None
 
 
 def get_db():
@@ -138,28 +142,30 @@ def _persist_batch(events: "list[Event]") -> "list[bool]":
     전파된다 — 기존 커밋-당-이벤트와 동일하게 부분 성공을 만들지 않는다."""
     conn = _writer_connection()
     results: list[bool] = []
-    wrote = False
-    for event in events:
-        cur = conn.execute(
-            """
-            INSERT OR IGNORE INTO events (event_id, event_type, timestamp, actor, team_id,
-                                 scenario_id, target_asset, vuln_id, phase,
-                                 trace_id, matched_event_id, challenge_id, schema_version, metadata)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                event.event_id, event.event_type.value, event.timestamp, event.actor,
-                event.team_id, event.scenario_id, event.target_asset, event.vuln_id,
-                event.phase.value if event.phase else None,
-                event.trace_id, event.matched_event_id, event.challenge_id,
-                event.schema_version, json.dumps(event.metadata),
-            ),
-        )
-        is_new = cur.rowcount == 1   # OR IGNORE 로 충돌 무시 시 rowcount=0
-        wrote = wrote or is_new
-        results.append(is_new)
-    if wrote:
-        conn.commit()  # 배치당 커밋 1회 = 그룹 커밋
+    try:
+        for event in events:
+            cur = conn.execute(
+                """
+                INSERT OR IGNORE INTO events (event_id, event_type, timestamp, actor, team_id,
+                                     scenario_id, target_asset, vuln_id, phase,
+                                     trace_id, matched_event_id, challenge_id, schema_version, metadata, defender_team_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event.event_id, event.event_type.value, event.timestamp, event.actor,
+                    event.team_id, event.scenario_id, event.target_asset, event.vuln_id,
+                    event.phase.value if event.phase else None,
+                    event.trace_id, event.matched_event_id, event.challenge_id,
+                    event.schema_version, json.dumps(event.metadata), event.metadata.get("defender_team_id"),
+                ),
+            )
+            is_new = cur.rowcount == 1   # OR IGNORE 로 충돌 무시 시 rowcount=0
+            if is_new:journal.append(conn,_topic_for(event),event.model_dump(mode="json"),event.event_id)
+            results.append(is_new)
+        conn.commit()  # Release the transaction even for an all-duplicate batch.
+    except BaseException:
+        conn.rollback()
+        raise
     return results
 
 
@@ -222,12 +228,15 @@ def init_db():
         """
     )
     # 기존 DB(v1.0)에 신규 컬럼이 없을 수 있으므로 방어적으로 추가(이미 있으면 무시)
-    for col in ["trace_id", "matched_event_id", "challenge_id", "schema_version"]:
+    for col in ["trace_id", "matched_event_id", "challenge_id", "schema_version", "defender_team_id"]:
         try:
             conn.execute(f"ALTER TABLE events ADD COLUMN {col} TEXT")
         except sqlite3.OperationalError:
             pass  # 컬럼이 이미 존재
     conn.execute("CREATE INDEX IF NOT EXISTS idx_events_trace_id ON events(trace_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_events_scope ON events(team_id,scenario_id,timestamp,event_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_events_defender ON events(defender_team_id,scenario_id,timestamp,event_id)")
+    journal.initialize(conn)
     # 감사 3.5: scoring 전달 실패용 로컬 스풀(DLQ). scoring_engine이 죽어도 이벤트를 잃지 않고
     # 복구되면 재전달한다.
     conn.execute(
@@ -269,8 +278,11 @@ def _prune_old_events() -> int:
     conn = get_db()
     try:
         cur = conn.execute("DELETE FROM events WHERE timestamp < ?", (cutoff,))
+        deleted=cur.rowcount or 0
+        conn.execute("DELETE FROM stream_journal WHERE (event_id IS NOT NULL AND event_id NOT IN (SELECT event_id FROM events)) OR (event_id IS NULL AND published_at<?)",(cutoff,))
+        if deleted:journal.invalidate_history(conn)
         conn.commit()
-        return cur.rowcount or 0
+        return deleted
     finally:
         conn.close()
 
@@ -283,6 +295,8 @@ _background_tasks: "list[asyncio.Task]" = []
 
 @on_startup(app)
 async def startup():
+    global _stream_loop
+    _stream_loop=asyncio.get_running_loop()
     # 그룹 커밋 배치 라이터 기동(ingest 큐 소비 → 배치 커밋).
     _background_tasks.append(asyncio.create_task(_batch_writer_loop()))
     # 감사 3.5: DLQ 드레인 루프 기동(scoring 복구 시 스풀 이벤트 재전달).
@@ -302,6 +316,14 @@ async def shutdown():
         except BaseException:  # CancelledError 포함 — 취소 정리 중 예외는 무시
             pass
     _background_tasks.clear()
+    # The SQLite connection belongs to the writer thread, including its close.
+    def close_writer():
+        global _writer_conn
+        if _writer_conn is not None:
+            _writer_conn.close();_writer_conn=None
+    await asyncio.get_running_loop().run_in_executor(_write_executor,close_writer)
+    global _ingest_queue
+    _ingest_queue=None
     # 공유 httpx 클라이언트(연결 풀)를 닫는다 — 미닫으면 종료가 지연된다.
     global _scoring_client
     if _scoring_client is not None:
@@ -332,7 +354,17 @@ def health():
 @app.post("/events")
 async def ingest_event(event: Event, authorization: str = Header(default="")):
     # 감사 3.1: 내부 S2S(트윈·서비스) 전용. 무토큰 주입 차단(참가자망서 이벤트 위조 방지).
-    require_service_token(authorization)
+    sensor=range_scope.identity()
+    if sensor and sensor.role=='range-agent':
+        range_scope.check_agent_asset(event.target_asset)
+        owner=range_scope.asset_owner(event.target_asset)
+        # Distinguish the actor's scoring team from the defending asset owner.
+        # A paired Red/Blue exercise declares red_team_id explicitly in its inventory.
+        event.team_id=owner.get('red_team_id') if event.actor=='red' and owner.get('red_team_id') else owner.get('team_id') or ''
+        event.scenario_id=owner.get('scenario_id') or ''
+        event.metadata={**event.metadata,'defender_team_id':owner.get('team_id') or ''}
+    else:
+        require_service_token(authorization)
     # 쓰기를 배치 라이터 큐로 넘긴다 → 이벤트 루프는 블록되지 않고, 자기 이벤트가 포함된
     # 배치가 commit 되면 future 로 stored 결과를 받는다(그룹 커밋으로 ≥600 EPS 병목 해소).
     loop = asyncio.get_running_loop()
@@ -355,6 +387,16 @@ async def ingest_event(event: Event, authorization: str = Header(default="")):
         task.add_done_callback(_forward_tasks.discard)
 
     return {"stored": not is_duplicate, "duplicate": is_duplicate, "event_id": event.event_id}
+
+
+def _publish_durable(topic,data):
+    conn=get_db()
+    try:
+        seq=journal.append(conn,topic,data);conn.commit()
+    finally:conn.close()
+    if _stream_loop and not _stream_loop.is_closed():_stream_loop.call_soon_threadsafe(bus.publish,topic,data)
+    else:bus.publish(topic,data)
+    return seq
 
 
 def _lookup_matched_timestamp(matched_event_id: str) -> Optional[float]:
@@ -411,7 +453,7 @@ async def _post_scoring(payload: dict) -> tuple[bool, Optional[str]]:
         if r.status_code == 200:
             res = r.json()
             if res.get("awarded"):
-                bus.publish("scores", {
+                _publish_durable("scores", {
                     "team_id": payload.get("team_id"), "actor": payload.get("actor"),
                     "category": res.get("category"), "points": res.get("points"),
                     "scenario_id": payload.get("scenario_id"),
@@ -473,87 +515,103 @@ async def _dlq_drain_loop():
 
 async def _broadcast(event: Event):
     dead = set()
-    for ws in _ws_clients:
+    for ws in list(_ws_clients):
         try:
             if ws.client_state == WebSocketState.CONNECTED:
-                await ws.send_json(event.model_dump(mode="json"))
+                data=event.model_dump(mode="json")
+                if range_scope.enforced():
+                    who=ws.scope.get("state",{}).get("range_identity")
+                    data=range_scope.event_projection(data,who) if who else None
+                if data is not None:await ws.send_json(data)
         except Exception:
             dead.add(ws)
     _ws_clients.difference_update(dead)
 
 
-@app.get("/events")
-def list_events(limit: int = 100, target_asset: Optional[str] = None, team_id: Optional[str] = None):
-    conn = get_db()
-    query = "SELECT * FROM events"
-    conditions = []
-    params = []
-    if target_asset:
-        conditions.append("target_asset = ?")
-        params.append(target_asset)
+
+def _event_conditions(team_id=None,scenario_id=None):
+    conditions=[];params=[]
+    who=range_scope.identity()
+    if who and who.role in {'red','blue'}:
+        team_id,scenario_id=range_scope.pair(team_id,scenario_id)
+        if who.role=='red':conditions.append("actor='red'")
+    elif who and who.role=='observer':
+        if who.match_id:
+            if scenario_id and scenario_id not in {'default',who.match_id}:raise HTTPException(403,'Exercise scope mismatch')
+            scenario_id=who.match_id
+        conditions.append('timestamp<=?');params.append(time.time()-max(30,OBSERVER_DELAY_SEC))
+        conditions.append('event_type IN ('+','.join('?' for _ in range_scope.PUBLIC_EVENTS)+')');params.extend(sorted(range_scope.PUBLIC_EVENTS))
     if team_id:
-        conditions.append("team_id = ?")
-        params.append(team_id)
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
-    query += " ORDER BY timestamp DESC LIMIT ?"
-    params.append(limit)
-    rows = [dict(r) for r in conn.execute(query, params).fetchall()]
+        if who and who.role=='blue':
+            conditions.append('(team_id=? OR defender_team_id=?)');params.extend([team_id,team_id])
+        else:conditions.append('team_id=?');params.append(team_id)
+    if scenario_id:conditions.append('scenario_id=?');params.append(scenario_id)
+    return conditions,params,scenario_id
+
+
+def _project_rows(rows):
+    return [projection for row in rows if (projection:=range_scope.event_projection(dict(row))) is not None]
+
+
+@app.get('/events')
+def list_events(limit:int=100,target_asset:Optional[str]=None,team_id:Optional[str]=None,scenario_id:Optional[str]=None):
+    cond,params,_=_event_conditions(team_id,scenario_id)
+    if target_asset:cond.append('target_asset=?');params.append(target_asset)
+    conn=get_db()
+    rows=conn.execute('SELECT * FROM events'+(' WHERE '+' AND '.join(cond) if cond else '')+' ORDER BY timestamp DESC,event_id DESC LIMIT ?',params+[max(1,min(limit,5000))]).fetchall()
     conn.close()
-    return {"events": rows}
+    return {'events':_project_rows(rows)}
 
 
-@app.get("/events/delayed")
-def list_events_delayed(delay_sec: float = 30.0, limit: int = 100,
-                        scenario_id: Optional[str] = None):
-    """관전자용 지연 이벤트 스트림(P3) — 최소 delay_sec 만큼 지난 이벤트만 노출한다.
-    관전자가 실시간 정보를 팀에 흘리지 못하게(공개정보 지연 표시). scenario_id로 매치 스코프 가능."""
-    import time as _t
-    cutoff = _t.time() - max(0.0, delay_sec)
-    conn = get_db()
-    query = "SELECT * FROM events WHERE timestamp <= ?"
-    params: list = [cutoff]
-    if scenario_id:
-        query += " AND scenario_id = ?"
-        params.append(scenario_id)
-    query += " ORDER BY timestamp DESC LIMIT ?"
-    params.append(limit)
-    rows = [dict(r) for r in conn.execute(query, params).fetchall()]
+@app.get('/events/delayed')
+def list_events_delayed(delay_sec:float=30,limit:int=100,scenario_id:Optional[str]=None):
+    if range_scope.identity() and range_scope.identity().role=='observer':delay_sec=max(30,OBSERVER_DELAY_SEC,delay_sec)
+    cond,params,_=_event_conditions(scenario_id=scenario_id)
+    cond.append('timestamp<=?');params.append(time.time()-max(0,delay_sec))
+    conn=get_db()
+    rows=conn.execute('SELECT * FROM events WHERE '+' AND '.join(cond)+' ORDER BY timestamp DESC,event_id DESC LIMIT ?',params+[max(1,min(limit,5000))]).fetchall()
     conn.close()
-    return {"events": rows, "delay_sec": delay_sec}
+    return {'events':_project_rows(rows),'delay_sec':delay_sec}
 
 
-@app.get("/replay/events")
-def replay_events(scenario_id: str = "default", time_from: Optional[float] = None,
-                  time_to: Optional[float] = None, team_id: Optional[str] = None,
-                  limit: Optional[int] = None):
-    """훈련 종료 후 리플레이(07번 문서 1절)용 시간순 전체 이벤트."""
-    conn = get_db()
-    query = "SELECT * FROM events WHERE scenario_id = ?"
-    params: list = [scenario_id]
-    if time_from is not None:
-        query += " AND timestamp >= ?"
-        params.append(time_from)
-    if time_to is not None:
-        query += " AND timestamp <= ?"
-        params.append(time_to)
-    if team_id:
-        query += " AND team_id = ?"
-        params.append(team_id)
-    # Optional bounded history for command clients. Existing unbounded contract remains.
-    truncated = False
+@app.get('/replay/events')
+def replay_events(scenario_id:str='default',time_from:Optional[float]=None,time_to:Optional[float]=None,team_id:Optional[str]=None,limit:Optional[int]=None):
+    cond,params,scenario_id=_event_conditions(team_id,scenario_id)
+    for value,operator in ((time_from,'>='),(time_to,'<=')):
+        if value is not None:cond.append('timestamp'+operator+'?');params.append(value)
+    query='SELECT * FROM events WHERE '+' AND '.join(cond)
     if limit is not None:
-        limit = max(1, min(limit, 50000))
-        query += " ORDER BY timestamp DESC, event_id DESC LIMIT ?"
-        params.append(limit + 1)
-    else:
-        query += " ORDER BY timestamp ASC, event_id ASC"
-    rows = [dict(r) for r in conn.execute(query, params).fetchall()]
-    conn.close()
-    if limit is not None:
-        truncated = len(rows) > limit
-        rows = list(reversed(rows[:limit]))
-    return {"scenario_id": scenario_id, "count": len(rows), "events": rows, "truncated": truncated}
+        limit=max(1,min(limit,50000));query+=' ORDER BY timestamp DESC,event_id DESC LIMIT ?';params.append(limit+1)
+    else:query+=' ORDER BY timestamp,event_id'
+    conn=get_db();rows=conn.execute(query,params).fetchall();conn.close()
+    truncated=limit is not None and len(rows)>limit
+    if limit is not None:rows=list(reversed(rows[:limit]))
+    result=_project_rows(rows)
+    return {'scenario_id':scenario_id,'count':len(result),'events':result,'truncated':truncated}
+
+
+@app.get('/replay/page')
+def replay_page(scenario_id:str='default',team_id:Optional[str]=None,cursor:str='',limit:int=2000):
+    cond,params,scenario_id=_event_conditions(team_id,scenario_id)
+    ident=range_scope.identity()
+    binding=[scenario_id,team_id or '',ident.actor if ident else '',ident.role if ident else '',ident.team_id if ident else '',ident.match_id if ident else '']
+    conn=get_db()
+    try:
+        state=journal.decode_cursor(conn,cursor) if cursor else {'scope':binding,'upper':journal.bounds(conn)[1],'revision':journal.revision(conn),'after':None}
+        if state.get('revision')!=journal.revision(conn):raise HTTPException(409,'Retained history changed; restart replay loading')
+        if state.get('scope')!=binding:raise HTTPException(403,'Cursor belongs to a different exercise scope')
+        cond.append('event_id IN (SELECT event_id FROM stream_journal WHERE seq<=?)');params.append(state['upper'])
+        if state['after']:
+            cond.append('(timestamp,event_id)>(?,?)');params.extend(state['after'])
+        limit=max(1,min(limit,5000))
+        rows=conn.execute('SELECT * FROM events WHERE '+' AND '.join(cond)+' ORDER BY timestamp,event_id LIMIT ?',params+[limit+1]).fetchall()
+        more=len(rows)>limit;rows=rows[:limit]
+        next_cursor=''
+        if more:
+            state['after']=[rows[-1]['timestamp'],rows[-1]['event_id']]
+            next_cursor=journal.encode_cursor(conn,state)
+        return {'scenario_id':scenario_id,'events':_project_rows(rows),'next_cursor':next_cursor,'complete':not more,'snapshot':journal.encode_cursor(conn,{'scope':binding,'upper':state['upper'],'revision':state['revision'],'after':None})}
+    finally:conn.close()
 
 
 @app.websocket("/ws")
@@ -561,9 +619,10 @@ async def event_stream(websocket: WebSocket):
     await websocket.accept()
     _ws_clients.add(websocket)
     try:
-        while True:
-            await websocket.receive_text()  # 클라이언트로부터의 ping 등 무시
+        await range_scope.receive_while_authorized(websocket)
     except WebSocketDisconnect:
+        pass
+    finally:
         _ws_clients.discard(websocket)
 
 
@@ -582,38 +641,64 @@ async def stream(request: Request, topics: str = "", last_event_id: str = "",
     - topics: 콤마 목록(events,detections,scores,safety,phase_clock). 비면 전체.
     - Last-Event-ID(헤더 또는 쿼리): 재연결 시 놓친 메시지 리플레이.
     - 역할·매치·관전자 지연은 visible_to 로 필터."""
-    role, match_id = _claims_from(authorization, cr_token)
-    tset = {t.strip() for t in topics.split(",") if t.strip()} or None
-    try:
-        last_id = int(last_event_id_hdr or last_event_id or 0)
-    except ValueError:
-        last_id = 0
+    who=range_scope.identity()
+    role, match_id = (who.role,who.match_id) if who else _claims_from(authorization,cr_token)
+    tset={t.strip() for t in topics.split(',') if t.strip()} or None
+    raw_id=last_event_id_hdr or last_event_id
+    try:last_id=max(0,int(raw_id or 0))
+    except ValueError:raise HTTPException(400,'Invalid Last-Event-ID') from None
+    auth=request.scope.get('state',{}).get('range_authorization',authorization)
+
+    def read(after):
+        conn=get_db()
+        try:
+            conn.execute("BEGIN")
+            cutoff=time.time()-max(30,OBSERVER_DELAY_SEC) if who and who.role=='observer' else None
+            return journal.messages(conn,after,cutoff=cutoff),journal.revision(conn),journal.bounds(conn)
+        finally:conn.close()
 
     async def gen():
-        yield "retry: 3000\n\n"   # EventSource 자동 재연결 간격(ms)
-        now = time.time()
-        # 1) 리플레이(놓친 이벤트)
-        for m in bus.replay(last_id, tset):
-            if visible_to(m, role, match_id, now, OBSERVER_DELAY_SEC):
-                yield _sse_frame(m)
-        yield f": subscribed role={role} topics={sorted(tset) if tset else 'all'}\n\n"
-        # 2) 라이브 구독
+        nonlocal last_id
+        yield 'retry: 3000\n\n'
+        conn=get_db();oldest,newest=journal.bounds(conn);conn.close()
+        if raw_id and (last_id>newest or oldest and last_id<oldest-1):
+            yield 'event: stream-gap\ndata: {"reason":"retained history changed","reload":true}\n\n'
+            last_id=max(0,oldest-1)
+        if not raw_id:last_id=max(0,newest-2000)
+        conn=get_db();revision=journal.revision(conn);conn.close()
+        checked=time.monotonic()
         with bus.subscription(maxsize=1000) as q:
-            while True:
-                if await request.is_disconnected():
-                    break
+            while not await request.is_disconnected():
+                if who and time.monotonic()-checked>=15:
+                    try:await range_scope.verify_session(auth)
+                    except HTTPException:
+                        yield 'event: session-ended\ndata: {"reason":"identity verification required"}\n\n'
+                        return
+                    checked=time.monotonic()
+                messages,current_revision,(oldest,newest)=await asyncio.to_thread(read,last_id)
+                if current_revision!=revision:
+                    revision=current_revision
+                    last_id=max(0,oldest-1) if oldest else newest
+                    yield 'event: stream-gap\ndata: {"reason":"retained history changed","reload":true}\n\n'
+                    continue
+                for m in messages:
+                    last_id=m['id']
+                    if tset is not None and m['topic'] not in tset:continue
+                    data=m['data']
+                    if who:
+                        data=range_scope.topic_projection(m['topic'],data,who)
+                        if data is None:continue
+                    elif not visible_to(type('LegacyMessage',(),{'topic':m['topic'],'data':data})(),role,match_id,time.time(),OBSERVER_DELAY_SEC):continue
+                    yield f"id: {m['id']}\nevent: {m['topic']}\ndata: {json.dumps(data)}\n\n"
+                if len(messages)>=512:continue
                 try:
-                    m = await asyncio.wait_for(q.get(), timeout=15.0)
+                    await asyncio.wait_for(q.get(),timeout=15)
+                    await asyncio.sleep(.05)  # Coalesce push notifications under continuous load.
+                    while not q.empty():q.get_nowait()
                 except asyncio.TimeoutError:
-                    yield ": keepalive\n\n"   # 하트비트(프록시 타임아웃·재연결 방지)
-                    continue
-                if tset is not None and m.topic not in tset:
-                    continue
-                if visible_to(m, role, match_id, time.time(), OBSERVER_DELAY_SEC):
-                    yield _sse_frame(m)
+                    yield ': keepalive\n\n'
 
-    return StreamingResponse(gen(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(gen(),media_type='text/event-stream',headers={'Cache-Control':'no-cache','X-Accel-Buffering':'no'})
 
 
 @app.post("/internal/publish")
@@ -624,7 +709,7 @@ async def internal_publish(request: Request, authorization: str = Header(default
     topic = body.get("topic", "events")
     data = body.get("data", {})
     data.setdefault("timestamp", time.time())
-    seq = bus.publish(topic, data)
+    seq = _publish_durable(topic, data)
     return {"published": seq, "topic": topic, "subscribers": bus.subscribers}
 
 
@@ -634,13 +719,15 @@ def admin_reset(authorization: str = Header(default="")):
     require_role(authorization, {"instructor"})
     conn = get_db()
     cleared = {}
-    for t in ['events']:
+    for t in ['events','stream_journal']:
         try:
             cleared[t] = conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
             conn.execute(f"DELETE FROM {t}")
         except Exception:
             cleared[t] = "n/a"
+    journal.invalidate_history(conn)
     conn.commit(); conn.close()
+    _publish_durable("safety",{"action":"range-reset","timestamp":time.time()})
     return {"service": "event_collector", "cleared": cleared}
 
 

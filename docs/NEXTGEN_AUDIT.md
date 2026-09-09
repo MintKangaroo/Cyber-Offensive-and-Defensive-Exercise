@@ -174,3 +174,16 @@ point. Share a local source package for tokens, UI primitives and transport; ado
 it incrementally in existing workspaces. Keep specialist A/D and offensive workbenches
 intact and reachable. Add capabilities only where backed by contracts or an explicit,
 tested additive API. Record limitations instead of faking completeness or telemetry.
+
+
+## Follow-up: service boundaries and retained history (2026-09-09)
+
+The initial findings above describe the pre-migration repository. The production
+profile now applies receiving-service identity/ownership checks, scoped sensor
+credentials, persistent incident/inject/SIEM/EDR ownership and direct dangerous
+operation confirmation/audit. The collector has a durable journal and signed replay
+pages; Command reconstructs owned incident/configuration history. The audit's local
+compatibility warning still applies when strict scope is disabled. Implementation,
+limits and tests are specified in [SERVICE_SCOPE.md](SERVICE_SCOPE.md); uncompleted
+visual authoring, specialist UI, personal training and acceptance work remains in
+[NEXTGEN_ROADMAP.md](NEXTGEN_ROADMAP.md).

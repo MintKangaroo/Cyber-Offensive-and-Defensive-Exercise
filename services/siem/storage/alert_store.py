@@ -39,6 +39,10 @@ class AlertStore:
             )
             """
         )
+        columns={r[1] for r in conn.execute('PRAGMA table_info(alerts)')}
+        for field in ('team_id','scenario_id'):
+            if field not in columns:conn.execute('ALTER TABLE alerts ADD COLUMN '+field+' TEXT')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_alert_scope ON alerts(team_id,scenario_id,timestamp)')
         conn.commit()
         conn.close()
 
@@ -51,15 +55,18 @@ class AlertStore:
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (alert_id, rule_id, title, severity, json.dumps(mitre), timestamp, detail, json.dumps(matched_event)),
         )
+        conn.execute("UPDATE alerts SET team_id=?,scenario_id=? WHERE id=?", (matched_event.get("team_id"),matched_event.get("scenario_id"),alert_id))
         conn.commit()
         conn.close()
         return alert_id
 
     def list_alerts(self, status: Optional[str] = None, severity_min: Optional[int] = None,
-                    limit: int = 100) -> list[dict]:
+                    limit: int = 100, team_id: str = "", scenario_id: str = "", offset: int = 0) -> list[dict]:
         conn = self._conn()
         conditions = []
         params: list = []
+        for key,value in (("team_id",team_id),("scenario_id",scenario_id)):
+            if value:conditions.append(key+" = ?");params.append(value)
         if status:
             conditions.append("status = ?")
             params.append(status)
@@ -68,7 +75,7 @@ class AlertStore:
             params.append(severity_min)
         where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
         rows = conn.execute(
-            f"SELECT * FROM alerts {where} ORDER BY timestamp DESC LIMIT ?", params + [limit]
+            f"SELECT * FROM alerts {where} ORDER BY timestamp DESC,id DESC LIMIT ? OFFSET ?", params + [limit,max(0,offset)]
         ).fetchall()
         conn.close()
         # mitre/matched_event는 저장 시 json.dumps로 문자열화했으므로 읽을 때 되돌린다.
@@ -93,16 +100,35 @@ class AlertStore:
         conn.close()
         return cur.rowcount > 0
 
-    def stats_by_severity(self) -> dict[int, int]:
+    def stats_by_severity(self, team_id="", scenario_id="") -> dict[int, int]:
         conn = self._conn()
-        rows = conn.execute("SELECT severity, COUNT(*) as c FROM alerts GROUP BY severity").fetchall()
+        where,params=self._scope_where(team_id,scenario_id)
+        rows = conn.execute("SELECT severity, COUNT(*) as c FROM alerts"+where+" GROUP BY severity",params).fetchall()
         conn.close()
         return {r["severity"]: r["c"] for r in rows}
 
-    def top_signatures(self, limit: int = 10) -> list[dict]:
+    def top_signatures(self, limit: int = 10, team_id="", scenario_id="") -> list[dict]:
         conn = self._conn()
+        where,params=self._scope_where(team_id,scenario_id)
         rows = conn.execute(
-            "SELECT rule_id, title, COUNT(*) as c FROM alerts GROUP BY rule_id ORDER BY c DESC LIMIT ?", (limit,)
+            "SELECT rule_id, title, COUNT(*) as c FROM alerts"+where+" GROUP BY rule_id ORDER BY c DESC LIMIT ?", params+[limit]
         ).fetchall()
         conn.close()
         return [dict(r) for r in rows]
+
+    def get(self, alert_id: str) -> dict | None:
+        conn=self._conn()
+        row=conn.execute('SELECT * FROM alerts WHERE id=?',(alert_id,)).fetchone()
+        conn.close()
+        if not row:return None
+        data=dict(row)
+        data['matched_event']=json.loads(data['matched_event'] or '{}')
+        data['mitre']=json.loads(data['mitre'] or '[]')
+        return data
+
+    @staticmethod
+    def _scope_where(team_id,scenario_id):
+        conditions=[];params=[]
+        for key,value in (("team_id",team_id),("scenario_id",scenario_id)):
+            if value:conditions.append(key+"=?");params.append(value)
+        return (" WHERE "+" AND ".join(conditions) if conditions else ""), params

@@ -33,6 +33,8 @@ INSTRUCTOR_TOKEN = os.environ.get("INSTRUCTOR_TOKEN", "")
 STALE_HOST_SEC = 30   # 이 시간 이상 스냅샷이 없으면 offline 처리
 
 app = FastAPI(title="EDR Backend")
+from shared import scope as range_scope
+range_scope.install(app, "edr")
 
 # EDR 콘솔(Vite dev, 기본 localhost:5173)이 브라우저에서 직접 이 API로 fetch 하려면
 # CORS가 필요하다. 없으면 브라우저가 preflight/응답을 차단해 호스트/알림/프로세스 트리가
@@ -98,6 +100,10 @@ def init_db():
         conn.execute("ALTER TABLE hosts ADD COLUMN server_pid INTEGER")
     except sqlite3.OperationalError:
         pass
+    columns={r[1] for r in conn.execute('PRAGMA table_info(hosts)')}
+    for field in ('team_id','scenario_id'):
+        if field not in columns:conn.execute('ALTER TABLE hosts ADD COLUMN '+field+' TEXT')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_edr_scope ON hosts(team_id,scenario_id)')
     conn.commit()
     conn.close()
 
@@ -171,6 +177,8 @@ class ProcessInfo(BaseModel):
 
 
 class SnapshotIngest(BaseModel):
+    team_id: str = ""
+    scenario_id: str = ""
     asset: str
     timestamp: float
     server_pid: Optional[int] = None   # 에이전트가 자기 자신(os.getpid())을 보고 -> 유일한 kill 보호대상
@@ -184,7 +192,15 @@ def health():
 
 @app.post("/edr/ingest")
 async def ingest(snapshot: SnapshotIngest):
+    range_scope.check_agent_asset(snapshot.asset)
     conn = get_db()
+    prior=conn.execute('SELECT team_id,scenario_id FROM hosts WHERE asset=?',(snapshot.asset,)).fetchone()
+    owner=range_scope.asset_owner(snapshot.asset)
+    # In strict mode only the operator inventory can confer team ownership.
+    team=owner.get('team_id') or ('' if range_scope.enforced() else snapshot.team_id)
+    scenario=owner.get('scenario_id') or ('' if range_scope.enforced() else snapshot.scenario_id)
+    if prior and prior['team_id'] and (prior['team_id'],prior['scenario_id'])!=(team,scenario):
+        conn.close();raise HTTPException(409,'Host identity belongs to a different exercise; use distinct host IDs')
 
     prev_pids = {
         r["pid"]: dict(r) for r in
@@ -243,19 +259,21 @@ async def ingest(snapshot: SnapshotIngest):
         "server_pid=COALESCE(excluded.server_pid, hosts.server_pid)",
         (snapshot.asset, snapshot.timestamp, len(snapshot.processes), snapshot.server_pid),
     )
+    conn.execute("UPDATE hosts SET team_id=?,scenario_id=? WHERE asset=?",(team or None,scenario or None,snapshot.asset))
     conn.commit()
     conn.close()
 
     for a in new_alerts:
-        await _broadcast({"type": "alert", **a})
+        await _broadcast({"type": "alert", **a,"team_id":team,"scenario_id":scenario})
 
     return {"processed": len(snapshot.processes), "new_alerts": len(new_alerts)}
 
 
 async def _broadcast(payload: dict) -> None:
     dead = set()
-    for ws in _ws_clients:
+    for ws in list(_ws_clients):
         try:
+            if range_scope.enforced() and not range_scope.owns(payload,ws.scope.get("state",{}).get("range_identity")):continue
             if ws.client_state == WebSocketState.CONNECTED:
                 await ws.send_json(payload)
         except Exception:
@@ -267,6 +285,13 @@ async def _broadcast(payload: dict) -> None:
 # 조회 API
 # ---------------------------------------------------------------------------
 
+def _check_asset(asset: str):
+    if not range_scope.is_team():return
+    with get_db() as conn:row=conn.execute('SELECT * FROM hosts WHERE asset=?',(asset,)).fetchone()
+    if not row:raise HTTPException(404,'Host not found')
+    range_scope.check(dict(row))
+
+
 @app.get("/edr/hosts")
 def list_hosts(authorization: str = Header(default="")):
     require_read(authorization)  # 관전자 read 게이트(OBSERVER_READ_ENFORCE 시 유효)
@@ -276,15 +301,17 @@ def list_hosts(authorization: str = Header(default="")):
     now = time.time()
     result = []
     for r in rows:
+        if not range_scope.owns(dict(r)):continue
         status = "online" if (now - r["last_seen"]) < STALE_HOST_SEC else "offline"
         result.append({"asset": r["asset"], "status": status, "last_seen": r["last_seen"],
-                       "process_count": r["process_count"]})
+                       "process_count": r["process_count"], "team_id":r["team_id"],"scenario_id":r["scenario_id"]})
     return {"hosts": result}
 
 
 @app.get("/edr/hosts/{asset}/processes")
 def get_processes(asset: str, authorization: str = Header(default="")):
     require_read(authorization)  # 관전자 read 게이트
+    _check_asset(asset)
     conn = get_db()
     rows = [dict(r) for r in conn.execute(
         "SELECT * FROM processes_current WHERE asset=?", (asset,)
@@ -305,6 +332,7 @@ def get_processes(asset: str, authorization: str = Header(default="")):
 @app.get("/edr/hosts/{asset}/timeline")
 def get_timeline(asset: str, limit: int = 200, authorization: str = Header(default="")):
     require_read(authorization)  # 관전자 read 게이트
+    _check_asset(asset)
     conn = get_db()
     rows = [dict(r) for r in conn.execute(
         "SELECT * FROM process_events WHERE asset=? ORDER BY timestamp DESC LIMIT ?", (asset, limit)
@@ -316,17 +344,29 @@ def get_timeline(asset: str, limit: int = 200, authorization: str = Header(defau
 @app.get("/edr/alerts")
 def get_alerts(asset: Optional[str] = None, limit: int = 100, authorization: str = Header(default="")):
     require_read(authorization)  # 관전자 read 게이트
+    team, scenario = range_scope.pair()
     conn = get_db()
+    query = "SELECT a.* FROM alerts a LEFT JOIN hosts h ON h.asset=a.asset WHERE 1=1"
+    params = []
     if asset:
-        rows = [dict(r) for r in conn.execute(
-            "SELECT * FROM alerts WHERE asset=? ORDER BY timestamp DESC LIMIT ?", (asset, limit)
-        ).fetchall()]
-    else:
-        rows = [dict(r) for r in conn.execute(
-            "SELECT * FROM alerts ORDER BY timestamp DESC LIMIT ?", (limit,)
-        ).fetchall()]
+        _check_asset(asset)
+        query += " AND a.asset=?"; params.append(asset)
+    if team:
+        query += " AND h.team_id=? AND h.scenario_id=?"; params.extend([team,scenario])
+    query += " ORDER BY a.timestamp DESC LIMIT ?"; params.append(max(1,min(limit,1000)))
+    rows = [dict(r) for r in conn.execute(query, params).fetchall()]
     conn.close()
     return {"alerts": rows}
+
+
+@app.get("/edr/alerts/{alert_id}")
+def alert_detail(alert_id: str):
+    conn=get_db()
+    row=conn.execute("SELECT a.*,h.team_id,h.scenario_id FROM alerts a LEFT JOIN hosts h ON h.asset=a.asset WHERE a.id=?",(alert_id,)).fetchone()
+    conn.close()
+    if not row:raise HTTPException(404,"Alert not found")
+    record=dict(row);range_scope.check(record)
+    return record
 
 
 # ---------------------------------------------------------------------------
@@ -356,6 +396,7 @@ async def isolate_host(asset: str, req: IsolateRequest, authorization: str = Hea
     """Config Service의 quarantine을 호출(20번 문서 6절 - 새 메커니즘 만들지 않고 재사용).
     방어 액션이므로 instructor 또는 blue 역할만 허용(RBAC). 이전엔 헤더를 받고도 검증하지 않아
     누구나 호스트를 격리할 수 있는 갭이 있었다."""
+    _check_asset(asset)
     actor = require_role(authorization, {"instructor", "blue"}).actor
     if not req.reason.strip():
         raise HTTPException(400, "reason is required")
@@ -375,6 +416,9 @@ async def isolate_host(asset: str, req: IsolateRequest, authorization: str = Hea
 
 @app.post("/edr/hosts/{asset}/unisolate")
 async def unisolate_host(asset: str, req: IsolateRequest, authorization: str = Header(default="")):
+    _check_asset(asset)
+    if not req.reason.strip():
+        raise HTTPException(400, "reason is required")
     actor = require_role(authorization, {"instructor", "blue"}).actor
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
@@ -402,6 +446,7 @@ def kill_process(asset: str, pid: int, req: KillRequest, authorization: str = He
     해당 트윈 컨테이너 내부의 EDR Agent가 반드시 자기 프로세스 공간에서 os.kill()을 실행해야
     하므로(EDR Backend는 별도 프로세스라 트윈의 pid space에 직접 접근 불가), 에이전트가 이
     큐를 폴링해 실행하고 결과를 ack한다."""
+    _check_asset(asset)
     kill_actor = require_role(authorization, {"instructor", "blue"}).actor
     if not req.reason.strip():
         raise HTTPException(400, "reason is required")
@@ -469,6 +514,8 @@ def ack_kill_command(command_id: str, ack: KillAck):
     if not row:
         conn.close()
         raise HTTPException(404, "command not found")
+    try:range_scope.check_agent_asset(row["asset"])
+    except HTTPException:conn.close();raise
     conn.execute(
         "UPDATE kill_commands SET status=?, completed_at=?, result_detail=? WHERE id=?",
         (ack.status, time.time(), ack.result_detail, command_id),
@@ -481,6 +528,7 @@ def ack_kill_command(command_id: str, ack: KillAck):
 
 @app.get("/edr/hosts/{asset}/kill-commands")
 def list_kill_commands(asset: str, limit: int = 50):
+    _check_asset(asset)
     conn = get_db()
     rows = [dict(r) for r in conn.execute(
         "SELECT * FROM kill_commands WHERE asset=? ORDER BY requested_at DESC LIMIT ?", (asset, limit)
@@ -509,7 +557,7 @@ def admin_reset(authorization: str = Header(default="")):
     cleared = {}
     # sqlite_master 열거로 데이터 테이블 전수 비우기(스키마 메타 테이블 제외).
     tables = [r["name"] for r in conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name!='audit_log'"
     ).fetchall()]
     for t in tables:
         try:
@@ -526,9 +574,10 @@ async def edr_stream(websocket: WebSocket):
     await websocket.accept()
     _ws_clients.add(websocket)
     try:
-        while True:
-            await websocket.receive_text()
+        await range_scope.receive_while_authorized(websocket)
     except WebSocketDisconnect:
+        pass
+    finally:
         _ws_clients.discard(websocket)
 
 

@@ -64,6 +64,8 @@ def _prune_reports() -> dict:
     return {"removed": removed, "remaining": len(list(PDF_OUTPUT_DIR.glob("aar_*.pdf")))}
 
 app = FastAPI(title="AAR Report API")
+from shared import scope as range_scope
+range_scope.install(app, "aar")
 
 
 def _require_viewer(authorization: str) -> None:
@@ -100,24 +102,30 @@ async def get_aar_report(scenario_id: str = "default", authorization: str = Head
 
         alerts: list[dict] = []
         try:
-            alerts_resp = await client.get(f"{SIEM_API_URL}/alerts")
-            alerts_resp.raise_for_status()
-            alerts = alerts_resp.json().get("alerts", [])
+            offset=0
+            while True:
+                alerts_resp = await client.get(f"{SIEM_API_URL}/alerts",params={"scenario_id":scenario_id,"limit":1000,"offset":offset})
+                alerts_resp.raise_for_status()
+                page=alerts_resp.json();alerts.extend(page.get("alerts",[]))
+                if not page.get("has_more"):break
+                next_offset=page.get("next_offset",offset)
+                if next_offset<=offset:raise ValueError("Alert pagination did not advance")
+                offset=next_offset
         except (httpx.HTTPError, ValueError):
             source_status["alerts"] = "unavailable"
             pass  # SIEM이 없어도 리포트 자체는 이벤트/점수만으로 생성 가능
 
         # --- P2-4 확장: 인시던트·인젝트·무결성(각 best-effort, 없으면 빈 섹션) ---
-        async def _get_json(url, key, default, source):
+        async def _get_json(url, key, default, source, params):
             try:
-                r = await client.get(url); r.raise_for_status()
+                r = await client.get(url,params=params); r.raise_for_status()
                 return r.json().get(key, default)
             except (httpx.HTTPError, ValueError):
                 source_status[source] = "unavailable"
                 return default
-        incidents = await _get_json(f"{INCIDENT_URL}/incidents", "incidents", [], "incidents")
-        inject_board = await _get_json(f"{INJECTS_URL}/injects/scoreboard", "scoreboard", [], "injects")
-        flagged = await _get_json(f"{CHALLENGE_PORTAL_URL}/portal/anticheat/flagged", "flagged", [], "integrity")
+        incidents = await _get_json(f"{INCIDENT_URL}/incidents", "incidents", [], "incidents", {"scenario_id":scenario_id})
+        inject_board = await _get_json(f"{INJECTS_URL}/injects/scoreboard", "scoreboard", [], "injects", {"scenario_id":scenario_id})
+        flagged = await _get_json(f"{CHALLENGE_PORTAL_URL}/portal/anticheat/flagged", "flagged", [], "integrity", {"match_id":scenario_id})
 
     mttd = compute_mttd(events)
     mttr = compute_mttr(events)
@@ -135,7 +143,7 @@ async def get_aar_report(scenario_id: str = "default", authorization: str = Head
 
     return {
         "source_status": source_status,
-        "source_scope": {"events": "scenario", "scores": "scenario", "alerts": "platform", "incidents": "platform", "injects": "platform", "integrity": "platform"},
+        "source_scope": {"events": "scenario", "scores": "scenario", "alerts": "scenario", "incidents": "scenario", "injects": "scenario", "integrity": "scenario"},
         "summary": {
             "scenario_id": scenario_id,
             "teams": list(scores.get("teams", {}).keys()),

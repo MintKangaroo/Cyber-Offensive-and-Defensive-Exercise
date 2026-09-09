@@ -67,6 +67,7 @@ services:
     cpus: "0.50"
     environment:
       - SERVICE_TOKEN=${SERVICE_TOKEN:-}
+      - INGEST_FALLBACK_AUTH=Bearer ${SERVICE_TOKEN:-}
     volumes:
       - ./infra/ingest_proxy/default.conf.template:/etc/nginx/templates/default.conf.template:ro
     depends_on: [event_collector]

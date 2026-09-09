@@ -94,3 +94,14 @@ New command routes live under Instructor API `/command` (gateway
 Scenario Engine persists published sources in `scenario_data:/data/authored`.
 Back up this volume and Instructor API data before deployment. AI remains disabled
 unless a local provider and instructor policy are configured.
+
+
+### Strict production scope rollout
+
+Run `./scripts/gen_secrets.sh` to populate the new asset-scoped sensor credentials
+before using `docker-compose.prod.yml`. Configure `RANGE_ASSET_SCOPES` with actual
+exercise and actor/defender team IDs. Do not copy `SERVICE_TOKEN` into twins. See
+[the ownership contract](docs/SERVICE_SCOPE.md) for additive schema migration,
+legacy compatibility, replay cursors and confirmed direct instructor operations.
+Run `python3 scripts/smoke_service_scope.py` for the isolated production service
+drill; it creates and removes its own project and never resets the training stack.
