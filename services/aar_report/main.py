@@ -81,7 +81,8 @@ def health():
 @app.get("/report/aar")
 async def get_aar_report(scenario_id: str = "default", authorization: str = Header(default="")):
     _require_viewer(authorization)
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    source_status = {"events": "ready", "scores": "ready", "alerts": "ready", "incidents": "ready", "injects": "ready", "integrity": "ready"}
+    async with httpx.AsyncClient(timeout=10.0, headers={"Authorization": authorization}) as client:
         try:
             events_resp = await client.get(f"{EVENT_COLLECTOR_URL}/replay/events", params={"scenario_id": scenario_id})
             events_resp.raise_for_status()
@@ -93,7 +94,8 @@ async def get_aar_report(scenario_id: str = "default", authorization: str = Head
             scores_resp = await client.get(f"{SCORING_ENGINE_URL}/scores", params={"scenario_id": scenario_id})
             scores_resp.raise_for_status()
             scores = scores_resp.json()
-        except httpx.HTTPError:
+        except (httpx.HTTPError, ValueError):
+            source_status["scores"] = "unavailable"
             scores = {"teams": {}}
 
         alerts: list[dict] = []
@@ -101,19 +103,21 @@ async def get_aar_report(scenario_id: str = "default", authorization: str = Head
             alerts_resp = await client.get(f"{SIEM_API_URL}/alerts")
             alerts_resp.raise_for_status()
             alerts = alerts_resp.json().get("alerts", [])
-        except httpx.HTTPError:
+        except (httpx.HTTPError, ValueError):
+            source_status["alerts"] = "unavailable"
             pass  # SIEM이 없어도 리포트 자체는 이벤트/점수만으로 생성 가능
 
         # --- P2-4 확장: 인시던트·인젝트·무결성(각 best-effort, 없으면 빈 섹션) ---
-        async def _get_json(url, key, default):
+        async def _get_json(url, key, default, source):
             try:
                 r = await client.get(url); r.raise_for_status()
                 return r.json().get(key, default)
             except (httpx.HTTPError, ValueError):
+                source_status[source] = "unavailable"
                 return default
-        incidents = await _get_json(f"{INCIDENT_URL}/incidents", "incidents", [])
-        inject_board = await _get_json(f"{INJECTS_URL}/injects/scoreboard", "scoreboard", [])
-        flagged = await _get_json(f"{CHALLENGE_PORTAL_URL}/portal/anticheat/flagged", "flagged", [])
+        incidents = await _get_json(f"{INCIDENT_URL}/incidents", "incidents", [], "incidents")
+        inject_board = await _get_json(f"{INJECTS_URL}/injects/scoreboard", "scoreboard", [], "injects")
+        flagged = await _get_json(f"{CHALLENGE_PORTAL_URL}/portal/anticheat/flagged", "flagged", [], "integrity")
 
     mttd = compute_mttd(events)
     mttr = compute_mttr(events)
@@ -130,6 +134,8 @@ async def get_aar_report(scenario_id: str = "default", authorization: str = Head
     flag_events = [e for e in events if e.get("event_type") == "flag_exfiltrated"]
 
     return {
+        "source_status": source_status,
+        "source_scope": {"events": "scenario", "scores": "scenario", "alerts": "platform", "incidents": "platform", "injects": "platform", "integrity": "platform"},
         "summary": {
             "scenario_id": scenario_id,
             "teams": list(scores.get("teams", {}).keys()),
@@ -187,7 +193,7 @@ async def get_timeline(scenario_id: str = "default", authorization: str = Header
         except (httpx.HTTPError, ValueError):
             return default
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=10.0, headers={"Authorization": authorization}) as client:
         events = await _get_json(f"{EVENT_COLLECTOR_URL}/replay/events", "events", [],
                                  params={"scenario_id": scenario_id})
         alerts = await _get_json(f"{SIEM_API_URL}/alerts", "alerts", [])

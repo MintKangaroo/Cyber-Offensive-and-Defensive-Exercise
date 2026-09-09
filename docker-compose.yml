@@ -172,7 +172,10 @@ services:
     build: { context: ., dockerfile: services/scenario_engine/Dockerfile }
     container_name: scenario_engine
     ports: ["8045:8045"]
+    volumes: ["scenario_data:/data"]
     environment:
+      - DATA_DIR=/data
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-}
       - SERVICE_TOKEN=${SERVICE_TOKEN:-}
       - EVENT_COLLECTOR_URL=http://event_collector:8010
       - EVENT_COLLECTOR_WS_URL=ws://event_collector:8010/ws
@@ -200,6 +203,9 @@ services:
       - RED_TOKEN=${RED_TOKEN:-}
       - BLUE_TOKEN=${BLUE_TOKEN:-}
       - OBSERVER_TOKEN=${OBSERVER_TOKEN:-}
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-}
+      - COMMAND_AI_URL=${COMMAND_AI_URL:-}
+      - COMMAND_AI_MODEL=${COMMAND_AI_MODEL:-}
       - DATA_DIR=/data
     depends_on: [scenario_engine, scoring_engine, event_collector]
     networks: [range_control]
@@ -1741,6 +1747,7 @@ networks:
   ad_registry_host: { driver: bridge }
 
 volumes:
+  scenario_data: {}
   aar_data: {}
   auth_data: {}
   inc_case_data: {}

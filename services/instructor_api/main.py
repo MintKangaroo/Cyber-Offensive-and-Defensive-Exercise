@@ -86,6 +86,7 @@ async def scenario_start(req: ScenarioStartRequest, authorization: str = Header(
             r = await client.post(
                 f"{SCENARIO_ENGINE_URL}/scenario/activate",
                 json={"scenario_id": req.scenario_id, "team_ids": req.team_ids},
+                headers={"Authorization": authorization},
             )
             r.raise_for_status()
     except httpx.HTTPStatusError as e:
@@ -105,7 +106,8 @@ async def scenario_end(req: ScenarioEndRequest, authorization: str = Header(defa
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             r = await client.post(
-                f"{SCENARIO_ENGINE_URL}/scenario/deactivate", json={"scenario_id": req.scenario_id}
+                f"{SCENARIO_ENGINE_URL}/scenario/deactivate", json={"scenario_id": req.scenario_id},
+                headers={"Authorization": authorization}
             )
             r.raise_for_status()
     except httpx.HTTPStatusError as e:
@@ -168,6 +170,10 @@ def get_audit(limit: int = 200, authorization: str = Header(default="")):
     # 감사 로그(actor·액션·사유)는 교관 전용. 과거 무인증 노출이던 걸 닫는다(감사 1.8).
     _require_instructor(authorization)
     return {"entries": audit_store.list_entries(limit)}
+
+
+from .command import router as command_router
+app.include_router(command_router)
 
 
 if __name__ == "__main__":

@@ -525,7 +525,8 @@ def list_events_delayed(delay_sec: float = 30.0, limit: int = 100,
 
 @app.get("/replay/events")
 def replay_events(scenario_id: str = "default", time_from: Optional[float] = None,
-                  time_to: Optional[float] = None, team_id: Optional[str] = None):
+                  time_to: Optional[float] = None, team_id: Optional[str] = None,
+                  limit: Optional[int] = None):
     """훈련 종료 후 리플레이(07번 문서 1절)용 시간순 전체 이벤트."""
     conn = get_db()
     query = "SELECT * FROM events WHERE scenario_id = ?"
@@ -539,10 +540,20 @@ def replay_events(scenario_id: str = "default", time_from: Optional[float] = Non
     if team_id:
         query += " AND team_id = ?"
         params.append(team_id)
-    query += " ORDER BY timestamp ASC"
+    # Optional bounded history for command clients. Existing unbounded contract remains.
+    truncated = False
+    if limit is not None:
+        limit = max(1, min(limit, 50000))
+        query += " ORDER BY timestamp DESC, event_id DESC LIMIT ?"
+        params.append(limit + 1)
+    else:
+        query += " ORDER BY timestamp ASC, event_id ASC"
     rows = [dict(r) for r in conn.execute(query, params).fetchall()]
     conn.close()
-    return {"scenario_id": scenario_id, "count": len(rows), "events": rows}
+    if limit is not None:
+        truncated = len(rows) > limit
+        rows = list(reversed(rows[:limit]))
+    return {"scenario_id": scenario_id, "count": len(rows), "events": rows, "truncated": truncated}
 
 
 @app.websocket("/ws")

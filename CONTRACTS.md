@@ -120,3 +120,15 @@ B1이 트윈을 갱신할 때 이 확장 스키마로 교체하되, 기존 필�
 - Event schema: 1.1.0
 - SIEM schema: 1.0.0
 
+
+## Additive Command Platform contracts (2026-09)
+
+The authenticated Instructor API `/command` projection, source status envelopes,
+role/team boundaries and authoring endpoints are documented in
+[docs/NEXTGEN_ARCHITECTURE.md](docs/NEXTGEN_ARCHITECTURE.md). Existing scoring,
+flag, event and delayed/stealth competition semantics are unchanged. Collector
+`GET /replay/events` accepts optional `limit` (1–50,000) and returns additive
+`truncated`; callers omitting the limit retain the established behavior. AAR
+adds `source_status` and `source_scope`; a failed dependency is not a measured zero.
+Scenario activate/deactivate require instructor authorization; Instructor API
+forwards the caller's authenticated authorization.

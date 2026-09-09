@@ -17,7 +17,8 @@ from typing import Optional
 
 import httpx
 import websockets
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
+from shared.rbac import require_role
 from pydantic import BaseModel
 
 from shared.lifespan import on_startup
@@ -119,6 +120,8 @@ async def _event_stream_loop() -> None:
 async def startup():
     global _ws_task
     _all_scenarios.update(load_all_scenarios(SCENARIOS_DIR))
+    from .studio import load_authored
+    load_authored()
     _ws_task = asyncio.create_task(_event_stream_loop())
 
 
@@ -133,7 +136,8 @@ class ActivateRequest(BaseModel):
 
 
 @app.post("/scenario/activate")
-async def activate_scenario(req: ActivateRequest):
+async def activate_scenario(req: ActivateRequest, authorization: str = Header(default="")):
+    require_role(authorization, {"instructor"})
     if req.scenario_id in _active_trackers:
         raise HTTPException(409, f"scenario '{req.scenario_id}' is already active")
     loaded = _all_scenarios.get(req.scenario_id)
@@ -159,7 +163,8 @@ class DeactivateRequest(BaseModel):
 
 
 @app.post("/scenario/deactivate")
-async def deactivate_scenario(req: DeactivateRequest):
+async def deactivate_scenario(req: DeactivateRequest, authorization: str = Header(default="")):
+    require_role(authorization, {"instructor"})
     tracker = _active_trackers.pop(req.scenario_id, None)
     if tracker is None:
         raise HTTPException(404, f"scenario '{req.scenario_id}' is not active")
@@ -237,7 +242,8 @@ def _scenario_dict(doc: dict) -> dict:
 def _raw_scenarios() -> dict[str, dict]:
     """scenarios/ 의 원본 scenario 딕셔너리(저작 검증용, 파싱된 모델과 별개)."""
     out: dict[str, dict] = {}
-    for p in Path(SCENARIOS_DIR).rglob("*.yaml"):
+    from .studio import authored_dir
+    for p in list(Path(SCENARIOS_DIR).rglob("*.yaml")) + sorted(authored_dir().glob("*.yaml")):
         try:
             for doc in yaml.safe_load_all(p.read_text()):
                 if not doc:
@@ -288,6 +294,10 @@ def scenario_phase_clock(scenario_id: str, elapsed_sec: float = 0):
     if not sc:
         raise HTTPException(404, f"scenario not found: {scenario_id}")
     return phase_clock(sc, elapsed_sec)
+
+
+from .studio import router as studio_router
+app.include_router(studio_router)
 
 
 if __name__ == "__main__":

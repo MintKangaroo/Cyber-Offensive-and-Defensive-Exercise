@@ -303,13 +303,18 @@ def verify_baseline(range_id: str, authorization: str = Header(default="")):
 _PAUSED_TEAMS: set[str] = set()
 
 
-def _killswitch_active() -> bool:
+def _killswitch_active() -> bool | None:
     try:
         r = requests.get(f"{CONFIG}/config/killswitch", timeout=3)
-        d = r.json() if r.status_code == 200 else {}
-        return bool(d.get("killswitch") or d.get("active") or d.get("value") in (True, "true"))
-    except requests.RequestException:
-        return False
+        if r.status_code != 200:
+            return None
+        d = r.json()
+        for key in ("killswitch", "active", "value"):
+            if key in d and d[key] in (True, False, "true", "false"):
+                return d[key] in (True, "true")
+        return None
+    except (requests.RequestException, ValueError):
+        return None
 
 
 @app.get("/safety/status")
@@ -354,7 +359,8 @@ def emergency_stop(req: SafetyReq, authorization: str = Header(default="")):
     try:
         r = requests.post(f"{CONFIG}/instructor/killswitch", headers=_hdr(),
                           json={"reason": req.reason}, timeout=5)
-        ok = r.status_code < 400
+        r.raise_for_status()
+        ok = True
     except requests.RequestException as e:
         raise HTTPException(502, f"killswitch 실패: {e}")
     return {"emergency_stop": ok, "killswitch": _killswitch_active(), "reason": req.reason}
@@ -364,8 +370,9 @@ def emergency_stop(req: SafetyReq, authorization: str = Header(default="")):
 def emergency_stop_release(req: SafetyReq, authorization: str = Header(default="")):
     _auth(authorization)
     try:
-        requests.post(f"{CONFIG}/instructor/killswitch/release", headers=_hdr(),
+        r = requests.post(f"{CONFIG}/instructor/killswitch/release", headers=_hdr(),
                       json={"reason": req.reason}, timeout=5)
+        r.raise_for_status()
     except requests.RequestException as e:
         raise HTTPException(502, f"release 실패: {e}")
     return {"emergency_stop": _killswitch_active(), "released": True}

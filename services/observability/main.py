@@ -63,7 +63,7 @@ async def _scrape_one(client: httpx.AsyncClient, name: str, base: str) -> dict:
     try:
         r = await client.get(f"{base}/health", timeout=3.0)
         latency = (time.perf_counter() - t0) * 1000
-        ok = r.status_code < 500
+        ok = 200 <= r.status_code < 300
         payload = r.json() if ok else None
         return {"name": name, "ok": ok, "latency_ms": round(latency, 2), "payload": payload}
     except (httpx.HTTPError, ValueError):
