@@ -37,13 +37,14 @@ Remaining priorities:
    library still has no publish endpoint (templates are inline or in source), rubric
    grading is manual by design, and complex campaign/rubric review stays in the
    Injects workspace until that library gains its own publication contract.
-2. Complete the internal visual migration of specialist Red/Blue/SIEM/EDR pages and
-   the static beginner/competition hubs. Keep advanced workflows and operational
-   detail. In progress, one dashboard per change: **SIEM, the EDR console, the Blue
-   portal and the Red portal migrated** to the shared design system (tokens + Panel/
-   Badge/Button/Empty/Error primitives, tests for each — the Red portal keeps its
-   existing guided-logic tests — with detection/containment/defensive/offensive
-   semantics and transport preserved). Remaining: the static beginner/competition hubs.
+2. Delivered: the internal visual migration of the specialist inner pages and static
+   hubs is complete. SIEM, the EDR console, the Blue portal and the Red portal were
+   moved onto the shared React design system (tokens + Panel/Badge/Button/Empty/Error
+   primitives, tests for each — the Red portal keeps its existing guided-logic tests)
+   with detection/containment/defensive/offensive semantics and transport preserved;
+   the two static hubs (START HERE, Competition) were aligned to the shared palette.
+   Advanced workflows and operational detail were kept throughout. Remaining refinement:
+   deeper interaction parity for individual specialist views can continue incrementally.
 3. Extend the delivered personal attempt/start/pass evidence with policy-aware hint
    usage and instructor-reviewed defensive rubrics. Keep competition scores
    independent of any proficiency estimate and label unavailable measurements.

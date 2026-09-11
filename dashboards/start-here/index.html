@@ -5,12 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>START HERE — Cyber Range Training</title>
 <style>
+  /* Aligned to the CYBER RANGE COMMAND SYSTEM palette (dashboards/shared/src/tokens.css).
+     Static hub: values are inlined (no build step) but track the shared tokens exactly. */
   :root{
-    --bg:#0A0E1A; --panel:#0F1524; --panel2:#131B2E; --border:#1E2A3F;
-    --ink:#E8EDF5; --dim:#6B7A99; --dim2:#8A98B8;
-    --red:#FB7185; --blue:#22D3EE; --green:#34D399; --amber:#F5A623; --violet:#A78BFA;
+    --bg:#0a101b; --panel:#101a28; --panel2:#162234; --border:#2b3b50;
+    --ink:#e9eff7; --dim:#879bb6; --dim2:#a4b4c9;
+    --red:#ff858b; --blue:#6cdaef; --green:#75d8ad; --amber:#f3bd63; --violet:#d6a0e8;
     --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --sans:Pretendard,Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif;
   }
   *{box-sizing:border-box}
   html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans)}
@@ -30,7 +32,7 @@
   .login p{color:var(--dim);font-size:13px;margin:0 0 20px;line-height:1.6}
   .field{display:block;margin-bottom:14px;font-size:12px;color:var(--dim2)}
   .field input{width:100%;margin-top:6px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--ink);font-family:var(--mono);font-size:13px}
-  .primary{width:100%;background:linear-gradient(135deg,#7C3AED,#22D3EE);border:none;color:#06121f;border-radius:9px;padding:12px;font-weight:700;font-size:14px}
+  .primary{width:100%;background:linear-gradient(135deg,var(--violet),var(--blue));border:none;color:var(--bg);border-radius:9px;padding:12px;font-weight:700;font-size:14px}
   .err{color:var(--red);font-size:12px;margin-top:12px;font-family:var(--mono)}
   /* stepper */
   .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
@@ -43,7 +45,7 @@
   .step .lbl{font-weight:600;font-size:15px}
   .step .st{font-size:11px;color:var(--dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:.1em}
   .step.done{border-color:var(--green)}
-  .step.done .n{border-color:var(--green);background:var(--green);color:#06121f}
+  .step.done .n{border-color:var(--green);background:var(--green);color:var(--bg)}
   .step.done .st{color:var(--green)}
   .step.active{border-color:var(--violet);box-shadow:inset 0 0 0 1px var(--violet)}
   .step.active .n{border-color:var(--violet);color:var(--violet)}
@@ -52,9 +54,9 @@
   .card .mission-kicker{color:var(--amber);font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase}
   .card h3{margin:8px 0 6px;font-size:20px}
   .card p.why{color:var(--dim2);font-size:13px;line-height:1.7;margin:0 0 18px}
-  .cta{display:inline-flex;align-items:center;gap:10px;background:linear-gradient(135deg,#7C3AED,#22D3EE);color:#06121f;border:none;border-radius:10px;padding:13px 22px;font-weight:700;font-size:15px}
-  .cta.red{background:linear-gradient(135deg,#F43F5E,#FB7185)}
-  .cta.blue{background:linear-gradient(135deg,#0891B2,#22D3EE)}
+  .cta{display:inline-flex;align-items:center;gap:10px;background:linear-gradient(135deg,var(--violet),var(--blue));color:var(--bg);border:none;border-radius:10px;padding:13px 22px;font-weight:700;font-size:15px}
+  .cta.red{background:linear-gradient(135deg,var(--red),var(--amber))}
+  .cta.blue{background:linear-gradient(135deg,var(--blue),var(--green))}
   .cta.dim{background:transparent;border:1px solid var(--border);color:var(--dim2);font-weight:600}
   .rowbtns{display:flex;flex-wrap:wrap;gap:10px}
   .hint{font-size:11px;color:var(--dim);margin-top:12px;font-family:var(--mono)}

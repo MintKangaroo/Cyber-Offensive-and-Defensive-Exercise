@@ -1,6 +1,27 @@
 # Next-generation changelog
 
 
+## 2026-09-11 — Static hubs aligned; specialist migration (priority 2) complete
+
+- Aligned the two static, build-free hubs — START HERE (the beginner flow) and the
+  Competition scoreboard — to the shared CYBER RANGE COMMAND SYSTEM palette. Both
+  already drove their styling from a local `:root` custom-property block, so their
+  token values were remapped to the shared tokens exactly (background, surface,
+  border, text, and the cyan/amber/red/green/magenta accents), and the remaining
+  hard-coded gradient/accent literals in START HERE were replaced with those
+  variables. As standalone HTML they inline the values (no build step) but track
+  `dashboards/shared/src/tokens.css`. All behavior, ports and gateway/dev routing
+  are unchanged.
+- This completes roadmap priority 2, the internal visual migration of the specialist
+  inner pages and static hubs: SIEM, EDR, Blue portal and Red portal onto the shared
+  React design system (each with preserved semantics/transport and new or retained
+  tests), plus these two static hubs. Advanced workflows and operational detail were
+  preserved throughout.
+
+Validation: static HTML — no build or test step; the palette variables and all
+`var(--…)` references resolve, and no hard-coded colors remain outside `:root`.
+
+
 ## 2026-09-11 — Red portal adopts the command design system
 
 - Migrated the Red portal (login, live target list, the raw request workbench, the

@@ -5,14 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>대회 세트 관제 — Competition Dashboard</title>
 <style>
+  /* Aligned to the CYBER RANGE COMMAND SYSTEM palette (dashboards/shared/src/tokens.css).
+     Static hub: values are inlined (no build step) but track the shared tokens exactly. */
   :root{
-    --bg:#0b0e14; --panel:#121722; --panel2:#0f141d; --line:#232c3b;
-    --fg:#e6edf3; --muted:#8b97a7; --accent:#4da3ff; --accent2:#2aa25c;
-    --warn:#f0b429; --crit:#fb7185;
+    --bg:#0a101b; --panel:#101a28; --panel2:#162234; --line:#2b3b50;
+    --fg:#e9eff7; --muted:#a4b4c9; --accent:#6cdaef; --accent2:#75d8ad;
+    --warn:#f3bd63; --crit:#ff858b;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--fg);
-    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif}
+    font:14px/1.5 Pretendard,Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif}
   header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
     padding:14px 18px;border-bottom:1px solid var(--line);background:var(--panel2)}
   header h1{font-size:16px;margin:0;letter-spacing:.5px}
