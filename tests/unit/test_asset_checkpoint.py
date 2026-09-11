@@ -100,6 +100,20 @@ def test_checkpoint_is_incremental_and_time_anchored(collector):
     assert late["checkpoint"]["states"] == {"power_plant": "recovered"}
 
 
+def test_auto_checkpoint_threshold_logic(collector):
+    mod, _ = collector
+    counters: dict = {}
+    # below threshold: nothing due, counters advance
+    assert mod.checkpoints_due(["exercise-a", "exercise-a"], 3, counters) == set()
+    assert counters["exercise-a"] == 2
+    # crossing the threshold marks the scenario due and resets its counter
+    assert mod.checkpoints_due(["exercise-a"], 3, counters) == {"exercise-a"}
+    assert counters["exercise-a"] == 0
+    # None scenario ids and every<=0 are ignored
+    assert mod.checkpoints_due([None, "x"], 1, counters) == {"x"}
+    assert mod.checkpoints_due(["exercise-a"], 0, counters) == set()
+
+
 def test_reset_invalidates_checkpoints(collector):
     mod, client = collector
     _persist(mod, [{"event_id": "a", "event_type": "asset_compromised", "timestamp": 100}])
