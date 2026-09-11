@@ -72,6 +72,10 @@ Remaining priorities:
 6. Complete manual accessibility and keyboard review of specialist workflows and
    evaluate the selected local AI model for grounding, hints policy and telemetry
    prompt injection before enabling it. AI remains disabled by default.
+   Code-side progress: automated `axe-core` structural accessibility checks now guard
+   all four specialist dashboards (SIEM, EDR, Blue, Red) in CI, and fixed the landmark
+   and ARIA-attribute regressions they found. The manual keyboard/screen-reader review
+   and the local AI model evaluation still require human/operator work and remain open.
 
 Unknown telemetry remains unavailable. Existing native capabilities and scoring
 rules remain available within their established authorized range boundaries.

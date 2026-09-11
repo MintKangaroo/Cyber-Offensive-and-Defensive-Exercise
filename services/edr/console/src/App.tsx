@@ -92,7 +92,7 @@ export default function App() {
       </header>
 
       <div className="edr-body">
-        <aside className="edr-pane-hosts">
+        <aside className="edr-pane-hosts" aria-label="Hosts">
           <HostList
             hosts={hosts ?? []}
             selectedAsset={selectedAsset}
@@ -126,7 +126,7 @@ export default function App() {
           </div>
         </main>
 
-        <aside className="edr-pane-alerts">
+        <aside className="edr-pane-alerts" aria-label="Detections">
           <div className="edr-pane-heading">Detections</div>
           <AlertsPanel alerts={mergedAlerts} onKillDone={handleActionDone} />
         </aside>

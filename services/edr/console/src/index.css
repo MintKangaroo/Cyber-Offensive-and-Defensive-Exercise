@@ -251,7 +251,7 @@ body {
 .edr-proc:hover {
   background: var(--cr-hover);
 }
-.edr-proc[aria-selected="true"] {
+.edr-proc[aria-current="true"] {
   background: var(--cr-raised);
 }
 .edr-connector {

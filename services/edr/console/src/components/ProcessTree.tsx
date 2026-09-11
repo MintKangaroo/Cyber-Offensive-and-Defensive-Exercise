@@ -59,7 +59,7 @@ function ProcessRow({
     <div>
       <div
         className="edr-proc"
-        aria-selected={isSelected}
+        aria-current={isSelected ? "true" : undefined}
         onClick={() => onSelectPid(node.pid)}
       >
         <span className="edr-connector">
