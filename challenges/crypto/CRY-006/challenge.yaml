@@ -1,0 +1,43 @@
+challenge:
+  id: "CRY-006"
+  title: "관세청 전자통관 API - 해시 길이확장 서명 위조"
+  category: "crypto"
+  difficulty: "hard"
+  points: { red: 240, blue: 240 }
+  asset: "customs-eclearance"
+  mitre: [T1548]
+
+  description: |
+    관세청 전자통관 API 가 요청 파라미터를 MAC = SHA256(SECRET ‖ message) 로 서명한다(비밀키를
+    메시지 앞에 이어붙이는 잘못된 MAC 구성). GET / 은 정상 서명된 요청(message + mac)을 준다.
+    SHA-256 은 Merkle–Damgård 구조라, 공격자는 SECRET 을 몰라도 알려진 MAC 을 내부 상태로 삼아
+    이어서 해시를 계속할 수 있다(length extension). SECRET 길이만 알거나 브루트포스하면
+    message‖glue_padding‖"&role=admin" 에 대한 유효한 MAC 을 SECRET 없이 계산할 수 있다.
+    위조한 (message, mac) 을 /api/clear 로 제출하면 서버가 SHA256(SECRET‖message) 로 검증하고,
+    메시지에 role=admin 이 들어 있으면 flag 를 내준다.
+
+  red_task:
+    goal: "GET / 의 서명 요청으로 길이확장 공격 → role=admin 을 덧붙인 유효 MAC 위조 → /api/clear 로 flag"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "MAC = SHA256(SECRET ‖ message). HMAC 이 아니라 비밀키를 앞에 붙였다 — 무엇이 가능한가?" }
+      - { cost: 20, text: "SHA-256(Merkle–Damgård) 길이확장: 알려진 MAC 8워드를 IV 로 재개해 원본+패딩 뒤를 계속 해시." }
+      - { cost: 30, text: "SECRET 길이는 모르니 1..40 브루트포스. 각 길이마다 glue padding 계산 후 '&role=admin' 확장, /api/clear 로 검증." }
+
+  blue_task:
+    goal: "SHA256(secret‖msg) 대신 HMAC-SHA256 으로 교체해 길이확장 위조 차단"
+    success_criteria: |
+      (1) MAC 구성이 secret-prefix 해시(SHA256(secret‖msg))인지 점검 — 길이확장에 취약
+      (2) 패치 후 HMAC-SHA256 이라 알려진 MAC 으로부터 확장 위조 불가(위조 MAC 거부)
+    points_breakdown: { detection: 72, patch: 168 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["customs-eclearance"]
+  safety:
+    profile: "hardened"
+    notes: "HTTP 서비스형. read_only/tmpfs/cap_drop/mem_limit. 취약은 의도된 secret-prefix MAC 이며 실제 서명키 아님."
