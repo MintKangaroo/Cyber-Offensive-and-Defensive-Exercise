@@ -52,6 +52,8 @@ services:
       - RBAC_ALLOW_INSECURE_DEV=${RBAC_ALLOW_INSECURE_DEV:-}
       # 그룹 커밋 배치 상한(이벤트당 커밋→배치 커밋). 1=배치 비활성(이벤트당 커밋).
       - INGEST_BATCH_MAX_SIZE=${INGEST_BATCH_MAX_SIZE:-256}
+      # 시나리오별 신규 이벤트가 이 임계에 닿으면 자산 체크포인트 자동 재료화(0=비활성).
+      - ASSET_CHECKPOINT_EVERY=${ASSET_CHECKPOINT_EVERY:-1000}
     ports: ["8010:8010"]
     # 격리된 트윈들이 이벤트를 보낼 수 있도록 각 twin_* internal 네트워크에도 연결.
     networks: [range_control]

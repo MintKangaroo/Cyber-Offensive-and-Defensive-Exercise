@@ -27,6 +27,9 @@ export SOAK_SUMMARY="$RESULTS/load_summary.${STAMP}.json"
 export RBAC_ALLOW_INSECURE_DEV="true"
 export SERVICE_TOKEN=""
 export CHALLENGE_SECRET="${CHALLENGE_SECRET:-soak-dummy-secret}"
+# 자산 체크포인트 자동 재료화를 소크 동안 자주 트리거해 fold/영속 경로를 지속 스트레스한다
+# (부하는 scenario_id 를 실어 보냄). 기본 250: 체크포인트가 자주 나되 매 배치는 아니게.
+export ASSET_CHECKPOINT_EVERY="${ASSET_CHECKPOINT_EVERY:-250}"
 
 CORE=(siem_logs_init event_collector scoring_engine config_service siem_api)
 SAMPLED=(event_collector scoring_engine config_service siem_api)

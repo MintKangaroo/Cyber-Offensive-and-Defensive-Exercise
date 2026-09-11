@@ -1,6 +1,25 @@
 # Next-generation changelog
 
 
+## 2026-09-11 — Soak harness exercises the checkpoint path (priority 5, code side)
+
+- The soak load generator now sends a `scenario_id` (`SOAK_SCENARIO_ID`, default
+  `soak-exercise`) on ingested events and rotates asset/event types, so the collector
+  accumulates per-scenario events and **automatically materializes asset checkpoints
+  under sustained load**. `run_soak.sh` lowers `ASSET_CHECKPOINT_EVERY` to 250 (exposed
+  as a collector Compose env) so the checkpoint fold/persist path fires frequently
+  throughout the soak; any leak or performance regression in that new code path is now
+  caught by the existing RSS-slope PASS/WARN/FAIL judgment. The README documents this
+  and how to disable it (`ASSET_CHECKPOINT_EVERY=0`).
+- This is a code-side contribution to priority 5; the full instructor-led acceptance
+  exercise and production-scale soak on the intended hardware still require operator
+  work outside this environment.
+
+Validation: `soak_load.py` compiles and its payload validates against the `Event`
+schema for every rotated event type; `docker compose config` is valid with the new
+collector env.
+
+
 ## 2026-09-11 — Automatic asset-checkpoint materialization (priority 4 follow-up)
 
 - Asset checkpoints (from priority 4) were on-demand only, so replay had no anchor

@@ -69,6 +69,10 @@ Remaining priorities:
 5. Run a full instructor-led acceptance exercise and production-scale soak on the
    intended hardware, including restoration and outages. PostgreSQL replica tests now run locally and in CI.
    The isolated Docker scope drill and browser fixtures have narrower stated scope.
+   Code-side progress: the soak harness now drives a `scenario_id` and a low
+   `ASSET_CHECKPOINT_EVERY` so the asset-checkpoint fold/persist path is stressed
+   throughout a run and any leak surfaces in the RSS-slope judgment. The instructor-led
+   acceptance exercise and the production-hardware soak still require operator work.
 6. Complete manual accessibility and keyboard review of specialist workflows and
    evaluate the selected local AI model for grounding, hints policy and telemetry
    prompt injection before enabling it. AI remains disabled by default.
