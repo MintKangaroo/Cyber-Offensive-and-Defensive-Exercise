@@ -1,6 +1,27 @@
 # Next-generation changelog
 
 
+## 2026-09-11 — Automated accessibility checks for specialist dashboards (priority 6, code side)
+
+- Added `axe-core` structural accessibility regression tests to the four migrated
+  specialist dashboards (SIEM, EDR console, Blue portal, Red portal). Each renders its
+  views in the existing Vitest/jsdom harness and asserts zero axe violations, so the
+  design-system migration can't silently regress on labels, roles, landmarks or ARIA
+  usage. This runs in the existing `specialist-dashboards` CI job (`npm run test`) with
+  no browser install; color-contrast (which needs real layout) is left to the manual
+  audit and disabled. This is a code-side complement to — not a replacement for — the
+  manual keyboard/screen-reader review the roadmap still requires.
+- The new checks caught and fixed two real regressions the migration had introduced:
+  the EDR console's two `<aside>` panes were unlabelled landmarks (added `aria-label`
+  "Hosts"/"Detections") and its process rows used `aria-selected` on a plain `div`
+  where it is not allowed (switched to `aria-current`). The Red portal's two `<aside>`
+  panes were likewise labelled ("Authorized targets", "Scoreboard and engagement
+  rules"). SIEM and Blue passed unchanged.
+
+Validation: SIEM 17, EDR 12, Blue 8, Red 16 Vitest tests pass (including the new a11y
+suites); all four production builds pass.
+
+
 ## 2026-09-11 — Bounded-memory replay (priority 4, part B) — priority 4 complete
 
 - The Control Tower replay previously accumulated every page of a very large archive

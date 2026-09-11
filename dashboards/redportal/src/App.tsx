@@ -121,7 +121,7 @@ export default function App() {
         {mode === "beginner"
           ? <GuidedMode target={selected} session={session} onFlagAccepted={refresh} />
           : <RequestWorkbench target={selected} />}
-        <aside className="rp-aside">
+        <aside className="rp-aside" aria-label="Scoreboard and engagement rules">
           {mode === "advanced" && <FlagSubmission session={session} onAccepted={refresh} />}
           <Scoreboard rows={scoreboard} ownTeamId={session.team_id} />
           <section className="rp-card">
@@ -180,7 +180,7 @@ function TargetList({ targets, selected, onSelect }: {
   onSelect: (target: AttackTarget) => void;
 }) {
   return (
-    <aside className="rp-targets rp-col">
+    <aside className="rp-targets rp-col" aria-label="Authorized targets">
       <div style={{ padding: "8px 8px 12px" }}>
         <span className="rp-section-label">AUTHORIZED TARGETS</span>
         <h2 style={{ fontSize: "1.1rem", margin: "4px 0 0" }}>Opponent attack surface</h2>
