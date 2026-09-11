@@ -30,6 +30,13 @@ SOAK_DURATION_SEC=28800 nohup bash loadtest/soak/run_soak.sh &
 - `SOAK_DURATION_SEC`(기본 7200) · `SOAK_RATE`(기본 40 req/s) · `SOAK_SAMPLE_INTERVAL`(기본 60)
 - `SOAK_SLOPE_WARN_MIB_H`(기본 5) · `SOAK_SLOPE_FAIL_MIB_H`(기본 20) · `SOAK_WARMUP_SKIP`(기본 5 샘플)
 - `SOAK_KEEP_UP=1` — 분석 후 스택 유지(디버깅용)
+- `SOAK_SCENARIO_ID`(기본 `soak-exercise`) · `ASSET_CHECKPOINT_EVERY`(소크 기본 250)
+
+### 자산 체크포인트 경로 스트레스(우선순위 4)
+부하가 이벤트에 `scenario_id`를 실어 보내므로, event_collector 가 시나리오별로 누적해
+`ASSET_CHECKPOINT_EVERY` 임계마다 **자산 체크포인트를 자동 재료화**(fold + 영속)한다. run_soak 는
+이 값을 250 으로 낮춰 소크 내내 체크포인트 경로(신규 코드)를 자주 두드리므로, 그 경로의 누수·
+성능 회귀가 RSS 기울기 판정에 함께 포착된다. `ASSET_CHECKPOINT_EVERY=0` 으로 비활성화 가능.
 
 > `run_soak.sh`는 이 격리 소크 스택을 CI `loadtest.yml`과 동일하게 **dev-mode ingest**로 띄운다
 > (`SERVICE_TOKEN=""` + `RBAC_ALLOW_INSECURE_DEV=true`) — 토큰 없는 부하가 `/events`를 통과하도록.

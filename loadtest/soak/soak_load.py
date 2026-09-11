@@ -52,6 +52,13 @@ _SIEM_GETS = ["/alerts", "/stats", "/search?q=protocol&limit=25", "/sources/heal
 # RedPhase enum(shared/event_schema.py) 유효값만 — 그 외는 422 로 튕겨 팬아웃 경로를 못 탄다.
 _PHASES = ["initial_access", "privilege_escalation", "lateral_movement",
            "data_exfiltration", "objective"]
+# 소크가 자산 체크포인트 경로(fold + 자동 재료화)를 지속부하로 두드리도록 scenario_id 를
+# 실어 보낸다. 이벤트에 scenario_id 가 있어야 event_collector 가 시나리오별로 누적해
+# ASSET_CHECKPOINT_EVERY 임계에서 자동 체크포인트를 재료화한다(신규 코드 경로 스트레스).
+SCENARIO_ID = os.environ.get("SOAK_SCENARIO_ID", "soak-exercise")
+# 자산 상태 전이가 실제로 일어나도록 red 계열 이벤트 타입을 섞는다(모두 red phase 와 호환).
+_EVENT_TYPES = ["red_attack_started", "asset_compromised", "flag_exfiltrated"]
+_ASSETS = ["ground_station", "power_plant", "defense_network"]
 
 
 def _record(ok: bool, code: int, latency: float) -> None:
@@ -74,12 +81,13 @@ def _one_request(sess: requests.Session, vu: int, it: int) -> None:
         if random.random() < 0.8:
             payload = {
                 "event_id": f"soak-{vu}-{it}-{time.time_ns()}",
-                "event_type": "red_attack_started",
+                "event_type": random.choice(_EVENT_TYPES),
                 "actor": "red",
-                "target_asset": "ground_station",
+                "target_asset": random.choice(_ASSETS),
                 "vuln_id": "GS-001",
                 "phase": random.choice(_PHASES),
                 "team_id": f"team_{vu % 16}",
+                "scenario_id": SCENARIO_ID,
             }
             r = sess.post(f"{EC_URL}/events", json=payload, timeout=10)
         else:
