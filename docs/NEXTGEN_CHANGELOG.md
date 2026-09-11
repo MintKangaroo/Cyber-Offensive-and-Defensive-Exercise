@@ -1,6 +1,32 @@
 # Next-generation changelog
 
 
+## 2026-09-11 — Red portal adopts the command design system
+
+- Migrated the Red portal (login, live target list, the raw request workbench, the
+  beginner guided-mode wizard, activity log, flag submission and scoreboard) off its
+  standalone Tailwind HUD palette onto the shared design system (tokens + Button,
+  StatusBadge, EmptyState). Removed Tailwind/PostCSS; Red-specific layout now lives in
+  `src/index.css` with no hard-coded colors. Fourth specialist inner-page migration.
+- Preserved offensive semantics exactly: the beginner/advanced mode toggle and its
+  `?mode=` deep link, session/mode localStorage, the login A/D-participant gate, live
+  target selection, the raw HTTP request workbench with recipes, the guided step
+  runner (register → login → IDOR/traversal → capture → submit) driven by the
+  untouched `guided.ts`, flag submission and the live scoreboard. The transport layer
+  (`api.ts`) and the pure guided logic (`guided.ts`) are unchanged — the existing 11
+  `guided.test.ts` cases still pass — and the "no challenge cards" / "AUTHORIZED
+  TARGETS" hidden-information framing is retained.
+- Fixed a regression the migration would otherwise introduce: the shared `Button`
+  defaults to `type="button"`, so the login and flag-submit form buttons now pass
+  `type="submit"` to keep form submission working.
+- Added Red portal component tests (`dashboard.test.tsx`): the login gate, the
+  beginner↔advanced workbench toggle, and a guided step issuing a real request.
+
+Validation: **14 Vitest tests pass** (11 existing guided + 3 new view), `tsc -b` +
+Vite build pass, no Tailwind references remain. No backend or transport contract
+changed; no existing test was modified.
+
+
 ## 2026-09-11 — Blue portal adopts the command design system
 
 - Migrated the Blue portal (defensive workspace: stat donuts, incident feed, patch
