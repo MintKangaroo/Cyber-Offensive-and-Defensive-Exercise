@@ -1,6 +1,29 @@
 # Next-generation changelog
 
 
+## 2026-09-11 — Blue portal adopts the command design system
+
+- Migrated the Blue portal (defensive workspace: stat donuts, incident feed, patch
+  board and the Sigma-rule detection panel with the scoreboard) off its standalone
+  Tailwind HUD palette onto the shared design system (tokens + Button, StatusBadge,
+  EmptyState). Removed Tailwind/PostCSS; Blue-specific layout now lives in
+  `src/index.css` with no hard-coded colors. Third specialist inner-page migration.
+- Preserved defensive semantics exactly: Sigma/YAML detection-rule submission and
+  grading, the patch board toggle with its audit reason, attack/normal dataset
+  download links, the live incident feed with its Korean event labels and
+  attack/defense classification, the scoreboard and per-team localStorage. The four
+  difficulty levels and event tones move onto shared tones (`helpers.ts`). The
+  transport layer (`api.ts`) is unchanged — 4s event/patch polling and base-URL
+  resolution behave as before. The patch-toggle-failure `window.alert` became an
+  inline error line.
+- Added the Blue portal's first automated tests: `helpers.test.ts` (tone/label
+  mapping) and `dashboard.test.tsx` (incident feed, patch toggle with reason, and
+  detection-rule submission), run by the specialist-dashboards CI job.
+
+Validation: **7 Vitest tests pass**, `tsc -b` + Vite build pass, no Tailwind
+references remain. No backend or transport contract changed.
+
+
 ## 2026-09-11 — EDR console adopts the command design system
 
 - Migrated the EDR console (App three-pane shell + HostList, ProcessTree,
