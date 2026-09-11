@@ -373,6 +373,9 @@ _HUMAN_ROUTES = {
             "GET /portal/scoreboard",
             "GET /portal/training/me",
             "POST /portal/training/challenges/{cid}/start",
+            "GET /portal/training/hints/policy",
+            "GET /portal/training/challenges/{cid}/hints",
+            "POST /portal/training/challenges/{cid}/hints/{index}/reveal",
         ),
         **_grants({"red"}, "POST /portal/challenges/{cid}/submit"),
         **_grants(

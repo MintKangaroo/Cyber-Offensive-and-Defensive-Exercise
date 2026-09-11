@@ -48,6 +48,11 @@ Remaining priorities:
 3. Extend the delivered personal attempt/start/pass evidence with policy-aware hint
    usage and instructor-reviewed defensive rubrics. Keep competition scores
    independent of any proficiency estimate and label unavailable measurements.
+   In progress: **policy-aware hint usage records delivered** — progressive per-learner
+   hint reveals, an instructor enable/disable policy, `hints_used` surfaced in the
+   personal profile, all kept out of competition scoring. Remaining: instructor-reviewed
+   defensive rubrics (populating `detection_quality`/`response_quality`), and optional
+   hint-reveal UI in the Red portal.
 4. Add authoritative asset checkpoints and a bounded-memory strategy for very large
    replay archives. The durable journal and 50,003-event pagination tests do not
    constitute unlimited browser capacity or a distributed snapshot guarantee.
