@@ -1,6 +1,35 @@
 # Next-generation changelog
 
 
+## 2026-09-11 — Instructor-reviewed defensive rubrics (priority 3, part B)
+
+- Added an instructor rubric-review workflow for Blue/defensive challenges, the
+  pattern the injects subsystem already used but which Blue grading lacked (Blue was
+  auto-graded pass/fail only). A `BlueTask` may now carry an optional `rubric`
+  (`[{criterion, max}]`, `shared/challenge_schema.py`); an instructor scores a
+  learner's defensive work against it, and the review is surfaced in that learner's
+  personal training profile.
+- New portal endpoints: `GET /portal/training/blue/{cid}/rubric` (member or
+  instructor — what the work is assessed on), `GET /portal/training/blue/reviews/pending`
+  (instructor — a queue of passed Blue submissions with a rubric and no review yet),
+  and `POST /portal/training/blue/{cid}/review` (instructor — records a per-criterion
+  score with feedback). Scoring uses a new pure `shared/rubric.py` (`rubric_total`
+  clamps each award to `[0, max]`; missing criteria score 0). Stored in a new
+  `training_reviews` table; the member rubric read was added to the `shared/scope.py`
+  portal grants, the instructor routes stay instructor-only.
+- `profile()` now attaches a `review` object (score, max, pct, per-criterion breakdown,
+  feedback, reviewer) to the relevant activity item, replacing the two never-populated
+  `detection_quality`/`response_quality` placeholders; `unavailable_inputs` reflects
+  that defensive quality is available once an instructor rubric review exists.
+- **Competition-score independence preserved**: reviews live only in `training_reviews`;
+  `_SOLVES`/`_BLUE_SOLVES`/scoreboards are untouched (a test asserts both remain empty
+  after a review). This completes roadmap priority 3's core (hint records + defensive
+  rubrics); optional UI wiring in the Red/Blue portals remains.
+
+Validation: **628 Python unit tests pass** (new `test_rubric.py` and
+`test_blue_reviews.py`; 618 → 628). No competition scoring changed.
+
+
 ## 2026-09-11 — Policy-aware hint usage records (priority 3, part A)
 
 - Turned the personal-training profile's permanent `hints_used: null` placeholder into

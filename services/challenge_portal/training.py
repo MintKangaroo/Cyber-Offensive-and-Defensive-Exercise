@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from shared import scope
 from shared.rbac import Identity, require_role
+from shared.rubric import review_breakdown, rubric_total
 
 # 정책 인지 힌트 기본값: 힌트 제공 허용(사용은 항상 기록). 교관이 끌 수 있다.
 DEFAULT_HINT_POLICY = {"enabled": True}
@@ -26,6 +27,14 @@ DEFAULT_HINT_POLICY = {"enabled": True}
 class HintPolicyRequest(BaseModel):
     enabled: bool = True
     reason: str = Field(default="", max_length=2000)
+
+
+class BlueReviewRequest(BaseModel):
+    subject: str = Field(min_length=1, max_length=200)
+    team_id: str = Field(min_length=1, max_length=200)
+    match_id: str = Field(min_length=1, max_length=200)
+    scores: dict[str, int] = Field(default_factory=dict)
+    feedback: str = Field(default="", max_length=5000)
 
 DOMAINS = (
     "Web",
@@ -80,6 +89,23 @@ def challenge_hints(catalog: dict, cid: str) -> list[dict]:
     for h in (data.get("red_task", {}) or {}).get("hints", []) or []:
         if isinstance(h, dict) and isinstance(h.get("text"), str):
             out.append({"cost": int(h.get("cost", 0) or 0), "text": h["text"]})
+    return out
+
+
+def challenge_rubric(catalog: dict, cid: str) -> list[dict]:
+    """챌린지 정의에서 blue_task.rubric 을 로드([{criterion,max}])."""
+    entry = catalog.get(cid)
+    if not entry or not entry.get("dir"):
+        return []
+    try:
+        raw = (yaml.safe_load((Path(entry["dir"]) / "challenge.yaml").read_text()) or {})
+        data = raw.get("challenge", {}) or {}
+    except (OSError, yaml.YAMLError):
+        return []
+    out = []
+    for item in (data.get("blue_task", {}) or {}).get("rubric", []) or []:
+        if isinstance(item, dict) and isinstance(item.get("criterion"), str):
+            out.append({"criterion": item["criterion"], "max": int(item.get("max", 0) or 0)})
     return out
 
 
@@ -142,6 +168,22 @@ def profile(conn, ident: Identity, catalog: dict) -> dict:
             (ident.actor, ident.team_id, ident.match_id, ident.role),
         )
     }
+    reviews = {
+        row["cid"]: {
+            "score": row["score"],
+            "max": row["max_score"],
+            "pct": round(100 * row["score"] / row["max_score"]) if row["max_score"] else None,
+            "feedback": row["feedback"] or "",
+            "reviewed_by": row["reviewer"],
+            "reviewed_at": row["reviewed_at"],
+            "criteria": json.loads(row["scores"] or "[]"),
+        }
+        for row in conn.execute(
+            "SELECT cid,score,max_score,scores,feedback,reviewer,reviewed_at FROM training_reviews "
+            "WHERE subject=? AND team_id=? AND match_id=? AND side=?",
+            (ident.actor, ident.team_id, ident.match_id, ident.role),
+        )
+    }
     domains = {
         name: {
             "domain": name,
@@ -162,7 +204,7 @@ def profile(conn, ident: Identity, catalog: dict) -> dict:
             domains[domain]["available"] += 1
             domains[domain]["completed"] += int(complete)
             domains[domain]["attempts"] += observed["attempts"] if observed else 0
-        if observed or cid in starts or cid in hint_counts:
+        if observed or cid in starts or cid in hint_counts or cid in reviews:
             start = starts.get(cid)
             end = observed["completed_at"] if observed else None
             activity.append(
@@ -181,8 +223,7 @@ def profile(conn, ident: Identity, catalog: dict) -> dict:
                     if observed
                     else None,
                     "hints_used": hint_counts.get(cid, 0),
-                    "detection_quality": None,
-                    "response_quality": None,
+                    "review": reviews.get(cid),
                 }
             )
         if not complete:
@@ -220,11 +261,10 @@ def profile(conn, ident: Identity, catalog: dict) -> dict:
         "domains": list(domains.values()),
         "activity": activity,
         "recommendations": recommendations[:6],
-        "method": "Recorded personal grader results in this exercise. Coverage is completed catalog challenges / available challenges; it is not a mastery grade. Attempts count evaluated submissions, including repeat passes. Elapsed time includes idle time from explicit practice start to first recorded pass. Hints used counts hints this learner explicitly revealed (policy-gated); it does not change scoring. Competition scores are unchanged.",
+        "method": "Recorded personal grader results in this exercise. Coverage is completed catalog challenges / available challenges; it is not a mastery grade. Attempts count evaluated submissions, including repeat passes. Elapsed time includes idle time from explicit practice start to first recorded pass. Hints used counts hints this learner explicitly revealed (policy-gated). Review is an instructor's defensive rubric score (manual, when submitted). None of these change competition scores.",
         "unavailable_inputs": [
             "active working time",
-            "detection quality",
-            "response quality",
+            "defensive quality without an instructor rubric review",
             "attribution of legacy attempts",
         ],
     }
@@ -389,6 +429,90 @@ def build_router(portal):
                 "cost": hints[index]["cost"],
                 "text": hints[index]["text"],
                 "hints_used": len(revealed) if already else len(revealed) + 1,
+            }
+        finally:
+            conn.close()
+
+    # --- Instructor-reviewed defensive rubrics (Blue) ---
+
+    @router.get("/blue/{cid}/rubric")
+    async def blue_rubric(
+        cid: str,
+        authorization: str = Header(default=""),
+        cr_token: str | None = Cookie(default=None),
+    ):
+        # Members and instructors may read what defensive work is assessed on.
+        auth = authorization or (f"Bearer {cr_token}" if cr_token else "")
+        require_role(auth, {"red", "blue", "instructor"}, allow_dev=False)
+        catalog = portal["blue"]()
+        if cid not in catalog:
+            raise HTTPException(404, "Challenge is unavailable in this workspace")
+        return {"challenge_id": cid, "rubric": challenge_rubric(catalog, cid)}
+
+    @router.get("/blue/reviews/pending")
+    async def pending_reviews(
+        authorization: str = Header(default=""),
+        cr_token: str | None = Cookie(default=None),
+    ):
+        await instructor(authorization, cr_token)
+        catalog = portal["blue"]()
+        rubric_cids = {cid for cid in catalog if challenge_rubric(catalog, cid)}
+        conn = portal["db"]()
+        try:
+            # Passed Blue submissions with a rubric and no recorded review yet.
+            rows = conn.execute(
+                """SELECT DISTINCT s.verified_subject subject, s.team_id, s.match_id, s.cid
+                   FROM submissions s WHERE s.side='blue' AND s.passed=1 AND s.verified_subject IS NOT NULL
+                   AND NOT EXISTS (SELECT 1 FROM training_reviews r
+                       WHERE r.subject=s.verified_subject AND r.team_id=s.team_id
+                       AND r.match_id=s.match_id AND r.cid=s.cid AND r.side='blue')"""
+            ).fetchall()
+            pending = [
+                dict(row) for row in rows if row["cid"] in rubric_cids
+            ]
+            return {"pending": pending, "count": len(pending)}
+        finally:
+            conn.close()
+
+    @router.post("/blue/{cid}/review")
+    async def review_blue(
+        cid: str,
+        req: BlueReviewRequest,
+        authorization: str = Header(default=""),
+        cr_token: str | None = Cookie(default=None),
+    ):
+        reviewer = await instructor(authorization, cr_token)
+        catalog = portal["blue"]()
+        if cid not in catalog:
+            raise HTTPException(404, "Challenge is unavailable in this workspace")
+        rubric = challenge_rubric(catalog, cid)
+        if not rubric:
+            raise HTTPException(400, "This challenge has no defensive rubric to review")
+        score, max_score = rubric_total(rubric, req.scores)
+        breakdown = review_breakdown(rubric, req.scores)
+        conn = portal["db"]()
+        try:
+            with conn:
+                conn.execute(
+                    "INSERT INTO training_reviews(subject,team_id,match_id,cid,side,score,max_score,scores,feedback,reviewer,reviewed_at) "
+                    "VALUES(?,?,?,?,'blue',?,?,?,?,?,?) "
+                    "ON CONFLICT(subject,team_id,match_id,cid,side) DO UPDATE SET "
+                    "score=excluded.score, max_score=excluded.max_score, scores=excluded.scores, "
+                    "feedback=excluded.feedback, reviewer=excluded.reviewer, reviewed_at=excluded.reviewed_at",
+                    (
+                        req.subject, req.team_id, req.match_id, cid,
+                        score, max_score, json.dumps(breakdown), req.feedback,
+                        reviewer.actor, time.time(),
+                    ),
+                )
+            return {
+                "challenge_id": cid,
+                "subject": req.subject,
+                "score": score,
+                "max": max_score,
+                "pct": round(100 * score / max_score) if max_score else None,
+                "criteria": breakdown,
+                "reviewed_by": reviewer.actor,
             }
         finally:
             conn.close()
