@@ -39,10 +39,10 @@ Remaining priorities:
    Injects workspace until that library gains its own publication contract.
 2. Complete the internal visual migration of specialist Red/Blue/SIEM/EDR pages and
    the static beginner/competition hubs. Keep advanced workflows and operational
-   detail. In progress, one dashboard per change: **SIEM migrated** to the shared
-   design system (tokens + Panel/Badge/Empty/Error primitives, first SIEM tests,
-   detection semantics and transport preserved). Remaining: EDR console, Blue portal,
-   Red portal, and the static beginner/competition hubs.
+   detail. In progress, one dashboard per change: **SIEM and the EDR console migrated**
+   to the shared design system (tokens + Panel/Badge/Button/Empty/Error primitives,
+   first tests for each, detection/containment semantics and transport preserved).
+   Remaining: Blue portal, Red portal, and the static beginner/competition hubs.
 3. Extend the delivered personal attempt/start/pass evidence with policy-aware hint
    usage and instructor-reviewed defensive rubrics. Keep competition scores
    independent of any proficiency estimate and label unavailable measurements.

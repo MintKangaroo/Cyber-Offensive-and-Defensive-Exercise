@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button, StatusBadge } from "@cyber-range/command-system";
 import type { Host } from "../api/types";
 import { isolateHost, unisolateHost } from "../api/client";
 
@@ -23,107 +24,114 @@ const ASSET_LABEL: Record<string, string> = {
   hospital_ot: "병원 OT",
 };
 
-function StatusDot({ status, isolated }: { status: Host["status"]; isolated?: boolean }) {
-  const color = isolated ? "bg-[#FF3B3B]" : status === "online" ? "bg-[#3DDC84]" : "bg-[#5B6570]";
-  const pulse = isolated || status === "online" ? "animate-pulse" : "";
-  return <span className={`inline-block w-2 h-2 rounded-full ${color} ${pulse}`} />;
+/** isolated → critical, online → healthy, offline → neutral. */
+function hostTone(host: Host): "critical" | "healthy" | "neutral" {
+  if (host.isolated) return "critical";
+  return host.status === "online" ? "healthy" : "neutral";
 }
 
-export function HostList({ hosts, selectedAsset, onSelectAsset, onActionDone }: Props) {
+export function HostList({
+  hosts,
+  selectedAsset,
+  onSelectAsset,
+  onActionDone,
+}: Props) {
   const [pendingAsset, setPendingAsset] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function confirmIsolate(asset: string, target: boolean) {
     setBusy(true);
+    setError(null);
     try {
-      if (target) await isolateHost(asset, reason || "manual isolation from EDR console");
+      if (target)
+        await isolateHost(asset, reason || "manual isolation from EDR console");
       else await unisolateHost(asset, reason || "manual release from EDR console");
       onActionDone();
-    } catch (e) {
-      alert(`요청 실패: ${e}`);
-    } finally {
-      setBusy(false);
       setPendingAsset(null);
       setReason("");
+    } catch (e) {
+      setError(`요청 실패: ${e}`);
+    } finally {
+      setBusy(false);
     }
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="text-[11px] uppercase tracking-widest text-[#5B6570] px-3 pt-2 pb-1">
-        Hosts
-      </div>
-      {hosts.map((h) => (
-        <div key={h.asset}>
-          <button
-            onClick={() => onSelectAsset(h.asset)}
-            className={`w-full text-left px-3 py-2 flex items-center gap-2 border-l-2 transition-colors
-              ${
-                selectedAsset === h.asset
-                  ? "bg-[#141B22] border-[#3DA9FC]"
-                  : "border-transparent hover:bg-[#10151A]"
-              }`}
-          >
-            <StatusDot status={h.status} isolated={h.isolated} />
-            <div className="flex-1 min-w-0">
-              <div className="font-mono text-sm text-[#D9E1E8] truncate">
-                {ASSET_LABEL[h.asset] ?? h.asset}
-              </div>
-              <div className="font-mono text-[10px] text-[#5B6570]">
-                {h.asset} · {h.process_count}procs
-              </div>
-            </div>
-            {h.isolated && (
-              <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#3A1414] text-[#FF3B3B] border border-[#5A2323]">
-                isolated
+    <div>
+      <div className="edr-pane-heading">Hosts</div>
+      {hosts.map((h) => {
+        const tone = hostTone(h);
+        const pulse = h.isolated || h.status === "online" ? " edr-live-dot" : "";
+        return (
+          <div key={h.asset}>
+            <button
+              type="button"
+              className="edr-host"
+              aria-current={selectedAsset === h.asset}
+              onClick={() => onSelectAsset(h.asset)}
+            >
+              <span
+                className={`edr-dot cr-tone-${tone}${pulse}`}
+                role="img"
+                aria-label={h.isolated ? "격리됨" : h.status}
+              />
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span className="edr-host-name" style={{ display: "block" }}>
+                  {ASSET_LABEL[h.asset] ?? h.asset}
+                </span>
+                <span className="edr-host-meta">
+                  {h.asset} · {h.process_count}procs
+                </span>
               </span>
-            )}
-          </button>
+              {h.isolated && <StatusBadge tone="critical">isolated</StatusBadge>}
+            </button>
 
-          {selectedAsset === h.asset && (
-            <div className="px-3 pb-2">
-              {pendingAsset === h.asset ? (
-                <div className="flex flex-col gap-1.5 bg-[#0F1419] border border-[#242E38] rounded p-2">
-                  <input
-                    autoFocus
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    placeholder="사유 입력 (감사 로그에 기록됨)"
-                    className="bg-[#131920] border border-[#242E38] rounded px-2 py-1 text-xs text-[#D9E1E8] font-mono focus:outline-none focus:border-[#3DA9FC]"
-                  />
-                  <div className="flex gap-1.5">
-                    <button
-                      disabled={busy || !reason.trim()}
-                      onClick={() => confirmIsolate(h.asset, !h.isolated)}
-                      className="flex-1 text-xs py-1 rounded bg-[#FF3B3B] text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#E02F2F]"
-                    >
-                      {h.isolated ? "격리 해제 확인" : "격리 확인"}
-                    </button>
-                    <button
-                      onClick={() => setPendingAsset(null)}
-                      className="text-xs py-1 px-2 rounded border border-[#242E38] text-[#9FB0C0] hover:bg-[#141B22]"
-                    >
-                      취소
-                    </button>
+            {selectedAsset === h.asset && (
+              <>
+                {error && <div className="edr-inline-error">{error}</div>}
+                {pendingAsset === h.asset ? (
+                  <div className="edr-confirm">
+                    <input
+                      className="edr-input"
+                      autoFocus
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                      placeholder="사유 입력 (감사 로그에 기록됨)"
+                      aria-label="격리 사유"
+                    />
+                    <div className="edr-row">
+                      <Button
+                        tone="critical"
+                        style={{ flex: 1 }}
+                        disabled={busy || !reason.trim()}
+                        onClick={() => confirmIsolate(h.asset, !h.isolated)}
+                      >
+                        {h.isolated ? "격리 해제 확인" : "격리 확인"}
+                      </Button>
+                      <Button onClick={() => setPendingAsset(null)}>취소</Button>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setPendingAsset(h.asset)}
-                  className={`w-full text-xs py-1 rounded border transition-colors ${
-                    h.isolated
-                      ? "border-[#2A3D2E] text-[#3DDC84] hover:bg-[#12201A]"
-                      : "border-[#3A2323] text-[#FF8A3D] hover:bg-[#201414]"
-                  }`}
-                >
-                  {h.isolated ? "격리 해제 (Unisolate)" : "호스트 격리 (Isolate)"}
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      ))}
+                ) : (
+                  <div style={{ padding: "0 12px 8px" }}>
+                    <Button
+                      tone={h.isolated ? "healthy" : "warning"}
+                      style={{ width: "100%" }}
+                      onClick={() => {
+                        setError(null);
+                        setPendingAsset(h.asset);
+                      }}
+                    >
+                      {h.isolated ? "격리 해제 (Unisolate)" : "호스트 격리 (Isolate)"}
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

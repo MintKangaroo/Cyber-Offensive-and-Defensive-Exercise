@@ -1,6 +1,30 @@
 # Next-generation changelog
 
 
+## 2026-09-11 — EDR console adopts the command design system
+
+- Migrated the EDR console (App three-pane shell + HostList, ProcessTree,
+  AlertsPanel) off its standalone Tailwind palette onto the shared design system
+  (tokens + Button, StatusBadge, EmptyState). Removed Tailwind/PostCSS; EDR-specific
+  layout — the workspace panes, host list, the pstree-style process explorer and the
+  severity-accented detection cards — now lives in `src/index.css` with no hard-coded
+  colors. Second of the specialist inner-page migrations (roadmap priority 2).
+- Preserved containment and detection semantics exactly: host Isolate/Unisolate and
+  process Kill still require an audit reason and confirmation; the asynchronous
+  KillCommand result and warning surface as before; the pstree connectors, collapse,
+  flagged/critical highlighting and Korean asset labels are unchanged. The five
+  severity strings keep their labels; only colors move onto five distinguishable
+  tones (`severity.ts`). Transport (`api/client.ts`/`types.ts`) is untouched —
+  5s polling, WebSocket reconnect backoff and base-URL resolution behave as before.
+  The isolate-failure `window.alert` became an inline error line (no behavior loss).
+- Added the EDR console's first automated tests: `severity.test.ts` and
+  `dashboard.test.tsx` (host isolation, process kill and process-tree rendering),
+  run by the specialist-dashboards CI job via `npm run test --if-present`.
+
+Validation: **8 Vitest tests pass**, `tsc -b` + Vite build pass, no Tailwind
+references remain. No backend or transport contract changed.
+
+
 ## 2026-09-11 — SIEM specialist page adopts the command design system
 
 - Migrated the SIEM analyst workspace (App shell + Discover, Alerts, AttackCoverage,
