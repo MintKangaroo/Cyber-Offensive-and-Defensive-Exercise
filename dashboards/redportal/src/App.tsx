@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Button, EmptyState, StatusBadge } from "@cyber-range/command-system";
 import {
   getAttackSurface, getScoreboard, getState, login, sendTargetRequest,
   submitCapturedFlag, targetBaseUrl,
@@ -12,7 +13,6 @@ type PortalMode = "beginner" | "advanced";
 
 function storedMode(): PortalMode {
   // URL ?mode=advanced|beginner 가 있으면 그것을 우선 적용하고 저장한다(저장된 값 덮어씀).
-  // 링크 하나로 고급(워크벤치) 모드를 바로 열 수 있게 한다.
   try {
     const fromUrl = new URLSearchParams(window.location.search).get("mode");
     if (fromUrl === "advanced" || fromUrl === "beginner") {
@@ -22,7 +22,11 @@ function storedMode(): PortalMode {
   } catch {
     /* window/localStorage 미가용 시 무시 */
   }
-  return localStorage.getItem(MODE_KEY) === "advanced" ? "advanced" : "beginner";
+  try {
+    return localStorage.getItem(MODE_KEY) === "advanced" ? "advanced" : "beginner";
+  } catch {
+    return "beginner";
+  }
 }
 
 function storedSession(): Session | null {
@@ -44,7 +48,7 @@ export default function App() {
   const [error, setError] = useState("");
 
   const changeMode = useCallback((next: PortalMode) => {
-    localStorage.setItem(MODE_KEY, next);
+    try { localStorage.setItem(MODE_KEY, next); } catch { /* private mode */ }
     setMode(next);
   }, []);
 
@@ -79,50 +83,50 @@ export default function App() {
 
   if (!session) {
     return <LoginScreen onLogin={(next) => {
-      localStorage.setItem(SESSION_KEY, JSON.stringify(next));
+      try { localStorage.setItem(SESSION_KEY, JSON.stringify(next)); } catch { /* */ }
       setSession(next);
     }} />;
   }
 
   const ownScore = scoreboard.find((row) => row.team_id === session.team_id);
   return (
-    <div className="min-h-screen bg-[#08090d] text-[#f3e9eb]">
-      <header className="min-h-16 border-b border-[#382127] bg-[#0d090b]/95 px-4 py-3 flex flex-wrap items-center gap-3 sticky top-0 z-20">
-        <div className="min-w-0">
-          <div className="font-mono text-sm tracking-[0.22em] text-[#FB7185]">RED OPERATIONS</div>
-          <div className="text-[10px] uppercase tracking-[0.16em] text-[#9b737b] mt-1">live service intrusion · no challenge cards</div>
+    <div className="rp-shell">
+      <header className="rp-header">
+        <div style={{ minWidth: 0 }}>
+          <div className="rp-brand">RED OPERATIONS</div>
+          <div className="rp-brand-sub">live service intrusion · no challenge cards</div>
         </div>
-        <span className={`font-mono text-[10px] px-2 py-1 rounded border ${state?.status === "running" ? "text-[#34D399] border-[#34D399]/50" : "text-[#F5A623] border-[#F5A623]/50"}`}>
+        <StatusBadge tone={state?.status === "running" ? "healthy" : "warning"}>
           {state?.status?.toUpperCase() ?? "CONNECTING"}
-        </span>
-        <div className="flex-1" />
-        <div className="inline-flex rounded border border-[#382127] overflow-hidden font-mono text-[10px]" role="group" aria-label="Portal mode">
-          <button aria-pressed={mode === "beginner"} onClick={() => changeMode("beginner")}
-            className={`px-3 py-1 ${mode === "beginner" ? "bg-[#FB7185]/20 text-[#FB7185]" : "text-[#9b737b]"}`}>초보자 가이드</button>
-          <button aria-pressed={mode === "advanced"} onClick={() => changeMode("advanced")}
-            className={`px-3 py-1 border-l border-[#382127] ${mode === "advanced" ? "bg-[#FB7185]/20 text-[#FB7185]" : "text-[#9b737b]"}`}>고급(워크벤치)</button>
+        </StatusBadge>
+        <div className="rp-spacer" />
+        <div className="rp-mode-toggle" role="group" aria-label="Portal mode">
+          <button type="button" className="rp-mode-btn" aria-pressed={mode === "beginner"}
+            onClick={() => changeMode("beginner")}>초보자 가이드</button>
+          <button type="button" className="rp-mode-btn" aria-pressed={mode === "advanced"}
+            onClick={() => changeMode("advanced")}>고급(워크벤치)</button>
         </div>
-        <div className="font-mono text-[10px] text-[#9b737b]">{state?.name ?? session.match_id} · R{state?.round ?? "—"}</div>
-        <div className="font-mono text-xs text-[#FB7185]">ATK {ownScore?.attack ?? 0} · TOTAL {ownScore?.total ?? 0}</div>
-        <button className="border border-[#382127] rounded px-2 py-1 text-[10px] text-[#9b737b]" onClick={() => {
-          localStorage.removeItem(SESSION_KEY);
+        <div className="rp-meta">{state?.name ?? session.match_id} · R{state?.round ?? "—"}</div>
+        <div className="rp-score">ATK {ownScore?.attack ?? 0} · TOTAL {ownScore?.total ?? 0}</div>
+        <Button onClick={() => {
+          try { localStorage.removeItem(SESSION_KEY); } catch { /* */ }
           setSession(null);
-        }}>LOGOUT</button>
+        }}>LOGOUT</Button>
       </header>
 
-      {error && <div role="alert" className="px-4 py-2 bg-[#FB7185]/10 text-[#FB7185] font-mono text-xs">PUBLIC GAME PLANE DEGRADED · {error}</div>}
+      {error && <div role="alert" className="rp-error">PUBLIC GAME PLANE DEGRADED · {error}</div>}
 
-      <main className="grid grid-cols-1 xl:grid-cols-[310px_minmax(0,1fr)_350px] min-h-[calc(100vh-4rem)]">
+      <main className="rp-main">
         <TargetList targets={surface?.targets ?? []} selected={selected} onSelect={setSelected} />
         {mode === "beginner"
           ? <GuidedMode target={selected} session={session} onFlagAccepted={refresh} />
           : <RequestWorkbench target={selected} />}
-        <aside className="border-l border-[#2a1a1c] bg-[#0c090a] p-4 flex flex-col gap-4">
+        <aside className="rp-aside">
           {mode === "advanced" && <FlagSubmission session={session} onAccepted={refresh} />}
           <Scoreboard rows={scoreboard} ownTeamId={session.team_id} />
-          <section className="border border-[#2a1a1c] rounded-lg p-3 bg-[#120c0e]">
-            <div className="text-[10px] text-[#9b737b] tracking-widest uppercase">Rules of engagement</div>
-            <ul className="mt-2 pl-4 list-disc text-xs leading-6 text-[#bea7ac]">
+          <section className="rp-card">
+            <div className="rp-section-label">Rules of engagement</div>
+            <ul className="rp-rules">
               <li>화면에 표시된 상대 팀 게임 포트만 공격합니다.</li>
               <li>관리 포트, Docker API와 호스트 OS는 공격 범위가 아닙니다.</li>
               <li>서비스를 파괴하지 말고 취약점으로 라운드 플래그를 획득합니다.</li>
@@ -147,15 +151,25 @@ function LoginScreen({ onLogin }: { onLogin: (session: Session) => void }) {
     finally { setBusy(false); }
   }
   return (
-    <main className="min-h-screen bg-[#08090d] text-[#f3e9eb] grid place-items-center p-4">
-      <form onSubmit={submit} className="w-full max-w-md border border-[#4a252d] bg-[#100a0c] rounded-xl p-6 shadow-2xl">
-        <span className="font-mono text-[10px] tracking-[0.2em] text-[#FB7185]">LIVE FIRE · ATTACK PLANE</span>
-        <h1 className="text-2xl mt-2 mb-1">Red Operations Login</h1>
-        <p className="text-sm text-[#9b737b] mb-5">문제 목록이 아니라 실제 상대 서비스에 접속하는 공격 워크벤치입니다.</p>
-        <label className="grid gap-1 text-xs text-[#bea7ac] mb-3">Username<input aria-label="Username" value={username} onChange={(event) => setUsername(event.target.value)} className="bg-[#08090d] border border-[#4a252d] rounded px-3 py-2 text-[#f3e9eb]" /></label>
-        <label className="grid gap-1 text-xs text-[#bea7ac] mb-4">Password<input aria-label="Password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="bg-[#08090d] border border-[#4a252d] rounded px-3 py-2 text-[#f3e9eb]" /></label>
-        <button disabled={busy} className="w-full py-2 rounded border border-[#FB7185] bg-[#FB7185]/15 text-[#FB7185] font-mono text-xs tracking-wider">{busy ? "CONNECTING…" : "ENTER ATTACK PLANE"}</button>
-        {error && <p role="alert" className="text-xs text-[#FB7185] mt-3">{error}</p>}
+    <main className="rp-login">
+      <form onSubmit={submit} className="rp-login-card">
+        <span className="rp-eyebrow">LIVE FIRE · ATTACK PLANE</span>
+        <h1 style={{ fontSize: "1.5rem", margin: "8px 0 4px" }}>Red Operations Login</h1>
+        <p className="rp-muted" style={{ fontSize: 14, marginBottom: 20 }}>
+          문제 목록이 아니라 실제 상대 서비스에 접속하는 공격 워크벤치입니다.
+        </p>
+        <label className="rp-field">Username
+          <input className="rp-input" aria-label="Username" value={username}
+            onChange={(event) => setUsername(event.target.value)} />
+        </label>
+        <label className="rp-field">Password
+          <input className="rp-input" aria-label="Password" type="password" value={password}
+            onChange={(event) => setPassword(event.target.value)} />
+        </label>
+        <Button type="submit" tone="critical" disabled={busy} className="rp-block">
+          {busy ? "CONNECTING…" : "ENTER ATTACK PLANE"}
+        </Button>
+        {error && <p role="alert" className="rp-accent" style={{ fontSize: 12, marginTop: 12 }}>{error}</p>}
       </form>
     </main>
   );
@@ -166,21 +180,26 @@ function TargetList({ targets, selected, onSelect }: {
   onSelect: (target: AttackTarget) => void;
 }) {
   return (
-    <aside className="border-r border-[#2a1a1c] bg-[#0c090a] p-3">
-      <div className="px-2 py-2 mb-2"><span className="font-mono text-[10px] tracking-widest text-[#9b737b]">AUTHORIZED TARGETS</span><h2 className="text-lg mt-1">Opponent attack surface</h2></div>
-      <div className="grid gap-2">
-        {targets.map((target) => {
-          const active = selected?.team_id === target.team_id && selected.service_id === target.service_id;
-          return (
-            <button key={`${target.team_id}:${target.service_id}`} onClick={() => onSelect(target)} className={`text-left rounded-lg border p-3 ${active ? "border-[#FB7185] bg-[#FB7185]/10" : "border-[#2a1a1c] bg-[#120c0e] hover:border-[#6d3944]"}`}>
-              <div className="flex justify-between gap-2"><strong>{target.team}</strong><span className="font-mono text-[10px] text-[#FB7185]">:{target.public_port}</span></div>
-              <div className="text-xs text-[#9b737b] mt-1">{target.service}</div>
-              <div className="font-mono text-[10px] text-[#6f555a] mt-2 truncate">{targetBaseUrl(target)}</div>
-            </button>
-          );
-        })}
-        {targets.length === 0 && <div className="text-xs text-[#9b737b] p-3">공개 공격 표면을 기다리는 중입니다.</div>}
+    <aside className="rp-targets rp-col">
+      <div style={{ padding: "8px 8px 12px" }}>
+        <span className="rp-section-label">AUTHORIZED TARGETS</span>
+        <h2 style={{ fontSize: "1.1rem", margin: "4px 0 0" }}>Opponent attack surface</h2>
       </div>
+      {targets.map((target) => {
+        const active = selected?.team_id === target.team_id && selected.service_id === target.service_id;
+        return (
+          <button key={`${target.team_id}:${target.service_id}`} type="button" className="rp-target"
+            aria-pressed={active} onClick={() => onSelect(target)}>
+            <div className="rp-target-head"><strong>{target.team}</strong>
+              <span className="rp-target-port">:{target.public_port}</span></div>
+            <div className="rp-muted" style={{ fontSize: 12, marginTop: 4 }}>{target.service}</div>
+            <div className="rp-target-url">{targetBaseUrl(target)}</div>
+          </button>
+        );
+      })}
+      {targets.length === 0 && (
+        <EmptyState title="공격 표면 대기 중" detail="공개 공격 표면을 기다리는 중입니다." />
+      )}
     </aside>
   );
 }
@@ -206,7 +225,7 @@ function RequestWorkbench({ target }: { target: AttackTarget | null }) {
     ["ENUMERATE", "GET", "/api/notes/1", ""],
   ], [target?.service_slug]);
 
-  if (!target) return <section className="p-6 text-[#9b737b]">상대 서비스 인스턴스를 선택하세요.</section>;
+  if (!target) return <section className="rp-stack rp-col">상대 서비스 인스턴스를 선택하세요.</section>;
   async function execute(event: FormEvent) {
     event.preventDefault(); if (!target) return;
     setBusy(true); setError(""); setResult(null);
@@ -215,41 +234,67 @@ function RequestWorkbench({ target }: { target: AttackTarget | null }) {
     finally { setBusy(false); }
   }
   return (
-    <section className="p-4 md:p-6 min-w-0">
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
-        <div><span className="font-mono text-[10px] tracking-widest text-[#FB7185]">SELECTED LIVE TARGET</span><h1 className="text-2xl mt-1">{target.team} · {target.service}</h1><code className="text-xs text-[#9b737b]">{targetBaseUrl(target)}</code></div>
-        <a href={`${targetBaseUrl(target)}/docs`} target="_blank" rel="noreferrer" className="px-3 py-2 border border-[#FB7185]/50 rounded text-xs text-[#FB7185]">OPEN API SURFACE ↗</a>
+    <section className="rp-work rp-col">
+      <div className="rp-work-head">
+        <div>
+          <span className="rp-eyebrow">SELECTED LIVE TARGET</span>
+          <h1 style={{ fontSize: "1.5rem", margin: "4px 0" }}>{target.team} · {target.service}</h1>
+          <code className="rp-subtle" style={{ fontSize: 12 }}>{targetBaseUrl(target)}</code>
+        </div>
+        <a href={`${targetBaseUrl(target)}/docs`} target="_blank" rel="noreferrer"
+          className="rp-dataset" style={{ padding: "8px 12px", border: "1px solid color-mix(in srgb, var(--cr-red) 50%, transparent)", borderRadius: "var(--cr-radius-sm)", color: "var(--cr-red)", textDecoration: "none", fontSize: 12 }}>
+          OPEN API SURFACE ↗
+        </a>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+      <div className="rp-recipes">
         {recipes.map(([label, recipeMethod, recipePath, recipeBody]) => (
-          <button key={label} onClick={() => { setMethod(recipeMethod); setPath(recipePath); setBody(recipeBody); setResult(null); }} className="text-left border border-[#2a1a1c] bg-[#120c0e] rounded p-3 hover:border-[#FB7185]/60">
-            <span className="font-mono text-[9px] text-[#FB7185]">{label}</span><strong className="block text-xs mt-1">{recipeMethod} {recipePath}</strong>
+          <button key={label} type="button" className="rp-recipe"
+            onClick={() => { setMethod(recipeMethod); setPath(recipePath); setBody(recipeBody); setResult(null); }}>
+            <span className="rp-recipe-label">{label}</span>
+            <strong>{recipeMethod} {recipePath}</strong>
           </button>
         ))}
       </div>
 
-      <form onSubmit={execute} className="border border-[#382127] rounded-lg bg-[#100b0d] overflow-hidden">
-        <div className="grid grid-cols-[110px_minmax(0,1fr)] border-b border-[#382127]">
-          <select aria-label="HTTP method" value={method} onChange={(event) => setMethod(event.target.value)} className="bg-[#180e11] px-3 py-3 border-r border-[#382127] text-[#FB7185] font-mono text-xs"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option></select>
-          <input aria-label="Request path" value={path} onChange={(event) => setPath(event.target.value)} className="bg-[#090709] px-3 py-3 font-mono text-xs text-[#f3e9eb]" />
+      <form onSubmit={execute} className="rp-request">
+        <div className="rp-request-line">
+          <select className="rp-select" aria-label="HTTP method" value={method}
+            onChange={(event) => setMethod(event.target.value)}>
+            <option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option>
+          </select>
+          <input className="rp-input" aria-label="Request path" value={path}
+            onChange={(event) => setPath(event.target.value)} />
         </div>
-        <div className="grid md:grid-cols-2">
-          <label className="grid gap-1 p-3 text-[10px] text-[#9b737b] border-b md:border-b-0 md:border-r border-[#382127]">BEARER TOKEN<input aria-label="Target bearer token" value={bearer} onChange={(event) => setBearer(event.target.value)} placeholder="login 응답의 access_token" className="bg-[#090709] border border-[#382127] rounded px-2 py-2 font-mono text-xs text-[#f3e9eb]" /></label>
-          <label className="grid gap-1 p-3 text-[10px] text-[#9b737b]">JSON BODY<textarea aria-label="JSON request body" value={body} onChange={(event) => setBody(event.target.value)} rows={4} className="bg-[#090709] border border-[#382127] rounded px-2 py-2 font-mono text-xs text-[#f3e9eb] resize-y" /></label>
+        <div className="rp-request-grid">
+          <label>BEARER TOKEN
+            <input className="rp-input" aria-label="Target bearer token" value={bearer}
+              onChange={(event) => setBearer(event.target.value)} placeholder="login 응답의 access_token" />
+          </label>
+          <label>JSON BODY
+            <textarea className="rp-textarea" aria-label="JSON request body" value={body}
+              onChange={(event) => setBody(event.target.value)} rows={4} />
+          </label>
         </div>
-        <button disabled={busy} className="w-full border-t border-[#FB7185]/40 bg-[#FB7185]/15 py-3 text-[#FB7185] font-mono text-xs tracking-wider">{busy ? "REQUEST IN FLIGHT…" : "SEND TO LIVE SERVICE"}</button>
+        <button type="submit" className="rp-send" disabled={busy}>
+          {busy ? "REQUEST IN FLIGHT…" : "SEND TO LIVE SERVICE"}
+        </button>
       </form>
 
-      <section className="mt-4 border border-[#2a1a1c] rounded-lg bg-[#070608] min-h-64 overflow-hidden">
-        <div className="flex justify-between px-3 py-2 border-b border-[#2a1a1c] font-mono text-[10px] text-[#9b737b]"><span>RAW RESPONSE</span>{result && <span className={result.status < 400 ? "text-[#34D399]" : "text-[#FB7185]"}>HTTP {result.status} · {result.elapsed_ms}ms</span>}</div>
-        {error ? <pre className="p-3 text-xs text-[#FB7185] whitespace-pre-wrap">{error}</pre> : result ? <pre className="p-3 text-xs text-[#cdbcc0] whitespace-pre-wrap break-all">{result.headers}{"\n\n"}{prettyBody(result.body)}</pre> : <div className="p-5 text-xs text-[#6f555a]">실제 대상에 요청을 보내면 서버 응답이 여기에 표시됩니다. 로그인 응답 토큰은 위 Bearer Token 필드에 복사하세요.</div>}
+      <section className="rp-response">
+        <div className="rp-response-head">
+          <span>RAW RESPONSE</span>
+          {result && <span className={result.status < 400 ? "rp-log-label rp-ok" : "rp-log-label rp-bad"}>HTTP {result.status} · {result.elapsed_ms}ms</span>}
+        </div>
+        {error ? <pre className="rp-accent">{error}</pre>
+          : result ? <pre>{result.headers}{"\n\n"}{prettyBody(result.body)}</pre>
+          : <div className="rp-placeholder">실제 대상에 요청을 보내면 서버 응답이 여기에 표시됩니다. 로그인 응답 토큰은 위 Bearer Token 필드에 복사하세요.</div>}
       </section>
     </section>
   );
 }
 
-function FlagSubmission({ session, onAccepted }: { session: Session; onAccepted: () => Promise<void> }) {
+function FlagSubmission({ session, onAccepted }: { session: Session; onAccepted: () => void }) {
   const [flag, setFlag] = useState("");
   const [message, setMessage] = useState("");
   async function submit(event: FormEvent) {
@@ -261,17 +306,34 @@ function FlagSubmission({ session, onAccepted }: { session: Session; onAccepted:
     } catch (reason) { setMessage(String(reason)); }
   }
   return (
-    <section className="border border-[#5a2933] rounded-lg bg-[#140c0f] p-3">
-      <span className="font-mono text-[10px] tracking-widest text-[#FB7185]">EXFILTRATED FLAG</span>
-      <h2 className="text-lg mt-1">Submit captured token</h2>
-      <form onSubmit={submit} className="grid gap-2 mt-3"><textarea aria-label="Captured flag" value={flag} onChange={(event) => setFlag(event.target.value.trim())} placeholder="FLAG{...}" rows={3} className="bg-[#080608] border border-[#5a2933] rounded p-2 font-mono text-xs resize-none" /><button disabled={!flag} className="border border-[#FB7185] bg-[#FB7185]/15 rounded py-2 text-[#FB7185] font-mono text-xs">SUBMIT TO GAME ENGINE</button></form>
-      {message && <p role="status" className="text-[10px] text-[#bea7ac] mt-2">{message}</p>}
+    <section className="rp-card rp-danger">
+      <span className="rp-eyebrow">EXFILTRATED FLAG</span>
+      <h2 style={{ fontSize: "1.1rem", margin: "4px 0 0" }}>Submit captured token</h2>
+      <form onSubmit={submit} style={{ display: "grid", gap: 8, marginTop: 12 }}>
+        <textarea className="rp-textarea" aria-label="Captured flag" value={flag}
+          onChange={(event) => setFlag(event.target.value.trim())} placeholder="FLAG{...}" rows={3} />
+        <Button type="submit" tone="critical" disabled={!flag} className="rp-block">SUBMIT TO GAME ENGINE</Button>
+      </form>
+      {message && <p role="status" className="rp-muted" style={{ fontSize: 11, marginTop: 8 }}>{message}</p>}
     </section>
   );
 }
 
 function Scoreboard({ rows, ownTeamId }: { rows: ScoreRow[]; ownTeamId: string }) {
-  return <section className="border border-[#2a1a1c] rounded-lg bg-[#120c0e] overflow-hidden"><div className="px-3 py-2 border-b border-[#2a1a1c] text-[10px] text-[#9b737b] tracking-widest">LIVE SCOREBOARD</div><ol className="m-0 p-0 list-none">{rows.map((row) => <li key={row.team_id} className={`grid grid-cols-[28px_1fr_auto] gap-2 px-3 py-2 border-b border-[#21171a] text-xs ${row.team_id === ownTeamId ? "bg-[#FB7185]/10" : ""}`}><span className="font-mono text-[#9b737b]">{row.rank}</span><strong>{row.team}</strong><span className="font-mono text-[#FB7185]">{row.total}</span></li>)}</ol></section>;
+  return (
+    <section className="rp-card rp-scoreboard">
+      <div className="rp-section-label" style={{ marginBottom: 8 }}>LIVE SCOREBOARD</div>
+      <ol>
+        {rows.map((row) => (
+          <li key={row.team_id} className={`rp-score-row${row.team_id === ownTeamId ? " rp-me" : ""}`}>
+            <span className="rp-subtle">{row.rank}</span>
+            <strong>{row.team}</strong>
+            <span className="rp-score-total">{row.total}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
 }
 
 function prettyBody(body: string): string {
