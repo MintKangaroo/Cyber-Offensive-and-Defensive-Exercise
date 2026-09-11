@@ -61,8 +61,12 @@ export function mergeEvents(
 export function assetStates(
   events: RangeEvent[],
   at = Infinity,
+  seed: Record<string, AssetState> = {},
 ): Record<string, AssetState> {
-  const states: Record<string, AssetState> = {};
+  // `seed` is an authoritative asset checkpoint; events fold forward from it so a
+  // bounded replay window keeps correct state for assets whose earlier events were
+  // evicted. Mirrors the Python fold in shared/asset_state.py.
+  const states: Record<string, AssetState> = { ...seed };
   for (const e of [...events]
     .filter((e) => e.timestamp <= at)
     .sort(

@@ -26,6 +26,10 @@ import {
   type ReplayInput,
 } from "../replayModel";
 import { AttackPath, stateLabel, stateTone } from "./Operations";
+// Bounded-memory replay: very large archives are windowed to the most recent slice.
+// Asset state before the window is anchored by an authoritative checkpoint (part A),
+// so evicting the oldest events never turns an asset back into "unknown".
+const MAX_REPLAY_EVENTS = 20000;
 export default function Replay({ mode }: { mode: string }) {
   const { scenarioId, entity, data, notify, session } = useCommand();
   const [input, setInput] = useState<ReplayInput | null>(null);
@@ -56,11 +60,21 @@ export default function Replay({ mode }: { mode: string }) {
         const retained = objects(object(eventsSource.data).events);
         let cursor = str(object(eventsSource.data).next_cursor);
         const cursors = new Set<string>();
+        let bounded = false;
+        let loaded = retained.length;
+        // Keep only the most recent MAX_REPLAY_EVENTS in memory (sliding window).
+        const cap = () => {
+          if (retained.length > MAX_REPLAY_EVENTS) {
+            retained.splice(0, retained.length - MAX_REPLAY_EVENTS);
+            bounded = true;
+          }
+        };
+        cap();
         while (cursor && !cancelled) {
           if (cursors.has(cursor))
             throw new Error("Replay cursor did not advance");
           cursors.add(cursor);
-          setLoadedCount(retained.length);
+          setLoadedCount(loaded);
           const page = await api(
             `/replay/page?scenario_id=${encodeURIComponent(scenarioId)}&cursor=${encodeURIComponent(cursor)}`,
           );
@@ -74,6 +88,8 @@ export default function Replay({ mode }: { mode: string }) {
               "Replay page contract is invalid; history is incomplete",
             );
           retained.push(...objects(page.events));
+          loaded += objects(page.events).length;
+          cap();
           cursor = page.next_cursor;
         }
         if (cancelled) return;
@@ -87,6 +103,21 @@ export default function Replay({ mode }: { mode: string }) {
         const incidents = objects(
           object(object(sources.incidents).data).incidents,
         ).map(incidentFrom);
+        // When the window is bounded, anchor asset state on the authoritative
+        // checkpoint at or before the earliest retained event.
+        let assetSeed: Record<string, string> | undefined;
+        if (bounded && e.length) {
+          try {
+            const cp = await api(
+              `/replay/checkpoint?scenario_id=${encodeURIComponent(scenarioId)}&at=${e[0].timestamp}`,
+            );
+            const states = object(object(cp).checkpoint).states;
+            if (states && Object.keys(states).length)
+              assetSeed = states as Record<string, string>;
+          } catch {
+            /* the checkpoint is an optional anchor; bounded replay still works */
+          }
+        }
         setInput({
           events: e,
           scores,
@@ -95,6 +126,7 @@ export default function Replay({ mode }: { mode: string }) {
           configuration: objects(
             object(object(sources.configuration).data).changes,
           ),
+          assetSeed: assetSeed as ReplayInput["assetSeed"],
         });
         setAt(
           e.find((ev) => ev.event_id === entity)?.timestamp ??
@@ -107,6 +139,10 @@ export default function Replay({ mode }: { mode: string }) {
         if (object(eventsSource.data).truncated)
           limits.push(
             "History exceeds the 50,000-event retained window. This replay is partial.",
+          );
+        if (bounded)
+          limits.push(
+            `Replay is windowed to the most recent ${MAX_REPLAY_EVENTS.toLocaleString()} events. Asset state before the window is anchored by the authoritative checkpoint; earlier incident, score and configuration detail is not reconstructed.`,
           );
         if (object(sources.scores).status !== "ready")
           limits.push("Historical score ledger is unavailable for this view.");

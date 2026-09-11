@@ -1,6 +1,30 @@
 # Next-generation changelog
 
 
+## 2026-09-11 — Bounded-memory replay (priority 4, part B) — priority 4 complete
+
+- The Control Tower replay previously accumulated every page of a very large archive
+  into one unbounded array. It now keeps a bounded sliding window of the most recent
+  `MAX_REPLAY_EVENTS` (20,000) events, dropping the oldest as pages stream in, so a
+  50k+ archive no longer grows browser memory without limit. The load progress counter
+  still reports the true cumulative total.
+- When the window is bounded, asset state is anchored on the authoritative checkpoint
+  from part A: the client fetches `GET /command/replay/checkpoint?at=<earliest retained
+  timestamp>` and seeds `assetStates`, so evicting the oldest events never turns an
+  asset back into "unknown". `assetStates` (shared `events.ts`) gained an optional
+  `seed` argument mirroring the Python `fold_asset_states`, threaded through
+  `reconstructReplay` via a new `ReplayInput.assetSeed`.
+- The bound is surfaced honestly: a limitation states the replay is windowed to the
+  most recent 20,000 events, asset state before the window is anchored by the
+  checkpoint, and earlier incident/score/configuration detail is not reconstructed
+  (a distributed cross-service snapshot remains out of scope). The checkpoint fetch is
+  optional — if none exists, bounded replay still works, just without the anchor.
+
+Validation: **58 Command Vitest tests pass** (new checkpoint-seed/`reconstructReplay`
+case), TypeScript build, ESLint and the existing replay Playwright flows pass. This
+completes roadmap priority 4 (authoritative asset checkpoints + bounded-memory replay).
+
+
 ## 2026-09-11 — Authoritative asset checkpoints (priority 4, part A)
 
 - Added an authoritative asset-state checkpoint so replay can anchor pre-window state
