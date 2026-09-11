@@ -91,6 +91,24 @@ describe("stream transport", () => {
         .power_plant,
     ).toBe("recovered");
   });
+  it("anchors bounded-window state on an authoritative checkpoint seed", () => {
+    // No in-window events for power_plant → it keeps the checkpoint state, not "unknown".
+    expect(assetStates([], Infinity, { power_plant: "compromised" })).toEqual({
+      power_plant: "compromised",
+    });
+    // In-window events fold forward from the seed.
+    expect(
+      assetStates([event("asset_recovered", 20, "e1")], Infinity, {
+        power_plant: "compromised",
+      }).power_plant,
+    ).toBe("recovered");
+    // reconstructReplay threads the seed through as the asset baseline.
+    const result = reconstructReplay(
+      { events: [], scores: [], incidents: [], assetSeed: { ground_station: "contained" } },
+      50,
+    );
+    expect(result.assets.ground_station).toBe("contained");
+  });
   it("extracts only explicitly provided ATT&CK mappings", () => {
     expect(techniques(event())).toEqual([]);
     expect(

@@ -4,6 +4,7 @@ import {
   objects,
   str,
   num,
+  type AssetState,
   type RangeEvent,
   type JsonObject,
 } from "@cyber-range/command-system";
@@ -13,6 +14,8 @@ export interface ReplayInput {
   incidents: JsonObject[];
   scenarioId?: string;
   configuration?: JsonObject[];
+  /** Authoritative asset checkpoint anchoring state before a bounded window. */
+  assetSeed?: Record<string, AssetState>;
 }
 /** One clock and one deterministic projection for every replay pane. */
 export function reconstructReplay(input: ReplayInput, at: number) {
@@ -100,7 +103,7 @@ export function reconstructReplay(input: ReplayInput, at: number) {
   return {
     at,
     events,
-    assets: assetStates(events, at),
+    assets: assetStates(events, at, input.assetSeed),
     scores,
     incidents,
     patches,
