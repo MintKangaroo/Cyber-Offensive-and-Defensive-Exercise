@@ -104,6 +104,28 @@ def get_db():
 _write_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="evt-writer")
 _writer_conn: Optional[sqlite3.Connection] = None
 _INGEST_BATCH_MAX = int(os.environ.get("INGEST_BATCH_MAX_SIZE", "256"))
+# 자동 자산 체크포인트: 시나리오별 신규 이벤트가 이 임계에 도달하면 체크포인트를 재료화한다
+# (증분 fold 라 저렴). 0 이면 비활성(수동/오케스트레이션 전용). replay 앵커 신선도 유지용.
+_ASSET_CHECKPOINT_EVERY = int(os.environ.get("ASSET_CHECKPOINT_EVERY", "1000"))
+_events_since_checkpoint: dict[str, int] = {}
+
+
+def checkpoints_due(scenario_ids: "list[str | None]", every: int, counters: dict) -> set:
+    """임계 로직(순수·테스트 용이). 시나리오별 신규 이벤트 카운터를 갱신하고, 임계 도달
+    시나리오 집합을 반환하며 해당 카운터를 리셋한다. every<=0 이면 항상 빈 집합."""
+    due: set = set()
+    if every <= 0:
+        return due
+    for sid in scenario_ids:
+        if not sid:
+            continue
+        nxt = counters.get(sid, 0) + 1
+        if nxt >= every:
+            due.add(sid)
+            counters[sid] = 0
+        else:
+            counters[sid] = nxt
+    return due
 # (event, Future[bool]) 큐 — 배치 라이터 루프가 소비. startup 에서 러닝 루프에 바인딩되게
 # 생성한다(모듈 로드 시점에 만들면 uvicorn 이 만드는 실제 서빙 루프와 다른 루프에 묶일 수
 # 있어 put/get 이 어긋난다).
@@ -203,6 +225,21 @@ async def _batch_writer_loop():
         for (_, fut), is_new in zip(batch, results):
             if not fut.done():
                 fut.set_result(is_new)
+        # 자동 체크포인트: 시나리오별 신규 이벤트 누적이 임계에 닿으면 재료화(증분·best-effort).
+        if _ASSET_CHECKPOINT_EVERY > 0:
+            new_scenarios = [
+                ev.scenario_id for ev, is_new in zip(events, results) if is_new
+            ]
+            due = checkpoints_due(new_scenarios, _ASSET_CHECKPOINT_EVERY, _events_since_checkpoint)
+            for sid in due:
+                try:
+                    # writer executor(단일 스레드)에서 writer 연결로 직렬 실행 — 락 경합 없음.
+                    await loop.run_in_executor(
+                        _write_executor,
+                        lambda s=sid: _materialize_checkpoint(_writer_connection(), s),
+                    )
+                except Exception:
+                    pass  # 자동 체크포인트는 best-effort — ingest 를 절대 방해하지 않는다.
 
 
 def init_db():
@@ -630,14 +667,39 @@ def replay_page(scenario_id:str='default',team_id:Optional[str]=None,cursor:str=
     finally:conn.close()
 
 
-@app.post('/replay/checkpoint')
-def create_checkpoint(scenario_id: str = 'default', authorization: str = Header(default='')):
-    """저널을 현재 상한까지 fold 해 권위 자산 상태 체크포인트를 영속화한다(서비스 전용).
+def _materialize_checkpoint(conn, scenario_id: str) -> dict:
+    """저널을 현재 상한까지 fold 해 자산 상태 체크포인트를 영속화(연결 주입).
 
     체크포인트는 저널 seq/revision 에 고정된다. 자산 상태 fold 만 재료화하며 점수·설정 등
-    다른 권위 상태는 건드리지 않는다. 직전 체크포인트가 있으면 그 상태를 seed 로 삼아 증분 fold.
-    """
-    # 서비스 토큰(내부 오케스트레이션) 또는 instructor(수동 핀) 둘 다 허용.
+    다른 권위 상태는 건드리지 않는다. 직전 체크포인트가 있으면 그 상태를 seed 로 증분 fold."""
+    upper = journal.bounds(conn)[1]
+    revision = journal.revision(conn)
+    prior = conn.execute(
+        'SELECT seq, at_ts, states FROM asset_checkpoints WHERE scenario_id=? AND revision=? AND seq<=? '
+        'ORDER BY seq DESC LIMIT 1',
+        (scenario_id, revision, upper),
+    ).fetchone()
+    seed = json.loads(prior['states']) if prior else {}
+    lower_seq = prior['seq'] if prior else 0
+    rows = conn.execute(
+        'SELECT event_type,target_asset,timestamp,event_id FROM events '
+        'WHERE scenario_id=? AND event_id IN (SELECT event_id FROM stream_journal WHERE seq>? AND seq<=?)',
+        (scenario_id, lower_seq, upper),
+    ).fetchall()
+    states = fold_asset_states([dict(r) for r in rows], seed=seed)
+    at_ts = max([r['timestamp'] for r in rows], default=(prior['at_ts'] if prior else 0.0))
+    with conn:
+        conn.execute(
+            'INSERT INTO asset_checkpoints(scenario_id,seq,revision,at_ts,states) VALUES(?,?,?,?,?) '
+            'ON CONFLICT(scenario_id,seq) DO UPDATE SET revision=excluded.revision, at_ts=excluded.at_ts, states=excluded.states',
+            (scenario_id, upper, revision, at_ts, json.dumps(states)),
+        )
+    return {'scenario_id': scenario_id, 'seq': upper, 'revision': revision, 'at_ts': at_ts, 'states': states}
+
+
+@app.post('/replay/checkpoint')
+def create_checkpoint(scenario_id: str = 'default', authorization: str = Header(default='')):
+    """수동/오케스트레이션 체크포인트 생성(서비스 토큰 또는 instructor)."""
     try:
         require_service_token(authorization)
     except HTTPException:
@@ -646,29 +708,7 @@ def create_checkpoint(scenario_id: str = 'default', authorization: str = Header(
         raise HTTPException(400, 'scenario_id is required')
     conn = get_db()
     try:
-        upper = journal.bounds(conn)[1]
-        revision = journal.revision(conn)
-        prior = conn.execute(
-            'SELECT seq, at_ts, states FROM asset_checkpoints WHERE scenario_id=? AND revision=? AND seq<=? '
-            'ORDER BY seq DESC LIMIT 1',
-            (scenario_id, revision, upper),
-        ).fetchone()
-        seed = json.loads(prior['states']) if prior else {}
-        lower_seq = prior['seq'] if prior else 0
-        rows = conn.execute(
-            'SELECT event_type,target_asset,timestamp,event_id FROM events '
-            'WHERE scenario_id=? AND event_id IN (SELECT event_id FROM stream_journal WHERE seq>? AND seq<=?)',
-            (scenario_id, lower_seq, upper),
-        ).fetchall()
-        states = fold_asset_states([dict(r) for r in rows], seed=seed)
-        at_ts = max([r['timestamp'] for r in rows], default=(prior['at_ts'] if prior else 0.0))
-        with conn:
-            conn.execute(
-                'INSERT INTO asset_checkpoints(scenario_id,seq,revision,at_ts,states) VALUES(?,?,?,?,?) '
-                'ON CONFLICT(scenario_id,seq) DO UPDATE SET revision=excluded.revision, at_ts=excluded.at_ts, states=excluded.states',
-                (scenario_id, upper, revision, at_ts, json.dumps(states)),
-            )
-        return {'scenario_id': scenario_id, 'seq': upper, 'revision': revision, 'at_ts': at_ts, 'states': states}
+        return _materialize_checkpoint(conn, scenario_id)
     finally:
         conn.close()
 

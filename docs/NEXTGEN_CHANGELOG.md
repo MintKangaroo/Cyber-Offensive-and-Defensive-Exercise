@@ -1,6 +1,24 @@
 # Next-generation changelog
 
 
+## 2026-09-11 — Automatic asset-checkpoint materialization (priority 4 follow-up)
+
+- Asset checkpoints (from priority 4) were on-demand only, so replay had no anchor
+  until an instructor or orchestrator pinned one. The collector now materializes a
+  checkpoint automatically once a scenario accumulates `ASSET_CHECKPOINT_EVERY` (default
+  1000) newly stored events. The fold is incremental (seeded from the prior checkpoint),
+  runs on the single-writer executor so it never contends with ingest, and is
+  best-effort (a checkpoint failure never disrupts event ingestion). Set the env to 0
+  to disable and keep manual/orchestrated checkpoints only.
+- The threshold decision is a pure, unit-tested helper (`checkpoints_due`) and the
+  fold body was extracted into `_materialize_checkpoint(conn, scenario_id)` shared by
+  the manual `POST /replay/checkpoint` endpoint and the automatic path.
+
+Validation: 640 Python unit tests pass, including the new threshold-logic test and the
+unchanged 50,003-event pagination/cursor tests (the writer-loop change does not alter
+ingest results).
+
+
 ## 2026-09-11 — Automated accessibility checks for specialist dashboards (priority 6, code side)
 
 - Added `axe-core` structural accessibility regression tests to the four migrated
