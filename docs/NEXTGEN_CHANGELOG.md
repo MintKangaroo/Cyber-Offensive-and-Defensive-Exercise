@@ -1,6 +1,32 @@
 # Next-generation changelog
 
 
+## 2026-09-11 — SIEM specialist page adopts the command design system
+
+- Migrated the SIEM analyst workspace (App shell + Discover, Alerts, AttackCoverage,
+  SourceHealth) off its standalone Tailwind palette onto the shared CYBER RANGE
+  COMMAND SYSTEM tokens and primitives (Panel, StatusBadge, Button, EmptyState,
+  ErrorState). Removed Tailwind/PostCSS; SIEM-specific layout now lives in
+  `src/index.css` with zero hard-coded colors. This is the first of the specialist
+  inner-page migrations (roadmap priority 2), one dashboard per change.
+- Preserved detection semantics exactly: numeric severity 0–4 keeps its
+  INFO/LOW/MEDIUM/HIGH/CRITICAL labels and the 2/3/4 filter thresholds; only colors
+  move onto five distinguishable design-system tones (`severity.ts`). The transport
+  layer (`api/client.ts`/`types.ts`) is unchanged — polling cadences (alerts/source
+  5s, coverage 15s), WebSocket reconnect backoff, base-URL resolution and the
+  open→ack→closed alert lifecycle all behave as before.
+- Added the SIEM dashboard's first automated tests: `severity.test.ts` (pure mapping)
+  and `dashboard.test.tsx` (view integration with the real polling hook and a mocked
+  network layer), run by the existing specialist-dashboards CI job via
+  `npm run test --if-present`. Instructor-only fields (`vuln_id`/`trace_id`/`team_id`)
+  remain unexposed; the workspace still shows only detections, coverage and rule ids.
+
+Validation: **13 Vitest tests pass** (6 severity, 7 view), `tsc -b` + Vite production
+build pass, no Tailwind references remain. Error and loading states, previously
+silent, now use the shared ErrorState/EmptyState. No backend or transport contract
+changed. The user-owned Compose override was untouched.
+
+
 ## 2026-09-11 — Injects campaigns become first-class scenario authoring
 
 - Gave the injects subsystem the publication contract it lacked: a campaign is now

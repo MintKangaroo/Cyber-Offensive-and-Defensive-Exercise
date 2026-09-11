@@ -1,35 +1,26 @@
 import { useState, useCallback } from "react";
+import { Button, EmptyState, ErrorState, Panel } from "@cyber-range/command-system";
 import { search } from "../../api/client";
 import type { NormalizedEvent } from "../../api/types";
-import { SEVERITY_LABEL } from "../../api/types";
+import { SeverityChip } from "../SeverityChip";
 
-const SEVERITY_COLOR: Record<number, string> = {
-  0: "#7A8699", 1: "#5FA8D3", 2: "#D9A441", 3: "#E0703A", 4: "#D64545",
-};
+const COLUMNS = ["시각", "심각도", "소스", "자산", "메시지", "ATT&CK"];
 
-function SeverityBadge({ severity }: { severity: number }) {
-  const color = SEVERITY_COLOR[severity] ?? "#7A8699";
+function EventRow({ event }: { event: NormalizedEvent }) {
   return (
-    <span
-      className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded"
-      style={{ color, backgroundColor: `${color}1A`, border: `1px solid ${color}55` }}
-    >
-      {SEVERITY_LABEL[severity] ?? severity}
-    </span>
-  );
-}
-
-function EventDetailRow({ event }: { event: NormalizedEvent }) {
-  return (
-    <tr className="border-b border-[#22303F] hover:bg-[#0E1620]">
-      <td className="px-2 py-1.5 font-mono text-[11px] text-[#8A99AB] whitespace-nowrap">
+    <tr>
+      <td className="siem-cell-mono">
         {new Date(event.timestamp).toLocaleTimeString("ko-KR")}
       </td>
-      <td className="px-2 py-1.5"><SeverityBadge severity={event.severity} /></td>
-      <td className="px-2 py-1.5 font-mono text-[11px] text-[#5FA8D3]">{event.source_type}</td>
-      <td className="px-2 py-1.5 font-mono text-[11px] text-[#C7D0DA]">{event.asset ?? "-"}</td>
-      <td className="px-2 py-1.5 font-mono text-[11px] text-[#C7D0DA] max-w-md truncate">{event.message}</td>
-      <td className="px-2 py-1.5 font-mono text-[10px] text-[#5C6B7A]">
+      <td>
+        <SeverityChip severity={event.severity} />
+      </td>
+      <td className="siem-cell-mono">{event.source_type}</td>
+      <td>{event.asset ?? "-"}</td>
+      <td className="siem-cell-msg" title={event.message}>
+        {event.message}
+      </td>
+      <td className="siem-cell-mono">
         {event.mitre.length > 0 ? event.mitre.join(", ") : "-"}
       </td>
     </tr>
@@ -43,32 +34,46 @@ export function Discover() {
   const [events, setEvents] = useState<NormalizedEvent[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const runSearch = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const res = await search({ text: text || undefined, source_type: sourceType || undefined, severity_min: severityMin, limit: 200 });
+      const res = await search({
+        text: text || undefined,
+        source_type: sourceType || undefined,
+        severity_min: severityMin,
+        limit: 200,
+      });
       setEvents(res.events);
       setTotal(res.total);
+    } catch (e) {
+      setError(String(e));
     } finally {
       setLoading(false);
     }
   }, [text, sourceType, severityMin]);
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-[#22303F] shrink-0">
+    <Panel
+      title="Log discovery"
+      actions={<span className="siem-total">total: {total}</span>}
+    >
+      <div className="siem-toolbar">
         <input
+          className="siem-input"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && runSearch()}
           placeholder="전문검색어 (예: SQLi, UNION)"
-          className="flex-1 bg-[#0E1620] border border-[#22303F] rounded px-2 py-1 text-xs font-mono text-[#C7D0DA] focus:outline-none focus:border-[#5FA8D3]"
+          aria-label="전문 검색어"
         />
         <select
+          className="siem-select"
           value={sourceType}
           onChange={(e) => setSourceType(e.target.value)}
-          className="bg-[#0E1620] border border-[#22303F] rounded text-[11px] font-mono text-[#C7D0DA] px-1.5 py-1"
+          aria-label="소스 필터"
         >
           <option value="">전체 소스</option>
           <option value="twin">twin</option>
@@ -77,50 +82,50 @@ export function Discover() {
           <option value="pfsense">pfsense</option>
         </select>
         <select
+          className="siem-select"
           value={severityMin ?? ""}
-          onChange={(e) => setSeverityMin(e.target.value ? Number(e.target.value) : undefined)}
-          className="bg-[#0E1620] border border-[#22303F] rounded text-[11px] font-mono text-[#C7D0DA] px-1.5 py-1"
+          onChange={(e) =>
+            setSeverityMin(e.target.value ? Number(e.target.value) : undefined)
+          }
+          aria-label="심각도 필터"
         >
           <option value="">전체 심각도</option>
           <option value="2">MEDIUM 이상</option>
           <option value="3">HIGH 이상</option>
           <option value="4">CRITICAL만</option>
         </select>
-        <button
-          onClick={runSearch}
-          disabled={loading}
-          className="text-xs font-mono px-3 py-1 rounded bg-[#5FA8D3]/20 border border-[#5FA8D3]/50 text-[#5FA8D3] disabled:opacity-40"
-        >
+        <Button tone="operational" onClick={runSearch} disabled={loading}>
           {loading ? "검색중..." : "검색"}
-        </button>
-        <div className="text-[11px] font-mono text-[#5C6B7A] ml-auto">total: {total}</div>
+        </Button>
       </div>
 
-      <div className="flex-1 overflow-auto">
-        <table className="w-full border-collapse">
-          <thead className="sticky top-0 bg-[#0A1119]">
-            <tr className="border-b border-[#22303F] text-left">
-              <th className="px-2 py-1.5 text-[10px] uppercase tracking-wider text-[#5C6B7A]">시각</th>
-              <th className="px-2 py-1.5 text-[10px] uppercase tracking-wider text-[#5C6B7A]">심각도</th>
-              <th className="px-2 py-1.5 text-[10px] uppercase tracking-wider text-[#5C6B7A]">소스</th>
-              <th className="px-2 py-1.5 text-[10px] uppercase tracking-wider text-[#5C6B7A]">자산</th>
-              <th className="px-2 py-1.5 text-[10px] uppercase tracking-wider text-[#5C6B7A]">메시지</th>
-              <th className="px-2 py-1.5 text-[10px] uppercase tracking-wider text-[#5C6B7A]">ATT&CK</th>
-            </tr>
-          </thead>
-          <tbody>
-            {events.length === 0 ? (
+      {error ? (
+        <ErrorState message={error} retry={runSearch} />
+      ) : events.length === 0 ? (
+        <EmptyState
+          title="검색 결과 없음"
+          detail="검색어를 입력하거나 필터를 조정하세요."
+        />
+      ) : (
+        <div className="cr-table-scroll" tabIndex={0} role="region" aria-label="검색 결과">
+          <table className="cr-table">
+            <thead>
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center font-mono text-sm text-[#5C6B7A]">
-                  검색 결과 없음 — 검색어를 입력하거나 필터를 조정하세요.
-                </td>
+                {COLUMNS.map((c) => (
+                  <th key={c} scope="col">
+                    {c}
+                  </th>
+                ))}
               </tr>
-            ) : (
-              events.map((e) => <EventDetailRow key={e.event_id} event={e} />)
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+            </thead>
+            <tbody>
+              {events.map((e) => (
+                <EventRow key={e.event_id} event={e} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Panel>
   );
 }
