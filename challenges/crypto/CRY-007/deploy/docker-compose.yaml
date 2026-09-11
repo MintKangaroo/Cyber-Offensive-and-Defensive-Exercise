@@ -1,0 +1,13 @@
+services:
+  cry007_deploy:
+    build: { context: . }
+    container_name: cry007_deploy
+    ports: ["8139:8139"]
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-cry007-dev-secret}
+      - PATCH_CRY_007=false
+    mem_limit: 160m
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]

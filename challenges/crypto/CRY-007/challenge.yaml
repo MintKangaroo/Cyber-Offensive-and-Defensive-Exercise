@@ -1,0 +1,40 @@
+challenge:
+  id: "CRY-007"
+  title: "지자체 스마트미터 펌웨어 서명 - RSA 작은 d(Wiener 공격)"
+  category: "crypto"
+  difficulty: "hard"
+  points: { red: 240, blue: 240 }
+  asset: "smartmeter-fwsign"
+  mitre: [T1552]
+
+  description: |
+    지자체 스마트미터 펌웨어 서명 서버가 검증 속도를 높이려 개인지수 d 를 작게 잡았다
+    (d < N^0.25/3). 이 조건에서 e/N 의 연분수 수렴근사(convergents)가 k/d 를 준다 — Wiener 공격.
+    공개키 (N,e) 로 d 를 복구하고, 서버가 (N,e) 로 암호화해 배포한 관리자 세션 토큰
+    c = token^e mod N 을 d 로 복호(token = c^d mod N)해 제출하면 flag 를 내준다.
+
+  red_task:
+    goal: "(N,e) 에서 Wiener 로 작은 d 복구 → 관리자 토큰 c 를 복호 → /api/admin 제출로 flag"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "e 가 N 만큼 크다(정상 e=65537 아님). 이는 d 가 작다는 신호 — Wiener 조건." }
+      - { cost: 20, text: "e/N 의 연분수 수렴근사 k/d 를 순회하며 phi=(e·d-1)/k 로 후보 검증." }
+      - { cost: 30, text: "phi 로 x²-(N-phi+1)x+N=0 의 정수근이 있으면 d 확정. token = pow(c,d,N) 을 바이트로 → /api/admin." }
+
+  blue_task:
+    goal: "표준 e=65537 과 정상 크기 d 로 재발급해 Wiener 조건(d<N^0.25/3) 제거"
+    success_criteria: |
+      (1) e 가 N 급으로 크고 d 가 작은지(Wiener 취약) 점검
+      (2) 패치 후 e=65537·정상 d 라 연분수 수렴근사로 d 복구 불가
+    points_breakdown: { detection: 72, patch: 168 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["smartmeter-fwsign"]
+  safety:
+    profile: "hardened"
+    notes: "HTTP 서비스형. read_only/tmpfs/cap_drop/mem_limit. 취약은 의도된 작은 d 이며 실제 서명키 아님."

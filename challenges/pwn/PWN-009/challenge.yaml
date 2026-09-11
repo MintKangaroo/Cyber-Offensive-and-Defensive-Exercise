@@ -1,0 +1,42 @@
+challenge:
+  id: "PWN-009"
+  title: "댐 방류 게이트 제어 콘솔 - 스택 카나리 유출·우회(ret2win)"
+  category: "pwn"
+  difficulty: "hard"
+  points: { red: 230, blue: 230 }
+  asset: "damctl"
+  mitre: [T1203, T1068]
+
+  description: |
+    댐 방류 게이트 제어 콘솔(원격 TCP)에 스택 카나리(-fstack-protector-all)가 있다. 하지만
+    1단계 상태조회에서 read 로 buf(64)를 채운 뒤 경계 없는 write(1,buf,80) 로 반향하면 buf 뒤
+    카나리(rbp-8, buf+72)까지 노출된다. 2단계 방류설정 오버플로우에서 유출한 카나리를 제자리에
+    넣어 __stack_chk_fail 을 통과시키고 복귀주소를 숨은 spillway_override 로 덮으면 /flag 가
+    노출된다. no-PIE·static 이라 주소 고정.
+    (기존 no-canary BOF 들과 달리 카나리 유출·우회가 핵심)
+
+  red_task:
+    goal: "1단계 write 반향으로 카나리 유출 → 2단계 오버플로우에서 카나리 보존 + 복귀주소를 spillway_override 로 → flag"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "1단계 write(1,buf,80) 이 buf(64)보다 많이 반향한다. 뒤쪽 8바이트(buf+72)는 무엇인가?" }
+      - { cost: 20, text: "유출 8바이트의 첫 바이트가 0x00 이면 카나리다(리틀엔디언). 이를 오버플로우에서 그대로 재사용." }
+      - { cost: 30, text: "offset: filler72 + canary8 + rbp8 + ret. spillway_override 앞에 ret 가젯 1개로 movaps 정렬." }
+
+  blue_task:
+    goal: "경계 없는 반향(write 길이>버퍼) 제거 — write(1,buf,읽은길이)로 카나리 유출 차단"
+    success_criteria: |
+      (1) 버퍼(64)보다 큰 고정 길이(80)로 반향해 인접 스택(카나리)을 유출하는지 점검
+      (2) 패치 후 반향 길이가 실제 입력 길이로 제한돼 카나리 유출 불가(우회 실패)
+    points_breakdown: { detection: 69, patch: 161 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["damctl"]
+  safety:
+    profile: "hardened"
+    notes: "원격 정적 바이너리(no-PIE·카나리 有·의도적 인접 스택 유출). cap_drop/pids_limit/mem_limit, 30초 타임아웃."
