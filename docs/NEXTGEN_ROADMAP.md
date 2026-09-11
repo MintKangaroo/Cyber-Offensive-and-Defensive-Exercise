@@ -58,6 +58,13 @@ Remaining priorities:
 4. Add authoritative asset checkpoints and a bounded-memory strategy for very large
    replay archives. The durable journal and 50,003-event pagination tests do not
    constitute unlimited browser capacity or a distributed snapshot guarantee.
+   In progress: **authoritative asset checkpoints delivered** — the collector folds the
+   journal into a per-asset checkpoint frozen at a `seq`/`revision`, materializing only
+   the derived asset-state (never re-deriving authoritative scores/config), with
+   create/read endpoints and a command projection. Remaining: the Control Tower replay
+   must anchor on the nearest checkpoint and hold a bounded event window instead of
+   accumulating every page (part B). A distributed cross-service snapshot remains out
+   of scope.
 5. Run a full instructor-led acceptance exercise and production-scale soak on the
    intended hardware, including restoration and outages. PostgreSQL replica tests now run locally and in CI.
    The isolated Docker scope drill and browser fixtures have narrower stated scope.

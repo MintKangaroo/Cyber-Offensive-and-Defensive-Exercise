@@ -596,6 +596,42 @@ async def replay_page(
     return page
 
 
+@router.get("/replay/checkpoint")
+async def replay_checkpoint(
+    scenario_id: str = "default",
+    at: float | None = None,
+    authorization: str = Header(default=""),
+    cr_token: str | None = Cookie(default=None),
+):
+    ident, auth = await identify(authorization, cr_token)
+    need(ident, "replay")
+    sid = scenario_scope(ident, scenario_id)
+    params: dict = {"scenario_id": sid}
+    if at is not None:
+        params["at"] = at
+    return await call("events", "/replay/checkpoint", auth, params=params)
+
+
+class CheckpointRequest(BaseModel):
+    scenario_id: str = Field(default="default", max_length=120)
+
+
+@router.post("/replay/checkpoint")
+async def create_replay_checkpoint(
+    req: CheckpointRequest,
+    authorization: str = Header(default=""),
+    cr_token: str | None = Cookie(default=None),
+):
+    ident, auth = await identify(authorization, cr_token)
+    need(ident, "control")
+    sid = scenario_scope(ident, req.scenario_id)
+    result = await call(
+        "events", "/replay/checkpoint", auth, method="POST", params={"scenario_id": sid}
+    )
+    audit_store.record(ident.actor, "replay:checkpoint", sid, "materialized asset checkpoint")
+    return result
+
+
 @router.get("/replay")
 async def replay(
     scenario_id: str = "default",

@@ -311,6 +311,7 @@ _HUMAN_ROUTES = {
         "GET /events/delayed",
         "GET /replay/events",
         "GET /replay/page",
+        "GET /replay/checkpoint",
         "GET /stream",
         "GET /ws",
     ),
@@ -462,7 +463,7 @@ class ScopeMiddleware:
             elif trusted and (
                 method == "GET"
                 or scope["type"] == "websocket"
-                or path in {"/events", "/edr/ingest", "/score/ingest"}
+                or path in {"/events", "/edr/ingest", "/score/ingest", "/replay/checkpoint"}
                 or self.service == "edr"
                 and path.startswith("/edr/kill-commands/")
                 and path.endswith("/ack")
