@@ -2,17 +2,21 @@
 
 ## 디자인 방향
 
-풀사이즈 Falcon UI를 흉내내는 대신, "터미널을 들여다보는 오퍼레이터"라는 핵심 경험 하나에
-집중했다. 시그니처는 **프로세스 트리를 실제 `pstree` 출력처럼 `├─`/`└─` 커넥터 문자로
-그리는 것** — 별도 장식 없이 데이터 구조 자체가 시각적 정체성이 되게 했다.
+**CYBER RANGE COMMAND SYSTEM 공유 디자인 시스템**(`@cyber-range/command-system`)을 채택했다.
+독자 Tailwind 팔레트를 제거하고 공유 토큰(`tokens.css`)·컴포넌트(`Button`·`StatusBadge`·
+`EmptyState`)로 통일해 Command Tower·다른 워크스페이스와 같은 시각 언어를 쓴다. 시그니처인
+**프로세스 트리(`pstree`식 `├─`/`└─` 커넥터)** 는 그대로 — 데이터 구조 자체가 정체성이라는
+원칙은 유지하고 색만 공유 토큰으로 옮겼다. EDR 고유 레이아웃(3단 워크스페이스·호스트 목록·
+프로세스 탐색기·탐지 카드)만 `src/index.css`에 공유 토큰 기반으로 남겼다(하드코딩 색상 0).
 
-- **팔레트**: 베이스 `#0B0F14`(거의 검정), 패널 `#131920`, 보더 `#1F2933`.
-  심각도는 critical `#FF3B3B` / high `#FF8A3D` / medium `#FFD23D` / info `#3DA9FC`,
-  온라인 상태 `#3DDC84`. 색만으로 구분하지 않고 텍스트 라벨(critical/high 등)을 항상 병행.
-- **타이포**: 데이터(프로세스명, pid, cmdline)는 전부 IBM Plex Mono. UI 라벨/헤더는
-  IBM Plex Sans. 이 콘솔은 "코드를 읽는 도구"이므로 모노스페이스가 장식이 아니라 기능이다.
-- **모션**: 온라인/격리 상태 점만 은은하게 펄스. 그 외 애니메이션 없음(`prefers-reduced-motion`
-  존중). 경보가 뜰 때마다 요란하게 움직이면 진짜 경보 상황에서 오히려 방해가 된다.
+- **심각도(보존)**: 문자열 5단계 critical/high/medium/low/info 라벨 그대로, 색상만 5개 구분되는
+  공유 톤으로 매핑(`severity.ts`): critical→critical·high→warning·medium→intelligence·
+  low→operational·info→neutral. 색만으로 구분하지 않고 텍스트 라벨을 항상 병행.
+- **동작 보존**: 전송 계층(`api/client.ts`·`types.ts`) 불변 — 호스트/프로세스/알림 폴링(5s)·WS
+  재연결 백오프·격리(Isolate/Unisolate)·프로세스 종료(Kill)의 사유 필수·감사 기록·비동기
+  KillCommand 처리(에이전트 다음 폴링 실행). 온라인/격리 점 펄스는 `prefers-reduced-motion` 존중.
+- **테스트**: `severity.test.ts`(순수 매핑) + `dashboard.test.tsx`(HostList 격리·AlertsPanel Kill·
+  ProcessTree 렌더, vitest+testing-library). CI specialist-dashboards 잡이 `--if-present`로 실행.
 
 ## 구조
 

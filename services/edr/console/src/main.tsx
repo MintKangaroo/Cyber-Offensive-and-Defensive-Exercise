@@ -8,7 +8,9 @@ import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <WorkspaceBar workspace="Endpoint Defense" />
-    <App />
+    <div className="edr-root">
+      <WorkspaceBar workspace="Endpoint Defense" />
+      <App />
+    </div>
   </React.StrictMode>
 );
