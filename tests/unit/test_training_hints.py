@@ -15,7 +15,7 @@ from services.challenge_portal import anticheat
 from services.challenge_portal import main as portal
 from shared import scope
 
-SECRET = "training-hints-test-key-not-for-production-32-bytes-long"
+SECRET = "training-hints-test-key-not-for-production-32-bytes-long"  # training-only fixture
 
 
 def headers(actor="learner-one", team="alpha", match="exercise-one", role="red"):
