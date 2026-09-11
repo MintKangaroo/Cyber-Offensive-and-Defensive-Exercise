@@ -106,4 +106,13 @@ def init_audit(conn: sqlite3.Connection) -> None:
         PRIMARY KEY(subject,team_id,match_id,cid,side))""")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_sub_cid_hash ON submissions(cid, value_hash)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_sub_team ON submissions(team_id)")
+    # 개인 훈련 힌트 공개 기록(진행형). 대회 점수와 무관 — 훈련 증거 전용.
+    conn.execute("""CREATE TABLE IF NOT EXISTS training_hints(
+        subject TEXT NOT NULL, team_id TEXT NOT NULL, match_id TEXT NOT NULL,
+        cid TEXT NOT NULL, side TEXT NOT NULL, hint_index INTEGER NOT NULL,
+        cost INTEGER NOT NULL DEFAULT 0, revealed_at REAL NOT NULL,
+        PRIMARY KEY(subject,team_id,match_id,cid,side,hint_index))""")
+    # 교관 정책(key/value). key="hints" → JSON {enabled:bool}. 정책 인지 힌트 게이트.
+    conn.execute("""CREATE TABLE IF NOT EXISTS training_policy(
+        key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at REAL NOT NULL, actor TEXT)""")
     conn.commit()

@@ -165,7 +165,9 @@ def test_profile_is_scoped_to_person_team_exercise_and_side(client):
     assert len(result["activity"]) == 1
     assert result["activity"][0]["attempts"] == 2
     assert result["activity"][0]["elapsed_sec"] is None
-    assert result["activity"][0]["hints_used"] is None
+    # hints_used is now a real count (0 when none revealed), not a permanent placeholder.
+    assert result["activity"][0]["hints_used"] == 0
+    assert "hint count" not in result["unavailable_inputs"]
     assert result["recommendations"][0]["id"] == "ICS-001"
     assert "value_hash" not in response.text and "another-learner" not in response.text
 

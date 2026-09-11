@@ -1,6 +1,36 @@
 # Next-generation changelog
 
 
+## 2026-09-11 — Policy-aware hint usage records (priority 3, part A)
+
+- Turned the personal-training profile's permanent `hints_used: null` placeholder into
+  a real, recorded measurement. Red-task hints (already defined in the challenge schema
+  as `{cost, text}` but never delivered) are now served progressively to an
+  authenticated learner, one at a time, and each reveal is recorded per
+  learner/team/exercise/side. `training.py`'s `profile()` reports `hints_used` per
+  challenge and drops "hint count" from `unavailable_inputs`.
+- **Policy-aware**: added an instructor hint policy (`{enabled}`), stored in the portal
+  and gated by an instructor-only endpoint. When disabled (e.g. exam mode), reveals are
+  refused (403) and nothing is recorded. Members read the policy; only an instructor
+  sets it.
+- New portal endpoints: `GET /portal/training/hints/policy` (member),
+  `POST /portal/training/hints/policy` (instructor), `GET
+  /portal/training/challenges/{cid}/hints` (member — lists hints; **unrevealed hint
+  text is never returned**), and `POST /portal/training/challenges/{cid}/hints/{index}/reveal`
+  (member — progressive; re-viewing an already-revealed hint is idempotent, skipping
+  ahead is 409). New SQLite tables `training_hints` and `training_policy` in
+  `anticheat.db`; the new routes were added to the `shared/scope.py` portal grants for
+  red/blue (the policy write stays instructor-only).
+- **Competition-score independence preserved**: all hint state lives in the training
+  audit tables; `_SOLVES`/scoreboards are never touched (a test asserts `_SOLVES == {}`
+  after reveals). Hints do not change scoring.
+
+Validation: **618 Python unit tests pass** (7 new hint tests in `test_training_hints.py`,
+plus the updated personal-training assertion). No competition scoring changed. Remaining
+priority-3 work: instructor-reviewed defensive rubrics (part B), and optional UI wiring
+of the hint reveal in the Red portal.
+
+
 ## 2026-09-11 — Static hubs aligned; specialist migration (priority 2) complete
 
 - Aligned the two static, build-free hubs — START HERE (the beginner flow) and the
