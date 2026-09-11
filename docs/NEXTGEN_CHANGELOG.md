@@ -1,6 +1,40 @@
 # Next-generation changelog
 
 
+## 2026-09-11 — Injects campaigns become first-class scenario authoring
+
+- Gave the injects subsystem the publication contract it lacked: a campaign is now
+  embedded in a scenario source (`injects_campaign:`) and published through the
+  existing lossless scenario file flow, so campaign authoring is faithful (durable,
+  re-loadable, validated) instead of an imperative runtime POST. The campaign's
+  `scenario_id` binds to the scenario id, replacing the previous free-form string
+  with referential integrity.
+- Added `shared/injects_campaign.py` as the single source of truth for a valid
+  campaign. The injects runtime re-exports its `CHANNELS`/`TRIGGER_EVENTS` so the
+  execution and authoring rules can never drift; Scenario Studio validation calls
+  `campaign_issues` so anything the runtime rejects is an error at authoring time,
+  with unknown templates, forward triggers and empty inline injects as warnings.
+- Extended Scenario Studio with a lossless visual campaign editor (spec ids,
+  templates, channels, inline subject/body, deadlines, schedules, answer/deadline
+  triggers and per-spec manual-grading rubrics). Existing scenario data, comments
+  and unknown fields are preserved; the Injects workspace keeps complex library and
+  rubric-review workflows.
+- Added `GET /studio/campaign/{sid}` (instructor) to extract and validate a
+  published scenario's embedded campaign, and `POST /command/injects/campaign/launch`
+  to load it into the injects service with the scenario id attached and a durable
+  requested/launched/rejected audit. Invalid campaigns are refused before launch.
+- Honest limits recorded: the built-in inject template library still has no publish
+  endpoint (templates are inline or in source) and rubric grading remains manual.
+
+Validation: **611 Python unit tests passed** (PostgreSQL-dependent integration runs
+in CI), including 24 new campaign-authoring/Studio/command tests and the unchanged
+injects runtime bad-trigger contract. **57 Command Vitest tests** (3 new
+campaign fidelity cases) and **18 Playwright flows** (new lossless campaign authoring
+flow) passed. Control Tower TypeScript build, ESLint and the six-app gateway build
+were re-run. No existing tests were removed; the user-owned Compose override was
+preserved.
+
+
 ## 2026-09-09 — Crossover Studio and personal training evidence
 
 - Added visual crossover phase creation with explicit IDs/dependencies, Red/Blue

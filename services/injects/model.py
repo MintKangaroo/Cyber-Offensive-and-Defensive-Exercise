@@ -8,7 +8,8 @@
 """
 from __future__ import annotations
 
-CHANNELS = ("media", "exec", "regulator", "legal", "customer", "internal")
+# 인젝트 캠페인 계약 상수는 shared 단일 출처에서 가져온다(런타임=저작 검증 동기화).
+from shared.injects_campaign import CHANNELS  # noqa: F401  (re-export)
 
 
 def deadline_state(deadline_at: float, now: float, response_at: float | None) -> str:

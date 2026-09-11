@@ -43,8 +43,39 @@ It does not execute attacks during validation or create external targets.
 - `expected_sec` is a dry-run pacing hint, not an enforced stage deadline. An
   investigation objective has no invented duration. The phase projection includes
   investigation counts and unlock/completion rules separately from event pacing.
-- Inject campaigns, complex rubrics and source extensions retain their established
-  Injects/YAML tools. They are not converted into fictional executable schema fields.
+- An embedded crisis-communications inject campaign (`injects_campaign:`) is authored
+  visually and published with the scenario file (see below). Complex inject libraries,
+  campaign templates and rubric grading review remain in the Injects workspace; they
+  are not converted into fictional executable schema fields.
+
+## Crisis-communications inject campaigns
+
+A scenario can carry an optional `injects_campaign:` block so a timed sequence of
+non-technical injects (media, exec, regulator, legal) is authored, versioned and
+published through the **same lossless scenario file contract** as the rest of the
+exercise — the missing publication contract that previously kept injects out of the
+Studio. Because the campaign lives in the scenario, its `scenario_id` is bound to the
+scenario's own id, giving referential integrity instead of a free-form string.
+
+- **Add** a campaign, then add specs. Each spec has a `spec_id`, an optional built-in
+  `template_id` (media-press-call, exec-ciso-brief, regulator-notice, legal-hold) or
+  inline `subject`/`body`, a `channel`, `deadline_min`, an `at_sec` schedule and an
+  optional `trigger` that fires a follow-up after an earlier spec is **answered** or
+  its **deadline is missed**.
+- **Rubric** criteria (`{criterion, max}`) are authored per spec. Grading stays
+  **manual**: an instructor awards points per criterion at run time. The editor does
+  not invent automatic scoring.
+- **Validation** applies the injects runtime's own rules from
+  `shared/injects_campaign.py` (unique spec ids, existing/valid triggers, positive
+  deadlines and rubric caps). Anything the runtime would reject is an error here too;
+  unknown templates, forward triggers and empty inline injects are warnings.
+- **Launch**: after publishing, `POST /command/injects/campaign/launch` reads the
+  embedded campaign from the published scenario and loads it into the injects service
+  with the scenario id already attached. Invalid campaigns are refused before launch.
+
+Honest limits: the built-in inject **template library has no publish endpoint** —
+new reusable templates are still added in source or inlined per spec — and rubric
+grading is reviewed by an instructor, not scored automatically.
 
 ## Fidelity and validation
 

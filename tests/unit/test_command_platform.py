@@ -349,6 +349,74 @@ def test_ai_disabled_by_default(client, monkeypatch):
     assert command_store.get("policy", "platform", "copilot") is None
 
 
+def test_campaign_launch_forwards_scenario_bound_specs(client, monkeypatch):
+    calls = []
+
+    async def fake(service, path, auth, **kwargs):
+        calls.append((service, path, kwargs))
+        if service == "scenario":
+            return {
+                "scenario_id": "CRISIS-01",
+                "name": "crisis-comms",
+                "specs": [{"spec_id": "media", "template_id": "media-press-call"}],
+                "issues": [],
+                "ok": True,
+            }
+        return {"campaign_id": "CMP-x", "status": "running"}
+
+    monkeypatch.setattr(command, "upstream", fake)
+    r = client.post(
+        "/command/injects/campaign/launch",
+        headers=headers(),
+        json={
+            "scenario_id": "CRISIS-01",
+            "team_ids": ["team-1", "team-2"],
+            "reason": "Begin crisis communications drill",
+            "confirm": True,
+        },
+    )
+    assert r.status_code == 200
+    assert calls[0][:2] == ("scenario", "/studio/campaign/CRISIS-01")
+    injects_call = calls[1]
+    assert injects_call[:2] == ("injects", "/injects/campaign")
+    body = injects_call[2]["body"]
+    assert body["scenario_id"] == "CRISIS-01"  # referential integrity is enforced
+    assert body["team_ids"] == ["team-1", "team-2"]
+    assert body["specs"] == [{"spec_id": "media", "template_id": "media-press-call"}]
+    assert {a["action"] for a in audit_store.list_entries()} == {"inject:campaign:launched"}
+
+
+def test_campaign_launch_refuses_invalid_campaign(client, monkeypatch):
+    async def fake(service, path, auth, **kwargs):
+        assert service == "scenario"  # must never reach injects with an invalid campaign
+        return {"scenario_id": "CRISIS-01", "name": "c", "specs": [], "issues": [
+            {"level": "error", "code": "campaign_specs", "message": "x", "where": "y"}
+        ], "ok": False}
+
+    monkeypatch.setattr(command, "upstream", fake)
+    r = client.post(
+        "/command/injects/campaign/launch",
+        headers=headers(),
+        json={"scenario_id": "CRISIS-01", "team_ids": ["t"], "reason": "Launch drill", "confirm": True},
+    )
+    assert r.status_code == 422
+    assert {a["action"] for a in audit_store.list_entries()} == {"inject:campaign:rejected"}
+
+
+def test_campaign_launch_requires_confirmation_and_control_role(client):
+    assert client.post(
+        "/command/injects/campaign/launch",
+        headers=headers(),
+        json={"scenario_id": "C", "team_ids": ["t"], "reason": "Launch drill", "confirm": False},
+    ).status_code == 400
+    for role in ("red", "blue", "observer", "competitor"):
+        assert client.post(
+            "/command/injects/campaign/launch",
+            headers=headers(role),
+            json={"scenario_id": "C", "team_ids": ["t"], "reason": "Launch drill", "confirm": True},
+        ).status_code == 403
+
+
 def test_drafts_are_private_to_actor(client, monkeypatch):
     source = "scenario:\n  id: X\n  private: keep exactly\n"
     assert (

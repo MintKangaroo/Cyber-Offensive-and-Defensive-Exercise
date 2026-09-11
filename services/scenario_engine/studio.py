@@ -18,6 +18,7 @@ import yaml
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field, ValidationError
 
+from shared.injects_campaign import campaign_issues
 from shared.rbac import require_role
 
 from .authoring import collect_stages, dry_run
@@ -101,6 +102,9 @@ def validate(text: str) -> dict:
         seen.add(sid)
         phase_issues, phase_projection = inspect_phases(raw)
         issues.extend(phase_issues)
+        if raw.get("injects_campaign") is not None:
+            # 임베드 인젝트 캠페인은 런타임과 동일한 규칙(shared)으로 검증한다.
+            issues.extend(campaign_issues(raw.get("injects_campaign")))
         try:
             report = dry_run(raw)
         except (TypeError, ValueError, AttributeError, RecursionError):
@@ -196,6 +200,36 @@ def get_source(sid: str, authorization: str = Header(default="")):
         "yaml": text,
         "sha256": hashlib.sha256(text.encode()).hexdigest(),
     }
+
+
+@router.get("/campaign/{sid}")
+def get_campaign(sid: str, authorization: str = Header(default="")):
+    """발행된 시나리오에 임베드된 인젝트 캠페인을 추출·검증해 반환한다.
+
+    실행(launch)의 권위 출처다. scenario_id 는 시나리오 id 로 고정돼 참조 무결성이
+    자동 보장된다(자유 문자열 아님). 캠페인이 없으면 404.
+    """
+    require_role(authorization, {"instructor"}, allow_dev=False)
+    item = sources().get(sid)
+    if not item:
+        raise HTTPException(404, "Scenario not found")
+    _, text = item
+    for doc in documents(text):
+        raw = doc.get("scenario") or doc.get("crossover_scenario") or {}
+        if raw.get("id") != sid:
+            continue
+        campaign = raw.get("injects_campaign")
+        if campaign is None:
+            raise HTTPException(404, "Scenario has no embedded injects campaign")
+        issues = campaign_issues(campaign)
+        return {
+            "scenario_id": sid,
+            "name": (campaign or {}).get("name", "") if isinstance(campaign, dict) else "",
+            "specs": (campaign or {}).get("specs", []) if isinstance(campaign, dict) else [],
+            "issues": issues,
+            "ok": not any(i["level"] == "error" for i in issues),
+        }
+    raise HTTPException(404, "Scenario not found")
 
 
 @router.post("/validate")
