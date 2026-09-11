@@ -1,0 +1,42 @@
+challenge:
+  id: "PWN-008"
+  title: "가스터미널 압력제어 콘솔 - 스택 오버플로우 ROP 인자 제어(pop rdi)"
+  category: "pwn"
+  difficulty: "hard"
+  points: { red: 220, blue: 220 }
+  asset: "gasctl"
+  mitre: [T1203, T1068]
+
+  description: |
+    가스터미널 압력제어 콘솔(원격 TCP)이 64바이트 버퍼에 read(0,buf,256) 으로 입력받아 스택
+    버퍼 오버플로우가 있다. 숨은 admin_shell(key) 은 rdi=0xC0DEC0DE 일 때만 /flag 를 낸다.
+    단순 ret2win 으로는 인자를 넘길 수 없으므로, `pop rdi; ret` 가젯으로 rdi 를 세팅하는 ROP
+    체인을 구성해야 한다. no-PIE·no-canary·static 이라 주소가 고정.
+    체인: [72 filler] + pop_rdi_ret + 0xC0DEC0DE + ret(정렬) + admin_shell.
+    (기존 ret2win[PWN-000/004]·전역BOF[PWN-002] 과 구분되는 ROP 인자 제어 유형)
+
+  red_task:
+    goal: "64바이트 buf 오버플로우(오프셋 72) → pop rdi 가젯으로 key=0xC0DEC0DE 전달 → admin_shell → flag"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "read(0,buf,256) 인데 buf 는 64바이트다. 오프셋은 buf(64)+saved rbp(8)=72." }
+      - { cost: 20, text: "admin_shell 은 rdi==0xC0DEC0DE 일 때만 flag. 단순 복귀로는 rdi 를 못 세운다 → ROP 필요." }
+      - { cost: 30, text: "`pop rdi; ret` 가젯(비정렬 5f c3 포함)으로 key 를 pop 후 admin_shell 로. movaps 정렬 위해 ret 가젯 1개 삽입." }
+
+  blue_task:
+    goal: "스택 카나리(-fstack-protector-all) 재빌드로 복귀주소 오염 시 abort → ROP 차단"
+    success_criteria: |
+      (1) 64바이트 버퍼에 256바이트 read 하는 경계 없는 입력, no-canary 빌드 관측
+      (2) 카나리 재빌드 후 오버플로우가 __stack_chk_fail 로 중단되어 ROP 불가(서비스는 정상 응답)
+    points_breakdown: { detection: 66, patch: 154 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["gasctl"]
+  safety:
+    profile: "hardened"
+    notes: "원격 정적 바이너리(no-PIE·no-canary·의도적 스택 BOF). cap_drop/pids_limit/mem_limit, 30초 타임아웃."

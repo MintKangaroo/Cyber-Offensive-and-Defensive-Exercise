@@ -769,7 +769,7 @@ docker compose down
 
 **소개 · 구조**
 - [무엇을 하는 플랫폼인가](#무엇을-하는-플랫폼인가) · [아키텍처](#아키텍처) · [주요 화면](#주요-화면-스크린샷) · [핵심 기능](#핵심-기능)
-- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (100종)](#챌린지-카탈로그-100종)
+- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (102종)](#챌린지-카탈로그-102종)
 
 **시작 · 품질 · 접근제어**
 - [처음 시작하기](#처음-시작하기) · [경기 운영 방법](#경기-운영-방법) · [빠른 시작](#빠른-시작)
@@ -1079,7 +1079,7 @@ patched/vulnerable 상태를 한 번에 판정합니다.
 
 ---
 
-## 챌린지 카탈로그 (100종)
+## 챌린지 카탈로그 (102종)
 
 web·pwn·crypto·forensics·network·reversing·detection·ai·ICS/OT 9개 분야가 모두 **easy → medium → hard → insane** 난이도 곡선을 갖추고 있습니다.
 표기: `점수(Red/Blue)`. 팀마다 플래그·정답이 HMAC으로 달라 답 공유가 불가능합니다.
@@ -1102,6 +1102,8 @@ web·pwn·crypto·forensics·network·reversing·detection·ai·ICS/OT 9개 분�
 > | PWN-006 | 원자로 냉각계통 제어 콘솔 | tcache poisoning 임의할당→전역 함수포인터 하이재킹 | hard | 9016 |
 > | CRY-005 | 정부 전자서명 감사시스템 | DSA 논스 재사용 개인키 복구 | hard | 8137 |
 > | PWN-007 | 발전소 로그 수집 데몬 | 포맷스트링 임의쓰기→전역 함수포인터 하이재킹 | hard | 9017 |
+> | CRY-006 | 관세청 전자통관 API | 해시 길이확장 서명 위조(SHA256 secret-prefix MAC) | hard | 8138 |
+> | PWN-008 | 가스터미널 압력제어 콘솔 | 스택 BOF ROP 인자 제어(pop rdi→키 필요 win) | hard | 9018 |
 >
 > 개별 기동: `cd challenges/<cat>/<ID>/deploy && CHALLENGE_SECRET=<secret> docker compose up -d --build`
 

@@ -1,0 +1,12 @@
+services:
+  pwn008_deploy:
+    build: { context: . }
+    container_name: pwn008_deploy
+    ports: ["9018:9018"]
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-pwn008-dev-secret}
+      - PORT=9018
+    mem_limit: 128m
+    pids_limit: 64
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
