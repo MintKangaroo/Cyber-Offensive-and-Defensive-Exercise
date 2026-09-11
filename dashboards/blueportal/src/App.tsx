@@ -1,54 +1,50 @@
 import { useEffect, useState, useCallback } from "react";
+import { Button, EmptyState, StatusBadge } from "@cyber-range/command-system";
 import {
   fetchBlueChallenges, submitRule, fetchBlueScoreboard, datasetUrl,
   fetchEvents, fetchPatches, togglePatch, fetchTeams,
   type BlueChallenge, type BlueSubmitResult, type ScoreRow, type RangeEvent, type Patches, type Team,
 } from "./api";
+import { difficultyTone, eventLabel, eventTone, isActiveIncident } from "./helpers";
 
-const DIFF: Record<string, string> = {
-  easy: "border-[#34D399]/40 text-[#34D399]", medium: "border-[#F5A623]/40 text-[#F5A623]",
-  hard: "border-[#FB7185]/50 text-[#FB7185]", insane: "border-[#C084FC]/50 text-[#C084FC]",
-};
-// 공격/위험 이벤트 vs 방어/정상 이벤트 색
-const EV_STYLE = (t: string) =>
-  /compromis|attack|exfil|objective_success/.test(t) ? "text-[#FB7185]"
-    : /blue_|recover|patch|detection|block/.test(t) ? "text-[#34D399]"
-    : "text-[#8aa0b8]";
-const EV_LABEL: Record<string, string> = {
-  red_attack_started: "공격 개시", asset_compromised: "자산 침해", red_objective_success: "목표 달성",
-  flag_exfiltrated: "플래그 유출", blue_detection_success: "탐지 성공", blue_patch_verified: "패치 검증",
-  blue_block_success: "차단 성공", asset_recovered: "복구 완료", stage_completed: "단계 완료",
-};
+const CYAN = "var(--cr-cyan)";
+const GREEN = "var(--cr-green)";
+const RED = "var(--cr-red)";
 
 function useLocalState(key: string, initial: string): [string, (v: string) => void] {
-  const [v, setV] = useState(() => localStorage.getItem(key) ?? initial);
-  return [v, useCallback((nv: string) => { setV(nv); localStorage.setItem(key, nv); }, [key])];
+  const [v, setV] = useState(() => {
+    try { return localStorage.getItem(key) ?? initial; } catch { return initial; }
+  });
+  return [v, useCallback((nv: string) => {
+    setV(nv);
+    try { localStorage.setItem(key, nv); } catch { /* private mode */ }
+  }, [key])];
 }
 
 function Badge({ d }: { d: string }) {
-  return <span className={`font-mono text-[9px] uppercase px-1.5 py-0.5 rounded border ${DIFF[d] ?? "border-[#6B7A99]/40 text-[#6B7A99]"}`}>{d}</span>;
+  return <StatusBadge tone={difficultyTone(d)}>{d}</StatusBadge>;
 }
 
 // ── CTF 시각화 ────────────────────────────────────────────────
 function Donut({ frac, big, sub, color }: { frac: number; big: string; sub: string; color: string }) {
   const R = 30, C = 2 * Math.PI * R;
   return (
-    <svg viewBox="0 0 80 80" className="w-[76px] h-[76px] shrink-0">
-      <circle cx="40" cy="40" r={R} fill="none" stroke="#16263a" strokeWidth="7" />
-      <circle cx="40" cy="40" r={R} fill="none" stroke={color} strokeWidth="7" strokeLinecap="round"
+    <svg viewBox="0 0 80 80" width={76} height={76} style={{ flexShrink: 0 }}>
+      <circle cx="40" cy="40" r={R} fill="none" strokeWidth="7" style={{ stroke: "var(--cr-raised)" }} />
+      <circle cx="40" cy="40" r={R} fill="none" strokeWidth="7" strokeLinecap="round"
         strokeDasharray={C} strokeDashoffset={C * (1 - frac)} transform="rotate(-90 40 40)"
-        style={{ transition: "stroke-dashoffset 0.8s ease" }} />
-      <text x="40" y="38" textAnchor="middle" fontSize="15" fontWeight="700" fill={color}>{big}</text>
-      <text x="40" y="52" textAnchor="middle" fontSize="8" fill="#5a7088">{sub}</text>
+        className="bp-donut-arc" style={{ stroke: color }} />
+      <text x="40" y="38" textAnchor="middle" fontSize="15" fontWeight="700" style={{ fill: color }}>{big}</text>
+      <text x="40" y="52" textAnchor="middle" fontSize="8" style={{ fill: "var(--cr-subtle)" }}>{sub}</text>
     </svg>
   );
 }
 
 function StatItem({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div className="text-center px-1">
-      <div className="font-mono text-2xl font-bold tabular-nums leading-none" style={{ color }}>{value}</div>
-      <div className="font-mono text-[9px] uppercase tracking-wide text-[#5a7088] mt-1">{label}</div>
+    <div className="bp-stat-item">
+      <div className="bp-stat-value" style={{ color }}>{value}</div>
+      <div className="bp-stat-label">{label}</div>
     </div>
   );
 }
@@ -62,24 +58,22 @@ function BlueStats({ challenges, patches, incidents, points, rank }: {
   for (const a of Object.values(patches)) for (const p of Object.values(a)) { vulnTotal++; if (p) vulnPatched++; }
   const patchFrac = vulnTotal ? vulnPatched / vulnTotal : 0;
   return (
-    <div className="border border-[#16263a] rounded-xl bg-gradient-to-br from-[#0c1826] to-[#081018] p-4 mb-4">
-      <div className="flex flex-wrap items-center gap-6">
-        <div className="flex items-center gap-3">
-          <Donut frac={detSolved / detTotal} big={`${detSolved}/${detTotal}`} sub="탐지" color="#22D3EE" />
-          <div>
-            <div className="font-mono text-3xl font-bold text-[#22D3EE] tabular-nums leading-none">{points}<span className="text-sm text-[#5a7088] ml-1">pt</span></div>
-            <div className="font-mono text-[11px] text-[#5a7088] mt-1">{rank ? `🏆 순위 ${rank}위` : "미제출"}</div>
-          </div>
+    <div className="bp-stats">
+      <div className="bp-stat-group">
+        <Donut frac={detSolved / detTotal} big={`${detSolved}/${detTotal}`} sub="탐지" color={CYAN} />
+        <div>
+          <div className="bp-headline">{points}<small>pt</small></div>
+          <div className="bp-muted" style={{ marginTop: 4 }}>{rank ? `🏆 순위 ${rank}위` : "미제출"}</div>
         </div>
-        <div className="flex items-center gap-3">
-          <Donut frac={patchFrac} big={`${Math.round(patchFrac * 100)}%`} sub={`${vulnPatched}/${vulnTotal}`} color="#34D399" />
-          <div className="font-mono text-[11px] text-[#5a7088]">패치<br />커버리지</div>
-        </div>
-        <div className="flex items-center gap-4 border-l border-[#16263a] pl-6">
-          <StatItem label="활성 공격" value={String(incidents)} color={incidents ? "#FB7185" : "#34D399"} />
-          <StatItem label="탐지 해결" value={String(detSolved)} color="#22D3EE" />
-          <StatItem label="패치 완료" value={String(vulnPatched)} color="#34D399" />
-        </div>
+      </div>
+      <div className="bp-stat-group">
+        <Donut frac={patchFrac} big={`${Math.round(patchFrac * 100)}%`} sub={`${vulnPatched}/${vulnTotal}`} color={GREEN} />
+        <div className="bp-muted">패치<br />커버리지</div>
+      </div>
+      <div className="bp-stat-group bp-stat-divider">
+        <StatItem label="활성 공격" value={String(incidents)} color={incidents ? RED : GREEN} />
+        <StatItem label="탐지 해결" value={String(detSolved)} color={CYAN} />
+        <StatItem label="패치 완료" value={String(vulnPatched)} color={GREEN} />
       </div>
     </div>
   );
@@ -88,14 +82,14 @@ function BlueStats({ challenges, patches, incidents, points, rank }: {
 function ScoreboardBars({ rows, me }: { rows: ScoreRow[]; me: string }) {
   const max = Math.max(1, ...rows.map((r) => r.points));
   return (
-    <div className="flex flex-col gap-1.5">
+    <div>
       {rows.slice(0, 6).map((r, i) => (
-        <div key={r.team_id} className="flex items-center gap-2">
-          <span className={`font-mono text-[10px] w-24 shrink-0 truncate ${r.team_id === me ? "text-[#22D3EE]" : "text-[#8aa0b8]"}`}>{i + 1}. {r.team_id}</span>
-          <div className="flex-1 h-3 rounded bg-[#16263a] overflow-hidden min-w-[60px]">
-            <div className={`h-full rounded transition-all duration-700 ${r.team_id === me ? "bg-[#22D3EE]" : "bg-[#3a6a80]"}`} style={{ width: `${(r.points / max) * 100}%` }} />
+        <div key={r.team_id} className="bp-score-row">
+          <span className={`bp-score-name${r.team_id === me ? " bp-me" : ""}`}>{i + 1}. {r.team_id}</span>
+          <div className="bp-score-track">
+            <div className={`bp-bar-fill${r.team_id === me ? " bp-me" : ""}`} style={{ width: `${(r.points / max) * 100}%` }} />
           </div>
-          <span className="font-mono text-[10px] text-[#5a7088] w-14 text-right tabular-nums">{r.points}pt·{r.solved}</span>
+          <span className="bp-score-pts">{r.points}pt·{r.solved}</span>
         </div>
       ))}
     </div>
@@ -106,20 +100,23 @@ function ScoreboardBars({ rows, me }: { rows: ScoreRow[]; me: string }) {
 function IncidentFeed({ events }: { events: RangeEvent[] }) {
   return (
     <div>
-      <div className="text-[12px] text-[#8aa0b8] mb-3">🔵 아래 공격 이벤트에 <b className="text-[#22D3EE]">EDR 격리·SIEM 규칙·패치</b>로 대응하세요. (실시간)</div>
-      <div className="flex flex-col gap-1.5">
-        {events.length === 0 && <div className="text-[#5a7088] font-mono text-sm">이벤트 없음 — 레드팀 공격을 대기 중…</div>}
-        {events.map((e) => (
-          <div key={e.event_id} className="flex items-center gap-3 border border-[#16263a] rounded px-3 py-2 bg-[#0d1a2a]">
-            <span className={`font-mono text-[11px] w-20 ${EV_STYLE(e.event_type)}`}>{EV_LABEL[e.event_type] ?? e.event_type}</span>
-            <span className="font-mono text-[12px] text-[#cfe0f0]">{e.target_asset}</span>
-            {e.vuln_id && <span className="font-mono text-[10px] text-[#8aa0b8]">{e.vuln_id}</span>}
-            {e.phase && <span className="font-mono text-[10px] text-[#5a7088]">{e.phase}</span>}
-            <span className="flex-1" />
-            <span className="font-mono text-[10px] text-[#5a7088]">team:{e.team_id}</span>
-          </div>
-        ))}
-      </div>
+      <div className="bp-hint">🔵 아래 공격 이벤트에 <b>EDR 격리·SIEM 규칙·패치</b>로 대응하세요. (실시간)</div>
+      {events.length === 0 ? (
+        <EmptyState title="이벤트 없음" detail="레드팀 공격을 대기 중입니다." />
+      ) : (
+        <div className="bp-feed">
+          {events.map((e) => (
+            <div key={e.event_id} className={`bp-event cr-tone-${eventTone(e.event_type)}`}>
+              <span className="bp-event-type">{eventLabel(e.event_type)}</span>
+              <span className="bp-event-asset">{e.target_asset}</span>
+              {e.vuln_id && <span className="bp-event-meta">{e.vuln_id}</span>}
+              {e.phase && <span className="bp-event-meta">{e.phase}</span>}
+              <span style={{ flex: 1 }} />
+              <span className="bp-event-meta">team:{e.team_id}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -127,38 +124,43 @@ function IncidentFeed({ events }: { events: RangeEvent[] }) {
 // ── 패치 보드 ──────────────────────────────────────────────────
 function PatchBoard({ patches, reload }: { patches: Patches; reload: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
   const assets = Object.keys(patches).sort();
   const doToggle = async (asset: string, vid: string, next: boolean) => {
     setBusy(`${asset}:${vid}`);
+    setErr(null);
     try { await togglePatch(asset, vid, next, "blue portal patch"); await reload(); }
-    catch (e) { alert("패치 토글 실패: " + e); }
+    catch (e) { setErr("패치 토글 실패: " + e); }
     finally { setBusy(null); }
   };
   return (
     <div>
-      <div className="text-[12px] text-[#8aa0b8] mb-3">🔧 취약 서비스를 <b className="text-[#22D3EE]">패치</b>하면 해당 공격이 막힙니다. 침해된 자산부터 우선 조치하세요.</div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="bp-hint">🔧 취약 서비스를 <b>패치</b>하면 해당 공격이 막힙니다. 침해된 자산부터 우선 조치하세요.</div>
+      {err && <div className="bp-error" role="alert">{err}</div>}
+      <div className="bp-patch-grid">
         {assets.map((asset) => {
           const vulns = patches[asset] || {};
           const total = Object.keys(vulns).length;
           const patched = Object.values(vulns).filter(Boolean).length;
           return (
-            <div key={asset} className="border border-[#16263a] rounded-lg bg-[#0d1a2a] p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-mono text-[12px] text-[#cfe0f0]">{asset}</span>
-                <span className="font-mono text-[10px] text-[#8aa0b8]">패치 {patched}/{total}</span>
+            <div key={asset} className="bp-patch-card">
+              <div className="bp-patch-head">
+                <span className="bp-event-asset">{asset}</span>
+                <span className="bp-muted">패치 {patched}/{total}</span>
               </div>
-              <div className="flex flex-col gap-1">
+              <div>
                 {Object.entries(vulns).map(([vid, isP]) => (
-                  <div key={vid} className="flex items-center justify-between gap-2">
-                    <span className={`font-mono text-[11px] ${isP ? "text-[#34D399]" : "text-[#FB7185]"}`}>
+                  <div key={vid} className="bp-vuln-row">
+                    <span className={`bp-vuln ${isP ? "bp-patched" : "bp-open"}`}>
                       {isP ? "✓" : "✗"} {vid}
                     </span>
-                    <button disabled={busy === `${asset}:${vid}`} onClick={() => doToggle(asset, vid, !isP)}
-                      className={`font-mono text-[9px] uppercase px-1.5 py-0.5 rounded border ${
-                        isP ? "border-[#6B7A99]/40 text-[#8aa0b8]" : "border-[#22D3EE]/50 text-[#22D3EE] hover:bg-[#22D3EE]/10"}`}>
+                    <Button
+                      tone={isP ? "neutral" : "operational"}
+                      disabled={busy === `${asset}:${vid}`}
+                      onClick={() => doToggle(asset, vid, !isP)}
+                    >
                       {busy === `${asset}:${vid}` ? "…" : isP ? "unpatch" : "patch"}
-                    </button>
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -192,36 +194,35 @@ function DetectionPanel({ c, team, onSolved }: { c: BlueChallenge; team: string;
     catch (e) { setErr(String(e)); } finally { setBusy(false); }
   };
   return (
-    <div className="flex flex-col gap-3">
+    <div className="bp-stack">
       <div>
-        <div className="text-[10px] uppercase tracking-widest text-[#5a7088] mb-1">목표</div>
-        <div className="text-[13px] text-[#cfe0f0]">{c.goal}</div>
+        <div className="bp-field-label">목표</div>
+        <div className="bp-event-asset">{c.goal}</div>
       </div>
-      {c.description && <div className="text-[12px] text-[#8aa0b8] whitespace-pre-wrap leading-relaxed">{c.description}</div>}
+      {c.description && <div className="bp-hint" style={{ whiteSpace: "pre-wrap", margin: 0 }}>{c.description}</div>}
       {c.success_criteria && (
-        <div className="border border-[#16263a] rounded px-3 py-2 bg-[#0a1420]">
-          <div className="text-[10px] uppercase tracking-widest text-[#5a7088] mb-1">성공 기준</div>
-          <div className="text-[12px] text-[#8aa0b8] whitespace-pre-wrap">{c.success_criteria}</div>
+        <div className="bp-criteria">
+          <div className="bp-field-label">성공 기준</div>
+          <div className="bp-muted" style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{c.success_criteria}</div>
         </div>
       )}
-      <div className="flex gap-2">
-        <a href={datasetUrl(c.id, "attack")} download className="font-mono text-[11px] px-2.5 py-1 rounded border border-[#FB7185]/50 text-[#FB7185] hover:bg-[#FB7185]/10">⬇ 공격 로그</a>
-        <a href={datasetUrl(c.id, "normal")} download className="font-mono text-[11px] px-2.5 py-1 rounded border border-[#34D399]/50 text-[#34D399] hover:bg-[#34D399]/10">⬇ 정상 로그</a>
+      <div style={{ display: "flex", gap: 8 }}>
+        <a href={datasetUrl(c.id, "attack")} download className="bp-dataset cr-tone-critical">⬇ 공격 로그</a>
+        <a href={datasetUrl(c.id, "normal")} download className="bp-dataset cr-tone-healthy">⬇ 정상 로그</a>
       </div>
       <div>
-        <div className="text-[10px] uppercase tracking-widest text-[#5a7088] mb-1">탐지 규칙 (YAML)</div>
-        <textarea value={rule} onChange={(e) => setRule(e.target.value)} spellCheck={false} rows={12}
-          className="w-full bg-[#0a1420] border border-[#16263a] rounded px-2.5 py-2 font-mono text-[11px] text-[#cfe0f0] focus:border-[#22D3EE]/60 outline-none resize-y" />
+        <div className="bp-field-label">탐지 규칙 (YAML)</div>
+        <textarea className="bp-textarea" value={rule} onChange={(e) => setRule(e.target.value)}
+          spellCheck={false} rows={12} aria-label="탐지 규칙 YAML" />
       </div>
-      <button onClick={submit} disabled={busy || !team}
-        className="font-mono text-[12px] uppercase tracking-wider px-3 py-2 rounded bg-[#22D3EE]/15 border border-[#22D3EE]/50 text-[#22D3EE] hover:bg-[#22D3EE]/25 disabled:opacity-40">
+      <Button tone="operational" onClick={submit} disabled={busy || !team}>
         {busy ? "채점 중(SIEM 엔진)…" : "규칙 제출"}
-      </button>
-      {err && <div className="text-[12px] text-[#FB7185] font-mono">⚠ {err}</div>}
+      </Button>
+      {err && <div className="bp-result cr-tone-critical">⚠ {err}</div>}
       {res && (
-        <div className={`rounded px-3 py-2 text-[13px] font-mono border ${res.passed ? "border-[#34D399]/50 bg-[#34D399]/10 text-[#34D399]" : "border-[#FB7185]/50 bg-[#FB7185]/10 text-[#FB7185]"}`}>
+        <div className={`bp-result cr-tone-${res.passed ? "healthy" : "critical"}`} role="status">
           {res.passed ? (res.already_solved ? "✓ 이미 해결됨" : `✓ 정답! +${res.points_awarded}pt 🎉`) : "✗ 오답 — attack 미탐지 또는 normal 오탐"}
-          <div className="text-[10px] text-[#5a7088] mt-1">{res.detail}</div>
+          <small>{res.detail}</small>
         </div>
       )}
     </div>
@@ -267,7 +268,7 @@ export default function App() {
 
   const myScore = scoreboard.find((r) => r.team_id === team);
   const solvedCount = challenges.filter((c) => c.solved).length;
-  const activeIncidents = events.filter((e) => /compromis|attack|exfil/.test(e.event_type)).length;
+  const activeIncidents = events.filter((e) => isActiveIncident(e.event_type)).length;
   const rankIdx = scoreboard.findIndex((r) => r.team_id === team);
   const rank = rankIdx >= 0 ? rankIdx + 1 : null;
 
@@ -278,51 +279,52 @@ export default function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#081018] text-[#cfe0f0] font-sans">
-      <header className="h-14 border-b border-[#16263a] flex items-center px-4 gap-3 sticky top-0 bg-[#081018] z-10">
-        <span className="font-mono text-sm tracking-[0.25em] text-[#22D3EE]">🛡️ BLUE PORTAL</span>
-        <span className="text-[10px] uppercase tracking-widest text-[#5a7088] px-2 py-0.5 rounded border border-[#16263a]">방어팀 전용</span>
-        <div className="flex-1" />
-        <label className="text-[10px] uppercase tracking-widest text-[#5a7088]">TEAM</label>
+    <div className="bp-shell">
+      <header className="bp-header">
+        <span className="bp-title">🛡️ BLUE PORTAL</span>
+        <span className="bp-pill">방어팀 전용</span>
+        <div className="bp-spacer" />
+        <label className="bp-label" htmlFor="bp-team">TEAM</label>
         {teams.length > 0 ? (
-          <select value={team} onChange={(e) => setTeam(e.target.value)}
-            className="bg-[#0d1a2a] border border-[#16263a] rounded px-2 py-1 font-mono text-[12px] text-[#cfe0f0] focus:border-[#22D3EE]/60 outline-none">
+          <select id="bp-team" className="bp-select" value={team} onChange={(e) => setTeam(e.target.value)}>
             {teams.map((t) => <option key={t.team_id} value={t.team_id}>{t.name}</option>)}
           </select>
         ) : (
-          <input value={team} onChange={(e) => setTeam(e.target.value.trim())}
-            className="bg-[#0d1a2a] border border-[#16263a] rounded px-2 py-1 font-mono text-[12px] text-[#cfe0f0] w-32 focus:border-[#22D3EE]/60 outline-none" />
+          <input id="bp-team" className="bp-input" value={team}
+            onChange={(e) => setTeam(e.target.value.trim())} style={{ width: 128 }} />
         )}
-        <div className="font-mono text-[13px] text-[#22D3EE] font-bold">{myScore?.points ?? 0}<span className="text-[10px] text-[#5a7088] ml-1">pt</span></div>
+        <div className="bp-points">{myScore?.points ?? 0}<small>pt</small></div>
       </header>
 
-      {err && <div className="px-4 py-2 text-[12px] text-[#FB7185] font-mono bg-[#FB7185]/10">⚠ 포털 백엔드(8060) 연결 실패: {err}</div>}
+      {err && <div className="bp-error" role="alert">⚠ 포털 백엔드(8060) 연결 실패: {err}</div>}
 
-      <div className="flex border-b border-[#16263a] px-4">
+      <nav className="bp-tabs" aria-label="Blue portal views">
         {TABS.map(([id, label, badge]) => (
-          <button key={id} onClick={() => setTab(id)}
-            className={`px-3 py-2.5 text-[12px] font-mono border-b-2 -mb-px ${tab === id ? "border-[#22D3EE] text-[#22D3EE]" : "border-transparent text-[#5a7088]"}`}>
-            {label} {badge && <span className="ml-1 text-[10px]">{badge}</span>}
+          <button key={id} type="button" className="bp-tab" aria-current={tab === id ? "page" : undefined}
+            onClick={() => setTab(id)}>
+            {label} {badge && <span style={{ fontSize: 10, marginLeft: 4 }}>{badge}</span>}
           </button>
         ))}
-      </div>
+      </nav>
 
-      <div className="flex">
-        <main className="flex-1 p-4 min-w-0">
+      <div className="bp-body">
+        <main className="bp-main">
           <BlueStats challenges={challenges} patches={patches} incidents={activeIncidents} points={myScore?.points ?? 0} rank={rank} />
           {tab === "incident" && <IncidentFeed events={events} />}
           {tab === "patch" && <PatchBoard patches={patches} reload={loadPatches} />}
           {tab === "detection" && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            <div className="bp-chal-grid">
               {challenges.map((c) => (
-                <button key={c.id} onClick={() => setSelected(c)}
-                  className={`text-left border rounded-lg px-3 py-2.5 bg-[#0d1a2a] hover:bg-[#11202f] ${c.solved ? "border-[#34D399]/50" : "border-[#16263a]"}`}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-mono text-[10px] text-[#5a7088]">{c.id}</span>
-                    <div className="flex items-center gap-1.5">{c.solved && <span className="text-[#34D399] text-[11px]">✓</span>}<Badge d={c.difficulty} /></div>
+                <button key={c.id} type="button" className={`bp-chal-card${c.solved ? " bp-solved" : ""}`}
+                  onClick={() => setSelected(c)}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span className="bp-muted">{c.id}</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      {c.solved && <span style={{ color: "var(--cr-green)" }}>✓</span>}<Badge d={c.difficulty} />
+                    </span>
                   </div>
-                  <div className="text-[13px] text-[#cfe0f0] leading-snug mb-1">{c.title}</div>
-                  <div className="text-right font-mono text-[12px] font-bold text-[#22D3EE]">{c.points_blue}pt</div>
+                  <div className="bp-chal-title">{c.title}</div>
+                  <div className="bp-chal-points">{c.points_blue}pt</div>
                 </button>
               ))}
             </div>
@@ -330,23 +332,27 @@ export default function App() {
         </main>
 
         {tab === "detection" && selected && (
-          <aside className="w-[26rem] border-l border-[#16263a] p-4 shrink-0 h-[calc(100vh-6.5rem)] overflow-y-auto sticky top-[6.5rem]">
-            <div className="flex items-start justify-between mb-3">
+          <aside className="bp-panel">
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
               <div>
-                <div className="font-mono text-[11px] text-[#5a7088]">{selected.id}</div>
-                <div className="text-[15px] font-semibold leading-snug mt-0.5">{selected.title}</div>
+                <div className="bp-muted">{selected.id}</div>
+                <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>{selected.title}</div>
               </div>
-              <button onClick={() => setSelected(null)} className="text-[#5a7088] hover:text-[#cfe0f0]">✕</button>
+              <button type="button" className="bp-close" aria-label="닫기" onClick={() => setSelected(null)}>✕</button>
             </div>
-            <div className="flex items-center gap-2 mb-3"><Badge d={selected.difficulty} /><span className="font-mono text-[12px] font-bold text-[#22D3EE]">{selected.points_blue}pt</span>{selected.solved && <span className="text-[#34D399] text-[11px]">✓ solved</span>}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <Badge d={selected.difficulty} />
+              <span className="bp-chal-points">{selected.points_blue}pt</span>
+              {selected.solved && <span style={{ color: "var(--cr-green)", fontSize: 11 }}>✓ solved</span>}
+            </div>
             <DetectionPanel c={selected} team={team} onSolved={loadChallenges} />
           </aside>
         )}
       </div>
 
       {scoreboard.length > 0 && (
-        <div className="fixed bottom-3 left-3 bg-[#0d1a2a] border border-[#16263a] rounded-lg px-3 py-2.5 w-72 shadow-lg">
-          <div className="text-[10px] uppercase tracking-widest text-[#5a7088] mb-2">🏆 Blue Scoreboard</div>
+        <div className="bp-scoreboard">
+          <div className="bp-field-label" style={{ marginBottom: 8 }}>🏆 Blue Scoreboard</div>
           <ScoreboardBars rows={scoreboard} me={team} />
         </div>
       )}

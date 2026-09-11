@@ -8,7 +8,9 @@ import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <WorkspaceBar workspace="Blue Team Operations" />
-    <App />
+    <div className="bp-root">
+      <WorkspaceBar workspace="Blue Team Operations" />
+      <App />
+    </div>
   </React.StrictMode>
 );
