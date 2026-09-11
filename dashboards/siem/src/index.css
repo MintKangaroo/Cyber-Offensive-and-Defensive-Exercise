@@ -1,16 +1,260 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-html, body, #root {
+/*
+ * SIEM workspace — CYBER RANGE COMMAND SYSTEM
+ * The shared design system (tokens.css + styles.css) supplies the palette and the
+ * Panel/Badge/Table/Empty/Error primitives. This file only adds SIEM-specific
+ * layout (the analyst shell, the log toolbar and the detection/coverage lists).
+ * No hard-coded colors: every value derives from a shared token.
+ */
+html,
+body,
+#root {
   height: 100%;
   margin: 0;
 }
-
 body {
   font-family: var(--cr-font);
+  background: var(--cr-bg);
+  color: var(--cr-text);
 }
 
-.font-mono {
-  font-family: var(--cr-mono);
+/* ---- analyst shell ---- */
+.siem-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+.siem-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1; /* fill the space below the shared WorkspaceBar */
+  min-height: 0;
+  background: var(--cr-bg);
+  color: var(--cr-text);
+}
+.siem-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--cr-border);
+  background: var(--cr-surface);
+}
+.siem-title {
+  font: 600 var(--cr-text-md) / 1.2 var(--cr-font);
+  letter-spacing: 0.14em;
+}
+.siem-pill {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--cr-subtle);
+  border: 1px solid var(--cr-border);
+  border-radius: var(--cr-radius-sm);
+  padding: 2px 8px;
+}
+.siem-tabs {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+}
+.siem-tab {
+  font: 500 12px / 1 var(--cr-font);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cr-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--cr-radius-sm);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.siem-tab:hover {
+  color: var(--cr-text);
+}
+.siem-tab[aria-current="page"] {
+  color: var(--cr-cyan);
+  background: color-mix(in srgb, var(--cr-cyan) 14%, transparent);
+  border-color: color-mix(in srgb, var(--cr-cyan) 35%, transparent);
+}
+.siem-live {
+  margin-left: auto;
+}
+.siem-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font: 500 var(--cr-text-sm) / 1.4 var(--cr-font);
+  color: var(--cr-red);
+  background: color-mix(in srgb, var(--cr-red) 14%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--cr-red) 40%, transparent);
+}
+
+/* ---- body: main view + source-health aside ---- */
+.siem-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.siem-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 16px;
+  overflow: auto;
+}
+.siem-aside {
+  width: 288px;
+  flex-shrink: 0;
+  padding: 16px;
+  border-left: 1px solid var(--cr-border);
+  overflow-y: auto;
+}
+@media (max-width: 860px) {
+  .siem-body {
+    flex-direction: column;
+  }
+  .siem-aside {
+    width: auto;
+    border-left: none;
+    border-top: 1px solid var(--cr-border);
+  }
+}
+
+/* ---- log toolbar (Discover) ---- */
+.siem-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--cr-border);
+}
+.siem-input,
+.siem-select {
+  background: var(--cr-bg);
+  border: 1px solid var(--cr-border);
+  border-radius: var(--cr-radius-sm);
+  color: var(--cr-text);
+  font: var(--cr-text-sm) / 1.3 var(--cr-font);
+  padding: 6px 10px;
+}
+.siem-input {
+  flex: 1;
+  min-width: 200px;
+}
+.siem-input:focus,
+.siem-select:focus {
+  outline: 2px solid var(--cr-cyan);
+  outline-offset: -1px;
+}
+.siem-total {
+  margin-left: auto;
+  font: var(--cr-text-sm) / 1 var(--cr-font);
+  color: var(--cr-muted);
+}
+
+/* ---- severity chip (5-level ramp, tone-colored) ---- */
+.siem-sev {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+}
+
+/* ---- detection list (Alerts) ---- */
+.siem-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--cr-border);
+}
+.siem-alert-title {
+  font: 500 var(--cr-text-sm) / 1.4 var(--cr-font);
+  color: var(--cr-text);
+}
+.siem-alert-title span {
+  color: var(--cr-subtle);
+}
+.siem-alert-detail {
+  font: var(--cr-text-sm) / 1.4 var(--cr-font);
+  color: var(--cr-muted);
+  margin: 2px 0 0;
+}
+.siem-alert-meta {
+  font-size: 11px;
+  color: var(--cr-subtle);
+  margin-top: 4px;
+}
+.siem-alert-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ---- ATT&CK coverage grid ---- */
+.siem-coverage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+  padding: 16px;
+}
+.siem-technique {
+  padding: 8px 12px;
+  border-radius: var(--cr-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--cr-green) 40%, transparent);
+  background: color-mix(in srgb, var(--cr-green) 10%, transparent);
+}
+.siem-technique b {
+  display: block;
+  font: 600 var(--cr-text-sm) / 1.2 var(--cr-font);
+  color: var(--cr-green);
+}
+.siem-technique small {
+  color: var(--cr-subtle);
+  font-size: 11px;
+}
+
+/* ---- source health list ---- */
+.siem-source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--cr-border);
+  border-radius: var(--cr-radius-sm);
+  background: var(--cr-surface);
+  margin-bottom: 6px;
+}
+.siem-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--cr-tone, var(--cr-neutral));
+}
+.siem-source-name {
+  flex: 1;
+  min-width: 0;
+  font: var(--cr-text-sm) / 1.3 var(--cr-font);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.siem-source-time {
+  font-size: 11px;
+  color: var(--cr-subtle);
+}
+.siem-cell-mono {
+  font-variant-numeric: tabular-nums;
+  color: var(--cr-muted);
+  white-space: nowrap;
+}
+.siem-cell-msg {
+  max-width: 32rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

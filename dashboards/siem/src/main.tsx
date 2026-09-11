@@ -8,7 +8,9 @@ import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <WorkspaceBar workspace="SIEM Intelligence" />
-    <App />
+    <div className="siem-root">
+      <WorkspaceBar workspace="SIEM Intelligence" />
+      <App />
+    </div>
   </React.StrictMode>
 );

@@ -2,14 +2,19 @@
 
 ## 디자인 방향
 
-Live Fire(전술 HUD)·EDR(터미널 SOC)과 톤을 의도적으로 다르게 잡았다 — SIEM은
-"정보 밀도가 최우선인 로그 분석 도구"다. 화려한 애니메이션 대신 표/리스트 밀도와
-스캔 속도에 집중.
+**CYBER RANGE COMMAND SYSTEM 공유 디자인 시스템**(`@cyber-range/command-system`)을 채택했다.
+독자 Tailwind 팔레트를 제거하고 공유 토큰(`tokens.css`)·컴포넌트(`Panel`·`StatusBadge`·
+`EmptyState`·`ErrorState`·`Button`·`WorkspaceBar`)로 통일해 Command Tower·다른 워크스페이스와
+같은 시각 언어를 쓴다. SIEM 고유 레이아웃(분석가 셸·로그 툴바·탐지/커버리지 리스트)만
+`src/index.css`에 공유 토큰 기반으로 남겼다(하드코딩 색상 0).
 
-- **팔레트**: 베이스 `#0A1119`, 패널 `#0E1620`, 보더 `#22303F`. 심각도는
-  info `#5FA8D3` → medium `#D9A441` → high `#E0703A` → critical `#D64545`, 정상 `#3FBF7F`.
-- **타이포**: IBM Plex Mono(데이터) + IBM Plex Sans(라벨). Live Fire의 Rajdhani, EDR의
-  JetBrains Mono와 겹치지 않게 폰트 자체도 구분.
+- **심각도(보존)**: 숫자 0~4와 라벨 INFO/LOW/MEDIUM/HIGH/CRITICAL·필터 임계값(2/3/4)은 그대로.
+  색상만 공유 톤으로 매핑(`severity.ts`의 `severityTone`): INFO→neutral·LOW→operational·
+  MEDIUM→intelligence·HIGH→warning·CRITICAL→critical (5단계 모두 구분됨).
+- **동작 보존**: 전송 계층(`api/client.ts`·`types.ts`)은 그대로 — 폴링 주기(알림/소스 5s·
+  커버리지 15s)·WS 재연결 백오프·베이스URL 해석·탐지 라이프사이클(open→ack→closed).
+- **테스트**: `severity.test.ts`(순수 매핑) + `dashboard.test.tsx`(뷰 통합, vitest+testing-library).
+  CI specialist-dashboards 잡이 `npm run test --if-present`로 자동 실행.
 
 ## 구조
 
