@@ -34,6 +34,7 @@ OBSERVER_DELAY_SEC = float(os.environ.get("OBSERVER_DELAY_SEC", "30"))
 
 from shared.rbac import require_role  # noqa: E402
 from shared.service_auth import require_service_token, service_headers  # noqa: E402
+from shared.asset_state import fold_asset_states  # noqa: E402
 from shared.sse_bus import SSEBus, visible_to, LIVE_TOPICS  # noqa: E402
 
 # 단일 상황판 허브(P0-4). 모든 토픽을 이 버스로 흘려 EventSource 하나로 구독한다.
@@ -236,6 +237,21 @@ def init_db():
     conn.execute("CREATE INDEX IF NOT EXISTS idx_events_trace_id ON events(trace_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_events_scope ON events(team_id,scenario_id,timestamp,event_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_events_defender ON events(defender_team_id,scenario_id,timestamp,event_id)")
+    # 우선순위 4: 권위 자산 상태 체크포인트. 저널 위치(seq/revision)에 고정된 자산 상태 fold를
+    # 영속화해, replay 가 윈도 이전 상태를 "unknown" 으로 추정하지 않고 앵커로 삼게 한다.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS asset_checkpoints (
+            scenario_id TEXT NOT NULL,
+            seq INTEGER NOT NULL,
+            revision INTEGER NOT NULL,
+            at_ts REAL NOT NULL,
+            states TEXT NOT NULL,
+            created_at REAL DEFAULT (strftime('%s','now')),
+            PRIMARY KEY(scenario_id, seq)
+        )
+        """
+    )
     journal.initialize(conn)
     # 감사 3.5: scoring 전달 실패용 로컬 스풀(DLQ). scoring_engine이 죽어도 이벤트를 잃지 않고
     # 복구되면 재전달한다.
@@ -614,6 +630,82 @@ def replay_page(scenario_id:str='default',team_id:Optional[str]=None,cursor:str=
     finally:conn.close()
 
 
+@app.post('/replay/checkpoint')
+def create_checkpoint(scenario_id: str = 'default', authorization: str = Header(default='')):
+    """저널을 현재 상한까지 fold 해 권위 자산 상태 체크포인트를 영속화한다(서비스 전용).
+
+    체크포인트는 저널 seq/revision 에 고정된다. 자산 상태 fold 만 재료화하며 점수·설정 등
+    다른 권위 상태는 건드리지 않는다. 직전 체크포인트가 있으면 그 상태를 seed 로 삼아 증분 fold.
+    """
+    # 서비스 토큰(내부 오케스트레이션) 또는 instructor(수동 핀) 둘 다 허용.
+    try:
+        require_service_token(authorization)
+    except HTTPException:
+        require_role(authorization, {"instructor"})
+    if not scenario_id:
+        raise HTTPException(400, 'scenario_id is required')
+    conn = get_db()
+    try:
+        upper = journal.bounds(conn)[1]
+        revision = journal.revision(conn)
+        prior = conn.execute(
+            'SELECT seq, at_ts, states FROM asset_checkpoints WHERE scenario_id=? AND revision=? AND seq<=? '
+            'ORDER BY seq DESC LIMIT 1',
+            (scenario_id, revision, upper),
+        ).fetchone()
+        seed = json.loads(prior['states']) if prior else {}
+        lower_seq = prior['seq'] if prior else 0
+        rows = conn.execute(
+            'SELECT event_type,target_asset,timestamp,event_id FROM events '
+            'WHERE scenario_id=? AND event_id IN (SELECT event_id FROM stream_journal WHERE seq>? AND seq<=?)',
+            (scenario_id, lower_seq, upper),
+        ).fetchall()
+        states = fold_asset_states([dict(r) for r in rows], seed=seed)
+        at_ts = max([r['timestamp'] for r in rows], default=(prior['at_ts'] if prior else 0.0))
+        with conn:
+            conn.execute(
+                'INSERT INTO asset_checkpoints(scenario_id,seq,revision,at_ts,states) VALUES(?,?,?,?,?) '
+                'ON CONFLICT(scenario_id,seq) DO UPDATE SET revision=excluded.revision, at_ts=excluded.at_ts, states=excluded.states',
+                (scenario_id, upper, revision, at_ts, json.dumps(states)),
+            )
+        return {'scenario_id': scenario_id, 'seq': upper, 'revision': revision, 'at_ts': at_ts, 'states': states}
+    finally:
+        conn.close()
+
+
+@app.get('/replay/checkpoint')
+def get_checkpoint(scenario_id: str = 'default', at: Optional[float] = None, team_id: Optional[str] = None):
+    """replay 앵커용 체크포인트 조회. at 이하(없으면 최신) 중 현재 revision 인 것만 반환.
+
+    revision 이 바뀌었으면(리셋/프루닝) 체크포인트는 stale → checkpoint=null 로 재시작 유도.
+    """
+    _, _, scenario_id = _event_conditions(team_id, scenario_id)
+    conn = get_db()
+    try:
+        revision = journal.revision(conn)
+        query = 'SELECT seq,revision,at_ts,states FROM asset_checkpoints WHERE scenario_id=? AND revision=?'
+        params: list = [scenario_id, revision]
+        if at is not None:
+            query += ' AND at_ts<=?'
+            params.append(at)
+        query += ' ORDER BY at_ts DESC, seq DESC LIMIT 1'
+        row = conn.execute(query, params).fetchone()
+        if not row:
+            return {'scenario_id': scenario_id, 'checkpoint': None, 'revision': revision}
+        return {
+            'scenario_id': scenario_id,
+            'revision': revision,
+            'checkpoint': {
+                'seq': row['seq'],
+                'revision': row['revision'],
+                'at_ts': row['at_ts'],
+                'states': json.loads(row['states']),
+            },
+        }
+    finally:
+        conn.close()
+
+
 @app.websocket("/ws")
 async def event_stream(websocket: WebSocket):
     await websocket.accept()
@@ -719,7 +811,7 @@ def admin_reset(authorization: str = Header(default="")):
     require_role(authorization, {"instructor"})
     conn = get_db()
     cleared = {}
-    for t in ['events','stream_journal']:
+    for t in ['events','stream_journal','asset_checkpoints']:
         try:
             cleared[t] = conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
             conn.execute(f"DELETE FROM {t}")

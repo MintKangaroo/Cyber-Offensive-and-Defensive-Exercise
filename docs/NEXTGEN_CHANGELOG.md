@@ -1,6 +1,34 @@
 # Next-generation changelog
 
 
+## 2026-09-11 — Authoritative asset checkpoints (priority 4, part A)
+
+- Added an authoritative asset-state checkpoint so replay can anchor pre-window state
+  instead of defaulting every unseen asset to "unknown". A checkpoint is the asset-state
+  fold frozen at a durable-journal position (`seq`/`revision`). Only the *derived*
+  asset-state fold is materialized; authoritative scores and config state are never
+  recomputed from event guesses.
+- New `shared/asset_state.py` (`fold_asset_states`) is the Python mirror of the client
+  reducer `assetStates` in `dashboards/shared/src/events.ts` (same transitions, same
+  `(timestamp, event_id)` ordering, plus a `seed` for checkpoint anchoring), so a
+  server-materialized checkpoint agrees exactly with the live UI.
+- Event collector: new `asset_checkpoints` table and endpoints
+  `POST /replay/checkpoint` (service token or instructor — folds the journal up to the
+  current upper bound, incrementally seeded from the prior checkpoint, and persists the
+  states/seq/revision) and `GET /replay/checkpoint?scenario_id=&at=` (member-scoped —
+  returns the latest checkpoint at or before `at`, only for the current journal
+  revision, so a reset/prune makes stale checkpoints disappear). Reset now clears
+  checkpoints. The checkpoint POST path was added to the scope trusted-write set and
+  the checkpoint GET to the collector read grants.
+- Command projection: `GET /command/replay/checkpoint` (replay capability) and
+  `POST /command/replay/checkpoint` (control capability, audited).
+
+Validation: **637 Python unit tests pass** plus new `test_asset_state.py` and
+`test_asset_checkpoint.py`, and command-projection checkpoint tests. The 50,003-event
+pagination and cursor/revision tests are unchanged. Remaining priority-4 work:
+bounded-memory replay in the Control Tower that anchors on these checkpoints (part B).
+
+
 ## 2026-09-11 — Instructor-reviewed defensive rubrics (priority 3, part B)
 
 - Added an instructor rubric-review workflow for Blue/defensive challenges, the

@@ -417,6 +417,36 @@ def test_campaign_launch_requires_confirmation_and_control_role(client):
         ).status_code == 403
 
 
+def test_replay_checkpoint_get_and_create(client, monkeypatch):
+    calls = []
+
+    async def fake(service, path, auth, **kwargs):
+        calls.append((service, path, kwargs))
+        if kwargs.get("method") == "POST":
+            return {"scenario_id": "TRAINING-01", "seq": 12, "revision": 3,
+                    "at_ts": 100.0, "states": {"power_plant": "compromised"}}
+        return {"scenario_id": "TRAINING-01", "checkpoint": {"seq": 12, "states": {}}}
+
+    monkeypatch.setattr(command, "upstream", fake)
+    # GET checkpoint (read capability)
+    got = client.get("/command/replay/checkpoint?scenario_id=default", headers=headers())
+    assert got.status_code == 200
+    assert calls[0][0:2] == ("events", "/replay/checkpoint")
+    # POST materializes and audits
+    made = client.post("/command/replay/checkpoint", headers=headers(),
+                       json={"scenario_id": "default"})
+    assert made.status_code == 200
+    assert calls[-1][0:2] == ("events", "/replay/checkpoint")
+    assert calls[-1][2]["method"] == "POST"
+    assert "replay:checkpoint" in {a["action"] for a in audit_store.list_entries()}
+
+
+def test_replay_checkpoint_create_requires_control(client):
+    for role in ("red", "blue", "observer", "competitor"):
+        assert client.post("/command/replay/checkpoint", headers=headers(role),
+                           json={"scenario_id": "default"}).status_code == 403
+
+
 def test_drafts_are_private_to_actor(client, monkeypatch):
     source = "scenario:\n  id: X\n  private: keep exactly\n"
     assert (
