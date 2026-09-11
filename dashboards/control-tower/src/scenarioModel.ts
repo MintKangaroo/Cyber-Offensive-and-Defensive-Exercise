@@ -186,6 +186,62 @@ export function appendPhase(
   };
   return editSource(source, index, [doc.root, key], value);
 }
+/** Built-in inject template ids (UI hint only; the runtime accepts inline specs too). */
+export const INJECT_TEMPLATES = [
+  "media-press-call",
+  "exec-ciso-brief",
+  "regulator-notice",
+  "legal-hold",
+] as const;
+/** Create the embedded injects_campaign block once; never overwrite an existing one. */
+export function appendCampaign(
+  source: string,
+  index: number,
+  root: string,
+): string {
+  const docs = parseSource(source);
+  const doc = docs[index];
+  if (!doc) throw new Error("Document no longer exists");
+  if (doc.document.hasIn([root, "injects_campaign"]))
+    throw new Error("This scenario already has an inject campaign.");
+  doc.document.setIn(
+    [root, "injects_campaign"],
+    {
+      name: "crisis-comms",
+      specs: [{ spec_id: "media", template_id: "media-press-call", at_sec: 0 }],
+    },
+  );
+  return docs.map((d) => d.document.toString()).join("");
+}
+/** Append one inject spec with a unique spec_id; existing specs stay intact. */
+export function appendCampaignSpec(
+  source: string,
+  index: number,
+  root: string,
+): string {
+  const docs = parseSource(source);
+  const doc = docs[index];
+  if (!doc) throw new Error("Document no longer exists");
+  const path: KeyPath = [root, "injects_campaign", "specs"];
+  if (!doc.document.hasIn(path))
+    doc.document.setIn(path, doc.document.createNode([]));
+  const seq = doc.document.getIn(path);
+  if (!isSeq(seq))
+    throw new Error("The specs field is not a sequence. Correct it in YAML source first.");
+  const existing = objects(seq.toJSON());
+  const used = new Set(existing.map((s) => str(s.spec_id)));
+  let n = existing.length + 1;
+  while (used.has(`inject_${n}`)) n++;
+  seq.add({
+    spec_id: `inject_${n}`,
+    channel: "internal",
+    subject: "New inject",
+    body: "",
+    deadline_min: 30,
+    rubric: [],
+  });
+  return docs.map((d) => d.document.toString()).join("");
+}
 export function moveStage(
   source: string,
   index: number,

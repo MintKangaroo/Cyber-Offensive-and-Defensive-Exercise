@@ -8,6 +8,9 @@ import {
   type JsonObject,
 } from "@cyber-range/command-system";
 import {
+  INJECT_TEMPLATES,
+  appendCampaign,
+  appendCampaignSpec,
   appendItem,
   appendPhase,
   appendStage,
@@ -171,6 +174,185 @@ export function BlueObjectives({
       >
         Add Blue recovery objective
       </Button>
+    </div>
+  );
+}
+
+/**
+ * Embedded crisis-communications inject campaign. Authored losslessly into the
+ * scenario source under `injects_campaign:` and published through the existing
+ * scenario file contract. The runtime (injects service) loads it by scenario id,
+ * so the campaign is bound to this scenario without a free-form string. Rubric
+ * grading stays manual — an instructor awards points per criterion at run time.
+ */
+export function CampaignEditor({
+  raw,
+  root,
+  source,
+  index,
+  change,
+  update,
+  onError,
+}: {
+  raw: JsonObject;
+  root: string;
+  source: string;
+  index: number;
+  change: (value: string) => void;
+  update: UpdateScenario;
+  onError: (message: string) => void;
+}) {
+  const campaign = raw.injects_campaign;
+  const mutate = (fn: () => string) => {
+    try {
+      change(fn());
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Visual edit failed");
+    }
+  };
+  const base: KeyPath = [root, "injects_campaign"];
+  if (campaign == null || typeof campaign !== "object" || Array.isArray(campaign))
+    return (
+      <div className="panel-padding">
+        <h3>Crisis communications injects (optional)</h3>
+        <p className="muted">
+          Add a timed sequence of non-technical injects (media, exec, regulator,
+          legal). It is published with the scenario and launched by scenario id;
+          rubric grading is reviewed by an instructor at run time.
+        </p>
+        <Button onClick={() => mutate(() => appendCampaign(source, index, root))}>
+          Add crisis-comms inject campaign
+        </Button>
+      </div>
+    );
+  const model = object(campaign);
+  return (
+    <div className="panel-padding">
+      <h3>Crisis communications injects</h3>
+      <p className="muted">
+        Each spec is delivered to every team. Use a built-in template id or inline
+        subject/body. A trigger fires a follow-up after an earlier spec is answered
+        or its deadline is missed.
+      </p>
+      <TextField
+        label="Campaign name"
+        value={model.name}
+        change={(v) => update([...base, "name"], v)}
+      />
+      {objects(model.specs).map((spec, i) => {
+        const path: KeyPath = [...base, "specs", i];
+        return (
+          <fieldset className="stage-fields" key={i}>
+            <legend>Inject {i + 1}</legend>
+            <TextField
+              label="Spec ID"
+              value={spec.spec_id}
+              change={(v) => update([...path, "spec_id"], v)}
+            />
+            <label>
+              Template
+              <input
+                list="inject-template-ids"
+                value={str(spec.template_id)}
+                placeholder="built-in id or blank for inline"
+                onChange={(e) =>
+                  update([...path, "template_id"], e.target.value || null)
+                }
+              />
+            </label>
+            <TextField
+              label="Channel"
+              value={spec.channel}
+              change={(v) => update([...path, "channel"], v || null)}
+            />
+            <TextField
+              label="Subject (inline)"
+              value={spec.subject}
+              change={(v) => update([...path, "subject"], v || null)}
+            />
+            <TextField
+              label="Body (inline)"
+              value={spec.body}
+              change={(v) => update([...path, "body"], v || null)}
+            />
+            <NumberField
+              label="Deadline (minutes)"
+              value={spec.deadline_min}
+              change={(v) => update([...path, "deadline_min"], v)}
+            />
+            <NumberField
+              label="Fire at (seconds)"
+              value={spec.at_sec}
+              change={(v) => update([...path, "at_sec"], v)}
+            />
+            <TextField
+              label="Trigger after (spec ID, optional)"
+              value={object(spec.trigger).after}
+              change={(v) =>
+                v
+                  ? update([...path, "trigger"], {
+                      after: v,
+                      on: str(object(spec.trigger).on) || "answered",
+                    })
+                  : update([...path, "trigger"], null)
+              }
+            />
+            {spec.trigger != null && (
+              <label>
+                Trigger on
+                <select
+                  value={str(object(spec.trigger).on) || "answered"}
+                  onChange={(e) =>
+                    update([...path, "trigger", "on"], e.target.value)
+                  }
+                >
+                  <option value="answered">Previous inject answered</option>
+                  <option value="deadline_missed">Previous deadline missed</option>
+                </select>
+              </label>
+            )}
+            <div className="field-wide">
+              <strong className="muted">Rubric (manual grading)</strong>
+              {objects(spec.rubric).map((crit, r) => (
+                <div className="stage-fields" key={r}>
+                  <TextField
+                    label={`Criterion ${r + 1}`}
+                    value={crit.criterion}
+                    change={(v) => update([...path, "rubric", r, "criterion"], v)}
+                  />
+                  <NumberField
+                    label="Max points"
+                    value={crit.max}
+                    change={(v) => update([...path, "rubric", r, "max"], v)}
+                  />
+                </div>
+              ))}
+              <Button
+                onClick={() =>
+                  mutate(() =>
+                    appendItem(source, index, [...path, "rubric"], {
+                      criterion: "New criterion",
+                      max: 5,
+                    }),
+                  )
+                }
+              >
+                Add rubric criterion
+              </Button>
+            </div>
+          </fieldset>
+        );
+      })}
+      <Button
+        onClick={() => mutate(() => appendCampaignSpec(source, index, root))}
+      >
+        Add inject spec
+      </Button>
+      <datalist id="inject-template-ids">
+        {INJECT_TEMPLATES.map((id) => (
+          <option key={id} value={id} />
+        ))}
+      </datalist>
     </div>
   );
 }

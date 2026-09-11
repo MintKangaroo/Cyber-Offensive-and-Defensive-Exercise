@@ -96,6 +96,7 @@ class CrossoverScenario(BaseModel):
     scoring_summary: dict[str, int] = Field(default_factory=dict)
     noise: Optional[NoiseSpec] = None
     safety: Optional[SafetySpec] = None
+    injects_campaign: Optional[dict[str, Any]] = None   # 임베드 인젝트 캠페인(선택), 보관만
 
     def phase_order(self) -> list[str]:
         """phase_1_web, phase_2_forensics, phase_3_detection 순으로 정렬."""

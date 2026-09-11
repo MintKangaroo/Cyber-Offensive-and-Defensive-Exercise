@@ -218,6 +218,52 @@ def test_direct_studio_publish_has_durable_audit(client):
     )
 
 
+CAMPAIGN_SOURCE = SOURCE.replace(
+    "  stages:",
+    """  injects_campaign:
+    name: crisis-comms
+    specs:
+      - spec_id: media
+        template_id: media-press-call
+        at_sec: 0
+      - spec_id: regulator
+        template_id: regulator-notice
+        trigger: {after: media, on: answered}
+  stages:""",
+)
+
+
+def test_campaign_endpoint_requires_instructor(client):
+    assert client.get("/studio/campaign/STUDIO-01").status_code == 401
+
+
+def test_campaign_endpoint_404_without_embedded_campaign(client):
+    # The base source has no injects_campaign.
+    assert client.get("/studio/campaign/STUDIO-01", headers=AUTH).status_code == 404
+    assert client.get("/studio/campaign/UNKNOWN", headers=AUTH).status_code == 404
+
+
+def test_campaign_endpoint_extracts_and_validates_embedded_campaign(client):
+    file = Path(api.SCENARIOS_DIR) / "original.yaml"
+    file.write_text(CAMPAIGN_SOURCE)
+    r = client.get("/studio/campaign/STUDIO-01", headers=AUTH)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["scenario_id"] == "STUDIO-01"
+    assert body["name"] == "crisis-comms"
+    assert [s["spec_id"] for s in body["specs"]] == ["media", "regulator"]
+
+
+def test_campaign_endpoint_reports_validation_errors(client):
+    broken = CAMPAIGN_SOURCE.replace("spec_id: regulator", "spec_id: media")
+    file = Path(api.SCENARIOS_DIR) / "original.yaml"
+    file.write_text(broken)
+    body = client.get("/studio/campaign/STUDIO-01", headers=AUTH).json()
+    assert body["ok"] is False
+    assert any(i["code"] == "duplicate_spec" for i in body["issues"])
+
+
 def test_yaml_merge_keys_keep_existing_semantics(client):
     source = SOURCE.replace(
         "vendor_extension: {preserve: true}",

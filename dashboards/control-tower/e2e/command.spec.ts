@@ -159,6 +159,33 @@ test("crossover phases and investigation keys survive visual source switching", 
   );
 });
 
+test("embedded inject campaign authoring writes lossless YAML and validates", async ({
+  page,
+}) => {
+  const updates = await setup(page);
+  await page.goto("/#studio");
+  await page
+    .getByRole("button", { name: "Add crisis-comms inject campaign" })
+    .click();
+  await page.getByRole("button", { name: "Add inject spec" }).click();
+  await page.getByRole("button", { name: "Add rubric criterion" }).first().click();
+  await page.getByRole("button", { name: "YAML source", exact: true }).click();
+  const raw = parse(
+    await page.getByLabel("Scenario YAML source").inputValue(),
+  ).scenario;
+  expect(raw.injects_campaign.name).toBe("crisis-comms");
+  expect(raw.injects_campaign.specs[0].spec_id).toBe("media");
+  expect(raw.injects_campaign.specs[1].spec_id).toBe("inject_2");
+  expect(raw.injects_campaign.specs[0].rubric[0]).toMatchObject({ max: 5 });
+  // Existing single-scenario content is untouched by the campaign edit.
+  expect(raw.stages[0].is_final).toBe(true);
+  await page.getByRole("button", { name: "Validate & dry run" }).click();
+  await expect(
+    page.getByRole("button", { name: "Publish scenario", exact: true }),
+  ).toBeEnabled();
+  expect(updates.find((u) => u.path === "/scenarios/validate")).toBeTruthy();
+});
+
 test("unapplied evidence blocks save and mode changes; keyboard applies typed criteria", async ({
   page,
 }) => {

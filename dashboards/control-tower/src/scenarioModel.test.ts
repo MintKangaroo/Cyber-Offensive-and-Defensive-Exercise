@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { resolve, join } from "node:path";
 import { readdirSync, readFileSync } from "node:fs";
 import {
+  appendCampaign,
+  appendCampaignSpec,
   appendItem,
   appendPhase,
   appendStage,
@@ -9,7 +11,37 @@ import {
   parseSource,
   phaseEntries,
   NEW_CROSSOVER,
+  NEW_SCENARIO,
 } from "./scenarioModel";
+
+describe("embedded inject campaign authoring", () => {
+  it("adds a campaign block without touching existing scenario data or comments", () => {
+    const original = NEW_SCENARIO + "  vendor_ext: &k {keep: 1}\n  mirror: *k\n";
+    const source = appendCampaign(original, 0, "scenario");
+    const before = parseSource(original)[0].raw;
+    const after = parseSource(source)[0].raw;
+    // Everything except the new campaign is byte-identical in meaning.
+    const { injects_campaign, ...rest } = after as Record<string, unknown>;
+    expect(rest).toEqual(before);
+    expect(injects_campaign).toMatchObject({ name: "crisis-comms" });
+    expect(source).toContain("vendor_ext"); // anchors/comments preserved
+  });
+  it("refuses to overwrite an existing campaign", () => {
+    const source = appendCampaign(NEW_SCENARIO, 0, "scenario");
+    expect(() => appendCampaign(source, 0, "scenario")).toThrow("already");
+  });
+  it("appends specs with unique spec_ids", () => {
+    let source = appendCampaign(NEW_SCENARIO, 0, "scenario");
+    source = appendCampaignSpec(source, 0, "scenario");
+    source = appendCampaignSpec(source, 0, "scenario");
+    const specs = (
+      parseSource(source)[0].raw.injects_campaign as { specs: { spec_id: string }[] }
+    ).specs;
+    const ids = specs.map((s) => s.spec_id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toContain("inject_2");
+  });
+});
 
 describe("crossover visual authoring fidelity", () => {
   it("appends explicitly dependent phases without changing existing data or comments", () => {

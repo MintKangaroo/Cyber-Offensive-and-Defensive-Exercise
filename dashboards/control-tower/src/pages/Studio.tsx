@@ -27,6 +27,7 @@ import {
 } from "../scenarioModel";
 import {
   BlueObjectives,
+  CampaignEditor,
   CriteriaEditor,
   PhaseEditor,
   ScenarioDraftContext,
@@ -591,9 +592,19 @@ export default function Studio() {
                         }}
                       />
                     )}
+                    <CampaignEditor
+                      raw={raw}
+                      root={root}
+                      source={source}
+                      index={docIndex}
+                      change={change}
+                      update={update}
+                      onError={setError}
+                    />
                     <p className="panel-padding muted">
-                      Inject campaigns retain their dedicated Injects workspace.
-                      Advanced source extensions remain available in YAML.
+                      Complex inject libraries and rubric review stay in the
+                      Injects workspace. Advanced source extensions remain
+                      available in YAML.
                     </p>
                   </>
                 )}

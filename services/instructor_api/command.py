@@ -808,6 +808,56 @@ async def inject_respond(
     )
 
 
+class CampaignLaunchRequest(BaseModel):
+    scenario_id: str = Field(min_length=1, max_length=120)
+    team_ids: list[str] = Field(min_length=1, max_length=100)
+    reason: str = Field(min_length=3, max_length=2000)
+    confirm: bool = False
+
+
+@router.post("/injects/campaign/launch")
+async def inject_campaign_launch(
+    req: CampaignLaunchRequest,
+    authorization: str = Header(default=""),
+    cr_token: str | None = Cookie(default=None),
+):
+    """발행된 시나리오에 임베드된 인젝트 캠페인을 injects 런타임에 적재한다.
+
+    캠페인 정의의 권위 출처는 발행된 시나리오 소스이며, scenario_id 는 시나리오 id 로
+    자동 고정된다(참조 무결성). 에러가 있는 캠페인은 적재하지 않는다.
+    """
+    ident, auth = await identify(authorization, cr_token)
+    need(ident, "control")
+    if not req.confirm or len(req.reason.strip()) < 3:
+        raise HTTPException(400, "Confirmation and reason required")
+    campaign = await call(
+        "scenario", "/studio/campaign/" + quote(req.scenario_id, safe=""), auth
+    )
+    if not campaign.get("ok"):
+        audit_store.record(
+            ident.actor, "inject:campaign:rejected", req.scenario_id, req.reason
+        )
+        raise HTTPException(
+            422, "Embedded campaign has validation errors; fix them in the scenario source"
+        )
+    result = await call(
+        "injects",
+        "/injects/campaign",
+        auth,
+        method="POST",
+        body={
+            "scenario_id": req.scenario_id,
+            "name": campaign.get("name") or req.scenario_id,
+            "team_ids": req.team_ids,
+            "specs": campaign.get("specs") or [],
+        },
+    )
+    audit_store.record(
+        ident.actor, "inject:campaign:launched", req.scenario_id, req.reason
+    )
+    return result
+
+
 @router.get("/training")
 async def training(
     authorization: str = Header(default=""), cr_token: str | None = Cookie(default=None)

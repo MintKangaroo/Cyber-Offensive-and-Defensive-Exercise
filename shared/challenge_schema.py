@@ -133,3 +133,7 @@ class Scenario(BaseModel):
     chain_bonus: Optional[ChainBonus] = None
     blue_objectives: list[BlueObjective] = Field(default_factory=list)
     noise: Optional[Noise] = None
+    # 선택: 이 시나리오에 임베드된 비기술 인젝트 캠페인(위기 커뮤니케이션).
+    # 구조 검증은 shared.injects_campaign.campaign_issues 가 담당(런타임과 동일 규칙).
+    # 로더는 실행에 관여하지 않고 보관만 한다; 캠페인은 별도 launch 로 injects 에 적재.
+    injects_campaign: Optional[dict[str, Any]] = None

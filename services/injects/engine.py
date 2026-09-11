@@ -16,7 +16,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-TRIGGER_EVENTS = ("answered", "deadline_missed")
+# 트리거 이벤트 계약은 shared 단일 출처에서(저작 검증기와 동일 규칙 보장).
+from shared.injects_campaign import TRIGGER_EVENTS  # noqa: F401  (re-export)
 
 
 @dataclass(frozen=True)
