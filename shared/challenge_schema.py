@@ -47,10 +47,19 @@ class RedTask(BaseModel):
     hints: list[Hint] = Field(default_factory=list)
 
 
+class RubricCriterion(BaseModel):
+    """교관 검토 방어 rubric 항목(자동 채점 아님, 항목별 상한 점수)."""
+    criterion: str
+    max: int
+
+
 class BlueTask(BaseModel):
     goal: str
     success_criteria: str
     points_breakdown: dict[str, int] = Field(default_factory=dict)
+    # 선택: 교관이 방어 작업 품질을 항목별로 검토·채점하는 rubric.
+    # 자동 채점(pass/fail)과 별개이며 대회 점수에 영향 없음(훈련 증거 전용).
+    rubric: list[RubricCriterion] = Field(default_factory=list)
 
 
 class Scoring(BaseModel):

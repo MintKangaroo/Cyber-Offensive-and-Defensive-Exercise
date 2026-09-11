@@ -115,4 +115,10 @@ def init_audit(conn: sqlite3.Connection) -> None:
     # 교관 정책(key/value). key="hints" → JSON {enabled:bool}. 정책 인지 힌트 게이트.
     conn.execute("""CREATE TABLE IF NOT EXISTS training_policy(
         key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at REAL NOT NULL, actor TEXT)""")
+    # 교관 검토 방어 rubric 리뷰(자동 채점과 별개·대회 점수 무관). 학습자×챌린지 1건.
+    conn.execute("""CREATE TABLE IF NOT EXISTS training_reviews(
+        subject TEXT NOT NULL, team_id TEXT NOT NULL, match_id TEXT NOT NULL,
+        cid TEXT NOT NULL, side TEXT NOT NULL, score INTEGER NOT NULL, max_score INTEGER NOT NULL,
+        scores TEXT NOT NULL, feedback TEXT, reviewer TEXT, reviewed_at REAL NOT NULL,
+        PRIMARY KEY(subject,team_id,match_id,cid,side))""")
     conn.commit()
