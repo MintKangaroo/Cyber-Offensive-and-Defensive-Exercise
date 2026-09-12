@@ -769,7 +769,7 @@ docker compose down
 
 **소개 · 구조**
 - [무엇을 하는 플랫폼인가](#무엇을-하는-플랫폼인가) · [아키텍처](#아키텍처) · [주요 화면](#주요-화면-스크린샷) · [핵심 기능](#핵심-기능)
-- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (104종)](#챌린지-카탈로그-104종)
+- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (106종)](#챌린지-카탈로그-106종)
 
 **시작 · 품질 · 접근제어**
 - [처음 시작하기](#처음-시작하기) · [경기 운영 방법](#경기-운영-방법) · [빠른 시작](#빠른-시작)
@@ -1079,7 +1079,7 @@ patched/vulnerable 상태를 한 번에 판정합니다.
 
 ---
 
-## 챌린지 카탈로그 (104종)
+## 챌린지 카탈로그 (106종)
 
 web·pwn·crypto·forensics·network·reversing·detection·ai·ICS/OT 9개 분야가 모두 **easy → medium → hard → insane** 난이도 곡선을 갖추고 있습니다.
 표기: `점수(Red/Blue)`. 팀마다 플래그·정답이 HMAC으로 달라 답 공유가 불가능합니다.
@@ -1106,6 +1106,8 @@ web·pwn·crypto·forensics·network·reversing·detection·ai·ICS/OT 9개 분�
 > | PWN-008 | 가스터미널 압력제어 콘솔 | 스택 BOF ROP 인자 제어(pop rdi→키 필요 win) | hard | 9018 |
 > | CRY-007 | 지자체 스마트미터 펌웨어 서명 | RSA 작은 d(Wiener 공격) | hard | 8139 |
 > | PWN-009 | 댐 방류 게이트 제어 콘솔 | 스택 카나리 유출·우회(ret2win) | hard | 9019 |
+> | CRY-008 | 중앙은행 결제 HSM | RSA LSB 패리티 오라클(복호 오라클) | hard | 8140 |
+> | PWN-010 | 송전망 SCADA 레지스터 콘솔 | 배열 OOB 쓰기→전역 함수포인터 하이재킹 | hard | 9020 |
 >
 > 개별 기동: `cd challenges/<cat>/<ID>/deploy && CHALLENGE_SECRET=<secret> docker compose up -d --build`
 
