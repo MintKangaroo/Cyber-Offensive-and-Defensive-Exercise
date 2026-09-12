@@ -1,0 +1,41 @@
+challenge:
+  id: "PWN-010"
+  title: "송전망 SCADA 레지스터 콘솔 - 배열 OOB 쓰기(전역 함수포인터 하이재킹)"
+  category: "pwn"
+  difficulty: "hard"
+  points: { red: 220, blue: 220 }
+  asset: "gridreg"
+  mitre: [T1203, T1068]
+
+  description: |
+    송전망 SCADA 레지스터 콘솔(원격 TCP)이 reg[idx]=val 을 인덱스 경계 검사 없이 수행해 OOB
+    상대 쓰기가 된다(음수/큰 인덱스 허용). 전역 함수포인터 handler(=safe_handler)를 숨은
+    admin_shell 로 덮으면 이어지는 handler() 호출에서 /flag 가 노출된다. no-PIE·static 이라
+    reg·handler·admin_shell 주소가 고정 → idx=(&handler-&reg)/8, val=&admin_shell.
+    (스택 BOF·포맷스트링·힙 계열과 구분되는 배열 OOB write-what-where 유형)
+
+  red_task:
+    goal: "경계 없는 reg[idx]=val 로 전역 handler 를 admin_shell 로 OOB 덮어쓰기 → handler() 실행 → flag"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "reg[idx]=val 의 idx 에 경계 검사가 없다. 음수 인덱스로 배열 앞쪽 전역을 건드릴 수 있다." }
+      - { cost: 20, text: "직후 handler() 가 호출된다. 전역 handler 를 admin_shell 주소로 덮으면?" }
+      - { cost: 30, text: "no-PIE 라 주소 고정: idx=(&handler-&reg)/8(음수), val=&admin_shell. nm/objdump 로 주소 확인." }
+
+  blue_task:
+    goal: "인덱스 경계 검사(0<=idx<16) 추가로 OOB 쓰기 차단"
+    success_criteria: |
+      (1) reg[idx]=val 에 부호/상한 검사가 없는지(음수·초과 인덱스 허용) 점검
+      (2) 패치 후 범위 밖 인덱스가 거부되어 전역 함수포인터 오염 불가
+    points_breakdown: { detection: 66, patch: 154 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["gridreg"]
+  safety:
+    profile: "hardened"
+    notes: "원격 정적 바이너리(no-PIE·의도적 OOB 배열쓰기). cap_drop/pids_limit/mem_limit, 30초 타임아웃."

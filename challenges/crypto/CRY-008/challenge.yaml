@@ -1,0 +1,40 @@
+challenge:
+  id: "CRY-008"
+  title: "중앙은행 결제 HSM - RSA LSB 패리티 오라클"
+  category: "crypto"
+  difficulty: "hard"
+  points: { red: 240, blue: 240 }
+  asset: "cbank-payment-hsm"
+  mitre: [T1040]
+
+  description: |
+    중앙은행 결제 HSM 이 RSA 복호 결과의 최하위 비트(짝/홀)를 상태 코드로 흘린다(LSB 오라클).
+    RSA 는 곱셈 준동형이라 c' = c·2^e mod N 의 복호는 2m mod N 이고, 그 LSB 는 2m 이 N 을
+    넘겼는지를 알려준다. 이를 반복하면 이분탐색으로 m 전체를 복구할 수 있다. 서버가 (N,e)로
+    암호화해 배포한 관리자 결제 토큰 c 를 오라클로 복구해 제출하면 flag 를 낸다.
+
+  red_task:
+    goal: "POST /api/oracle 의 LSB 로 이분탐색 → 관리자 토큰 c 복구 → /api/admin 제출로 flag"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "복호 결과의 짝/홀만 새도 위험하다. RSA 준동형: enc(2)·c = enc(2m). 2m 이 N 을 넘으면 LSB 가 바뀐다." }
+      - { cost: 20, text: "매 단계 c←c·2^e mod N, 오라클 LSB 로 상·하한 [0,N) 을 절반씩 좁힌다(Fraction 으로 정확히)." }
+      - { cost: 30, text: "N.bit_length() 번 질의로 m 확정. m 을 바이트로 → /api/admin 에 hex 로 제출." }
+
+  blue_task:
+    goal: "복호 부산물(LSB/오류 상태)을 외부에 노출하지 않도록 오라클 제거"
+    success_criteria: |
+      (1) 복호 결과의 패리티·상세 오류가 응답으로 새는지(오라클) 점검
+      (2) 패치 후 오라클이 패리티를 반환하지 않아 이분탐색 복구 불가
+    points_breakdown: { detection: 72, patch: 168 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["cbank-payment-hsm"]
+  safety:
+    profile: "hardened"
+    notes: "HTTP 서비스형. read_only/tmpfs/cap_drop/mem_limit. 취약은 의도된 LSB 오라클이며 실제 결제키 아님."

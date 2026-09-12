@@ -1,0 +1,12 @@
+services:
+  pwn010_deploy:
+    build: { context: . }
+    container_name: pwn010_deploy
+    ports: ["9020:9020"]
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-pwn010-dev-secret}
+      - PORT=9020
+    mem_limit: 128m
+    pids_limit: 64
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
