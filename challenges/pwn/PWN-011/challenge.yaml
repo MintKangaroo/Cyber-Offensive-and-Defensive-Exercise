@@ -1,0 +1,41 @@
+challenge:
+  id: "PWN-011"
+  title: "변전소 제어 릴레이 콘솔 - ROP execve 시스콜 체인(셸 획득)"
+  category: "pwn"
+  difficulty: "insane"
+  points: { red: 260, blue: 260 }
+  asset: "relayctl"
+  mitre: [T1203, T1059]
+
+  description: |
+    변전소 제어 릴레이 콘솔(원격 TCP)이 64바이트 버퍼에 read(0,buf,512) 로 입력받아 스택
+    오버플로우가 있다. ret2win 함수가 없으므로 정적 바이너리의 가젯을 모아 execve("/bin/sh",0,0)
+    시스콜을 직접 구성해야 한다: rdi=&"/bin/sh", rsi=0, rdx=0(pop rdx;pop rbx;ret), rax=59, syscall.
+    no-PIE·no-canary·static 이라 가젯·문자열 주소가 고정(offset 72). 셸을 얻은 뒤 /flag 를 읽는다.
+    (단일 pop rdi ret2win[PWN-008] 을 넘어선 다중 레지스터 ROP + 시스콜 체인)
+
+  red_task:
+    goal: "오프셋 72 오버플로우 → pop 가젯으로 execve 인자 세팅 → syscall 로 /bin/sh 셸 → cat /flag"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "read(0,buf,512) 인데 buf 는 64바이트. 오프셋 72(=64+saved rbp). ret2win 함수는 없다." }
+      - { cost: 20, text: "정적 바이너리엔 execve 시스콜을 만들 가젯이 다 있다: pop rdi/rsi/rax, syscall. rdx 는 pop rdx;pop rbx;ret." }
+      - { cost: 30, text: "'/bin/sh' 문자열이 바이너리에 있다(binsh 심볼). rax=59(execve), rdi=&binsh, rsi=rdx=0 → syscall. 셸 후 페이로드/명령 분리 전송." }
+
+  blue_task:
+    goal: "경계 있는 입력(read(0,buf,sizeof buf))과 카나리·PIE·RELRO 재빌드로 ROP 차단"
+    success_criteria: |
+      (1) 64바이트 버퍼에 512바이트 read 하는 경계 없는 입력·no-canary·no-PIE 빌드 관측
+      (2) 카나리+PIE 재빌드 후 고정주소 가젯 체인이 무력화되어 셸 획득 불가(서비스는 정상 응답)
+    points_breakdown: { detection: 78, patch: 182 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["relayctl"]
+  safety:
+    profile: "hardened"
+    notes: "원격 정적 바이너리(no-PIE·no-canary·의도적 스택 BOF→ROP). cap_drop/pids_limit/mem_limit, 30초 타임아웃."
