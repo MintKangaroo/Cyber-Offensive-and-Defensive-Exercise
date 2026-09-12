@@ -1,0 +1,42 @@
+challenge:
+  id: "PWN-012"
+  title: "터빈 세이프티 PLC 콘솔 - SROP execve(Sigreturn-Oriented Programming)"
+  category: "pwn"
+  difficulty: "insane"
+  points: { red: 260, blue: 260 }
+  asset: "plcsafe"
+  mitre: [T1203, T1059]
+
+  description: |
+    터빈 세이프티 PLC 콘솔(원격 TCP)이 64바이트 버퍼에 read(0,buf,1024) 로 입력받아 대형 스택
+    오버플로우가 있다. 개별 pop 가젯이 부족해도, pop rax=15 후 syscall 로 rt_sigreturn 을 호출하면
+    커널이 스택의 위조 sigcontext 로 모든 레지스터를 복원한다(SROP). 이를 이용해 rax=59·
+    rdi=&"/bin/sh"·rsi=rdx=0·rip=syscall 로 세팅해 execve("/bin/sh",0,0) 로 셸을 얻는다.
+    단 두 가젯(pop rax; ret, syscall)만으로 전 레지스터를 제어한다. no-PIE·no-canary·static.
+    (다중 pop-가젯 ROP[PWN-011] 과 구분되는 sigreturn 프레임 기반 기법)
+
+  red_task:
+    goal: "offset72 오버플로우 → pop rax=15; syscall 로 rt_sigreturn → 위조 프레임으로 execve → cat /flag"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "pop 가젯이 부족하다. rt_sigreturn(rax=15) 은 스택의 sigcontext 로 모든 레지스터를 한 번에 세팅한다." }
+      - { cost: 20, text: "pop rax; ret 로 15 를 넣고 syscall → 그 다음 스택이 위조 sigcontext 프레임(레지스터 오프셋 표준)." }
+      - { cost: 30, text: "프레임에 rax=59·rdi=&'/bin/sh'·rsi=rdx=0·rip=syscall·cs=0x33. 셸 후 페이로드/명령 분리 전송." }
+
+  blue_task:
+    goal: "경계 있는 입력·카나리·PIE 재빌드로 오버플로우/고정주소 가젯 무력화"
+    success_criteria: |
+      (1) 64바이트 버퍼에 1024바이트 read·no-canary·no-PIE 빌드 관측
+      (2) 카나리+PIE 재빌드 후 sigreturn 체인이 무력화되어 셸 획득 불가(서비스는 정상 응답)
+    points_breakdown: { detection: 78, patch: 182 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["plcsafe"]
+  safety:
+    profile: "hardened"
+    notes: "원격 정적 바이너리(no-PIE·no-canary·의도적 스택 BOF→SROP). cap_drop/pids_limit/mem_limit, 30초 타임아웃."

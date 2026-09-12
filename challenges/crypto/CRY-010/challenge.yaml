@@ -1,0 +1,40 @@
+challenge:
+  id: "CRY-010"
+  title: "국가 CCTV 관제 키 배포 - RSA Håstad 브로드캐스트(e=3)"
+  category: "crypto"
+  difficulty: "hard"
+  points: { red: 240, blue: 240 }
+  asset: "cctv-key-broadcast"
+  mitre: [T1040]
+
+  description: |
+    국가 CCTV 관제센터가 같은 관리자 키(평문)를 공개지수 e=3 으로 서로 다른 세 기관의 공개
+    모듈러스(N1,N2,N3)에 각각 암호화해 브로드캐스트한다. e=3 이고 수신자가 3명이면 Håstad
+    브로드캐스트 공격이 성립한다: CRT 로 c1,c2,c3 를 합치면 x ≡ m^3 (mod N1·N2·N3) 이고,
+    m^3 < N1·N2·N3 이므로 x 의 정수 세제곱근이 곧 평문 m 이다. 복구한 관리자 키를 제출하면 flag.
+
+  red_task:
+    goal: "세 (N,c) 를 CRT 로 합쳐 m^3 복원 → 정수 세제곱근으로 관리자 키 m 복구 → /api/admin 로 flag"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "같은 평문이 e=3 으로 서로 다른 세 모듈러스에 암호화됐다. 수신자 수 == e — 무엇이 성립하나?" }
+      - { cost: 20, text: "CRT: x ≡ c_i (mod N_i) 를 풀면 x = m^3 mod (N1 N2 N3). m 이 작아 m^3 < 곱 이면 랩어라운드 없음." }
+      - { cost: 30, text: "x 의 정수 세제곱근(이분탐색/뉴턴)이 m. 바이트로 변환해 /api/admin 에 hex 제출." }
+
+  blue_task:
+    goal: "공개지수를 e=65537 로 키우고 수신자별 임의 패딩(OAEP)을 적용해 브로드캐스트 공격 차단"
+    success_criteria: |
+      (1) e 가 작고(=3) 같은 평문이 패딩 없이 여러 모듈러스에 뿌려지는지 점검
+      (2) 패치 후 e=65537 이라 3개(그 이상)로도 세제곱근 복구 불가
+    points_breakdown: { detection: 72, patch: 168 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["cctv-key-broadcast"]
+  safety:
+    profile: "hardened"
+    notes: "HTTP 서비스형. read_only/tmpfs/cap_drop/mem_limit. 취약은 의도된 저지수·무패딩 브로드캐스트이며 실제 키 아님."
