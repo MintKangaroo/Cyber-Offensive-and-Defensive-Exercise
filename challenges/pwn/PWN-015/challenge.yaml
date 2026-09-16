@@ -1,0 +1,42 @@
+challenge:
+  id: "PWN-015"
+  title: "정수처리장 밸브 명명 콘솔 - off-by-one NULL 바이트 함수 포인터 변조"
+  category: "pwn"
+  difficulty: "medium"
+  points: { red: 220, blue: 220 }
+  asset: "valvectl"
+  mitre: [T1203, T1059]
+
+  description: |
+    정수처리장 밸브 명명 콘솔(원격 TCP)이 스택 구조체 {char name[64]; void(*action)();} 에 이름을
+    입력받고 종단 널을 붙인다. 입력을 64바이트로 채우면 종단 널 name[64]='\0' 이 버퍼를 정확히 한
+    바이트 넘어 인접한 함수 포인터 action 의 최하위 바이트를 0 으로 만든다(off-by-one NULL). action 은
+    원래 benign() 을 가리키는데 win() 과 같은 256바이트 정렬 블록에 있어, LSB 가 0 이 되면 action==win
+    이 되고 이어지는 action() 호출이 win()=system("cat /flag") 로 흐른다. no-PIE 라 함수 주소가 고정
+    되어 결정적(스택 ASLR 무관). (스택 BOF/ROP 와 구분되는 단일 NULL 바이트 경계침범 기법)
+
+  red_task:
+    goal: "정확히 64바이트(개행 없이) 전송 → 종단 널이 action 포인터 LSB 를 0 으로 → benign→win → cat /flag"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "버퍼는 64바이트인데 종단 널 인덱스가 64까지 갈 수 있다. 한 바이트가 어디로 넘치나?" }
+      - { cost: 20, text: "버퍼 바로 뒤에 함수 포인터 action 이 있다. 리틀엔디안에서 name[64] 는 action 의 최하위 바이트." }
+      - { cost: 30, text: "win 은 256정렬(주소 …00), benign 은 같은 256블록. LSB 를 0 으로 만들면 action==win. 개행 없이 64바이트만 보내라." }
+
+  blue_task:
+    goal: "종단 널 자리를 남겨 경계를 한 칸 축소(n<sizeof-1) + 카나리/PIE 로 포인터 변조 무력화"
+    success_criteria: |
+      (1) 종단 널 인덱스가 버퍼 크기에 도달해 인접 함수 포인터를 침범하는지 관측
+      (2) 패치 후 종단 널이 항상 버퍼 내부에 머물러 action 이 보존되고 win 도달 불가(정상 응답)
+    points_breakdown: { detection: 66, patch: 154 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["valvectl"]
+  safety:
+    profile: "hardened"
+    notes: "원격 정적배치 바이너리(no-PIE·no-canary·의도적 off-by-one NULL). cap_drop/pids_limit/mem_limit, 30초 타임아웃."

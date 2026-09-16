@@ -1,0 +1,42 @@
+challenge:
+  id: "CRY-013"
+  title: "재난경보 방송 명령 인증 - AES-GCM 논스 재사용 forbidden attack"
+  category: "crypto"
+  difficulty: "insane"
+  points: { red: 260, blue: 260 }
+  asset: "broadcast-gcm-auth"
+  mitre: [T1552, T1600]
+
+  description: |
+    재난경보 방송 관제가 상태 메시지 두 건을 AES-128-GCM 으로 인증·암호화해 공개한다. 그러나 같은
+    nonce 를 두 메시지에 재사용한다(고정 nonce 버그). 논스가 재사용되면 두 인증 태그의 차이가
+    GHASH 부분키 H = E_K(0^128) 에 대한 GF(2^128) 다항식이 되어 H 를 복구할 수 있고(Joux 의
+    forbidden attack), 이어서 E_K(J0) 와 keystream(알려진 평문)으로 임의 명령의 유효한 태그를
+    위조할 수 있다. 관리자 명령("CMD unlock_all_valves=1 admin=1")을 위조해 POST /api/command 에
+    제출하면 flag. (nonce 재사용이 기밀성뿐 아니라 무결성까지 파괴하는 사례)
+
+  red_task:
+    goal: "두 태그 차이 → GF(2^128) 다항식 근으로 H 복구 → E_K(J0)·keystream 복구 → 관리자 명령 태그 위조 → /api/command"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "두 메시지의 nonce 가 같은지 확인하라. GCM 에서 nonce 재사용은 치명적이다." }
+      - { cost: 20, text: "tag1 XOR tag2 는 E_K(J0) 가 소거되어 H 에 대한 GF(2^128) 다항식이 된다. 그 근이 H." }
+      - { cost: 30, text: "H 로 E_K(J0)=GHASH(aad,ct1,len) XOR tag1, keystream=pt1 XOR ct1 복구 후 관리자 명령의 태그를 위조." }
+
+  blue_task:
+    goal: "메시지마다 유일한 nonce(무작위 96비트/비반복 카운터) 또는 AES-GCM-SIV 로 재사용을 제거"
+    success_criteria: |
+      (1) 동일 (키,nonce) 로 두 메시지를 인증하는지 관측 — nonce 재사용 시 H 복구·태그 위조 가능
+      (2) 패치 후 메시지마다 nonce 가 달라 태그 차이로 H 를 복구할 수 없어 위조 불가
+    points_breakdown: { detection: 78, patch: 182 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["broadcast-gcm-auth"]
+  safety:
+    profile: "hardened"
+    notes: "HTTP 서비스형. read_only/tmpfs/cap_drop/mem_limit. 취약은 의도된 nonce 재사용이며 실 방송키 아님."
