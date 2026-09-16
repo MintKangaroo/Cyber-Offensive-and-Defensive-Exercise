@@ -1,0 +1,41 @@
+challenge:
+  id: "PWN-013"
+  title: "SCADA HMI 진단 콘솔 - 포맷 스트링 GOT 덮어쓰기"
+  category: "pwn"
+  difficulty: "hard"
+  points: { red: 240, blue: 240 }
+  asset: "hmicon"
+  mitre: [T1203, T1059]
+
+  description: |
+    SCADA HMI 진단 콘솔(원격 TCP)이 사용자 입력을 printf(buf) 로 서식 인자 없이 그대로 출력한다
+    (포맷 스트링 취약점). %p 로 스택을 누출해 입력 버퍼의 인자 위치를 찾고, %hn 두 번으로 printf 의
+    GOT 엔트리를 win() 주소(system("/bin/sh"))로 덮으면, 다음 루프의 printf("입력> ") 호출이
+    win() 으로 흘러 셸을 얻는다. dynamically-linked·no-PIE·partial-RELRO(GOT 쓰기가능) 라
+    주소 고정. (스택 BOF/ROP 계열과 구분되는 포맷스트링 임의쓰기 기법)
+
+  red_task:
+    goal: "%p 로 버퍼 오프셋 탐지 → %hn 2회로 GOT[printf]=win() 덮기 → 다음 printf 가 셸 → cat /flag"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "printf(buf) 에 서식 인자가 없다. %p 나열로 입력 버퍼가 스택 몇 번째 인자에서 시작하나?" }
+      - { cost: 20, text: "%n 계열은 지금까지 출력한 바이트 수를 임의 주소에 쓴다. GOT[printf] 를 win() 으로 덮어라." }
+      - { cost: 30, text: "값이 크므로 %hn(2바이트) 두 번으로 나눠 쓰기. 지시부 뒤에 GOT+0/GOT+2 주소를 8정렬 배치." }
+
+  blue_task:
+    goal: "printf(\"%s\", buf) 로 서식 고정 + Full RELRO(GOT 읽기전용) 재빌드로 포맷스트링 쓰기 무력화"
+    success_criteria: |
+      (1) 사용자 입력이 printf 의 서식 문자열로 직접 들어가는지, GOT 가 쓰기 가능한지 관측
+      (2) 패치 후 서식 고정·Full RELRO 로 %n 임의쓰기가 막혀 셸 획득 불가(서비스는 정상 응답)
+    points_breakdown: { detection: 72, patch: 168 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["hmicon"]
+  safety:
+    profile: "hardened"
+    notes: "원격 정적배치 바이너리(no-PIE·partial-RELRO·의도적 포맷스트링 취약). cap_drop/pids_limit/mem_limit, 30초 타임아웃."
