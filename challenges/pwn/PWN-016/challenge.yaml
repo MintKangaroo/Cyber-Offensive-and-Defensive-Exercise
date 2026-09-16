@@ -1,0 +1,43 @@
+challenge:
+  id: "PWN-016"
+  title: "SCADA 태그 캐시 관리자 - tcache 이중 free(dup) safe-linking 우회"
+  category: "pwn"
+  difficulty: "insane"
+  points: { red: 260, blue: 260 }
+  asset: "scadaheap"
+  mitre: [T1203, T1059]
+
+  description: |
+    SCADA 태그 캐시 관리자(원격 TCP)가 힙 청크를 슬롯으로 관리하는데 free() 후 포인터를 초기화하지
+    않아 use-after-free 가 발생한다. 이를 이용해 glibc 2.3x tcache 의 두 방어를 우회한다: freed 청크의
+    key 를 UAF edit 로 지워 이중 free(double-free) 탐지를 우회하고, freed 청크의 fd 를 UAF show 로
+    누출해 safe-linking(fd=chunk>>12) 을 복원한다. 두 번째 free 직후 fd 를 (chunk>>12)^&g_handler 로
+    포이즌하면 count=2 로 두 번의 malloc 이 각각 청크와 &g_handler 를 반환하고, 전역 함수 포인터를
+    win(system("cat /flag"))으로 덮어 run 하면 셸 명령이 실행된다. static·no-PIE 라 주소 고정.
+    (tcache 포이즌/UAF 심화 — 이중 free 와 safe-linking·key 우회를 결합)
+
+  red_task:
+    goal: "UAF 로 힙 누출·key 소거 → 이중 free → freed fd 포이즌(&g_handler) → g_handler=win → run → cat /flag"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "free 후 슬롯 포인터가 남는다(UAF). freed 청크의 8바이트를 show 하면 무엇이 보이나(safe-linking fd)?" }
+      - { cost: 20, text: "이중 free 는 key(offset 8) 검사로 막힌다. UAF edit 로 key 를 0 으로 지운 뒤 다시 free." }
+      - { cost: 30, text: "두 번째 free 직후 freed 상태에서 fd=(chunk>>12)^&g_handler 로 포이즌. count=2 라 malloc 두 번이면 &g_handler 를 얻는다. 거기에 win 을 써라." }
+
+  blue_task:
+    goal: "free 후 포인터 NULL 화로 use-after-free/이중 free 를 원천 차단"
+    success_criteria: |
+      (1) free 후 슬롯 포인터가 유지되어 freed 청크를 읽고 쓸 수 있는지 관측
+      (2) 패치 후 free 시 슬롯이 무효화되어 UAF·이중 free 가 불가능하고 함수 포인터가 보존됨
+    points_breakdown: { detection: 78, patch: 182 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["scadaheap"]
+  safety:
+    profile: "hardened"
+    notes: "원격 정적배치 바이너리(static·no-PIE·의도적 UAF/이중 free). cap_drop/pids_limit/mem_limit, 30초 타임아웃. glibc 2.3x tcache(safe-linking·key) 대상."

@@ -1,0 +1,41 @@
+challenge:
+  id: "CRY-014"
+  title: "원전 계측 게이트웨이 - RSA PKCS#1 v1.5 패딩 오라클 Bleichenbacher"
+  category: "crypto"
+  difficulty: "insane"
+  points: { red: 260, blue: 260 }
+  asset: "instrument-rsa-oracle"
+  mitre: [T1552]
+
+  description: |
+    원전 계측 게이트웨이가 세션 토큰을 RSA PKCS#1 v1.5 로 감싸(c0) 공개하고, 임의 암호문을 복호했을
+    때 패딩이 유효한지(00 02 ...) 여부를 응답한다(POST /api/unwrap). 이 패딩 오라클로 Bleichenbacher
+    (1998) 적응적 선택암호문 공격을 수행하면 개인키 없이 c0 의 평문(세션 토큰)을 복구할 수 있다.
+    c0·s^e 형태의 암호문을 반복 질의하며 가능한 평문 구간을 이분적으로 좁혀 유일값으로 수렴시킨다.
+    복구한 토큰을 POST /api/recover 에 제출하면 flag.
+
+  red_task:
+    goal: "패딩 오라클(/api/unwrap) 로 Bleichenbacher 수행 → c0 평문(세션 토큰) 복구 → /api/recover"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "/api/unwrap 이 PKCS#1 v1.5 패딩(00 02) 유효성을 알려준다. 이것이 패딩 오라클이다." }
+      - { cost: 20, text: "c' = c0·s^e mod n 을 질의해 복호가 적합해지는 s 를 찾고, 평문 구간 [2B,3B) 를 좁혀라(Bleichenbacher)." }
+      - { cost: 30, text: "c0 는 이미 적합하므로 blinding 생략. 구간이 유일값으로 수렴하면 평문에서 00 뒤가 토큰." }
+
+  blue_task:
+    goal: "패딩 유효성 비노출(동일 응답)/상수시간 또는 RSA-OAEP 로 전환해 오라클을 제거"
+    success_criteria: |
+      (1) 복호 API 가 패딩 유효성을 구분 가능하게 노출하는지 관측 — 노출 시 Bleichenbacher 가능
+      (2) 패치 후 성공/실패가 구분되지 않아 오라클이 사라지고 평문 복구 불가
+    points_breakdown: { detection: 78, patch: 182 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["instrument-rsa-oracle"]
+  safety:
+    profile: "hardened"
+    notes: "HTTP 서비스형. read_only/tmpfs/cap_drop/mem_limit. 512비트 RSA 는 훈련용 축소 파라미터이며 실 계측키 아님."
