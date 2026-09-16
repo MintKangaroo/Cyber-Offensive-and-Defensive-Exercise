@@ -1,0 +1,12 @@
+services:
+  pwn017_deploy:
+    build: { context: . }
+    container_name: pwn017_deploy
+    ports: ["9027:9027"]
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-pwn017-dev-secret}
+      - PORT=9027
+    mem_limit: 128m
+    pids_limit: 64
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]

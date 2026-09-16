@@ -1,0 +1,41 @@
+challenge:
+  id: "CRY-015"
+  title: "위성 원격측정 서명기 - ECDSA 편향 논스 격자(LLL) 개인키 복구"
+  category: "crypto"
+  difficulty: "insane"
+  points: { red: 280, blue: 280 }
+  asset: "satellite-ecdsa-signer"
+  mitre: [T1552]
+
+  description: |
+    위성 원격측정 게이트웨이가 secp256k1 ECDSA 로 여러 프레임을 서명해 공개한다. 그러나 서명 논스 k
+    를 128비트로만 생성해 상위 비트가 0 인 편향이 있다. 편향된 논스는 Hidden Number Problem 으로
+    환원되어(k = z/s + (r/s)·d mod n, 0<=k<2^128), 여러 서명으로 Kannan 임베딩 격자를 만들고 LLL 로
+    축약하면 짧은 벡터에서 개인키 d 를 복구할 수 있다. 서명 8개 정도면 충분하다. 복구한 d 를
+    POST /api/recover 에 제출하면 flag.
+
+  red_task:
+    goal: "편향 논스 서명들 → HNP 환원(u_i=z/s, t_i=r/s) → Kannan 임베딩 격자 LLL 축약 → d 복구 → /api/recover"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "nonce_bits 를 보라. 논스가 n(256비트)보다 훨씬 작다면 상위 비트가 0 인 편향이다." }
+      - { cost: 20, text: "s=k^-1(z+rd) → k = z/s + (r/s)d mod n, 0<=k<2^128. 이는 Hidden Number Problem." }
+      - { cost: 30, text: "여러 (u_i=z/s, t_i=r/s) 로 (m+2)차원 Kannan 임베딩 격자를 만들고 LLL 축약 후 짧은 벡터에서 d 를 읽어라." }
+
+  blue_task:
+    goal: "RFC6979 결정적 논스(전체 구간)/CSPRNG 로 편향을 제거해 HNP 격자 공격을 무력화"
+    success_criteria: |
+      (1) 논스가 n 대비 짧아(상위 비트 0) 편향되었는지 관측 — 편향 시 LLL 로 d 복구 가능
+      (2) 패치 후 논스가 전체 구간이라 HNP 격자에서 d 를 복구할 수 없음
+    points_breakdown: { detection: 84, patch: 196 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["satellite-ecdsa-signer"]
+  safety:
+    profile: "hardened"
+    notes: "HTTP 서비스형. read_only/tmpfs/cap_drop/mem_limit. 취약은 의도된 논스 편향이며 실 위성키 아님."

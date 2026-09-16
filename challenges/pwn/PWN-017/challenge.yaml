@@ -1,0 +1,42 @@
+challenge:
+  id: "PWN-017"
+  title: "배전 자동화 피더 단말 - ret2dlresolve(동적 심볼 해석 악용)"
+  category: "pwn"
+  difficulty: "insane"
+  points: { red: 280, blue: 280 }
+  asset: "feederctl"
+  mitre: [T1203, T1059]
+
+  description: |
+    배전 자동화 피더 단말(원격 TCP)이 read(0,buf,512) 로 64바이트 버퍼를 넘겨 반환주소(offset 72)를
+    덮는다. 카나리·PIE 가 없고 partial RELRO(lazy binding) 라, libc 주소를 누출하지 않고도 동적 링커의
+    지연 해석을 악용할 수 있다(ret2dlresolve). ROP 로 read 를 호출해 .bss 에 가짜 Elf64_Rela/Elf64_Sym/
+    심볼 문자열("system")과 "/bin/sh" 를 심고, 조작한 reloc 인덱스로 PLT0(_dl_runtime_resolve)을
+    호출하면 링커가 system 을 즉석 해석·호출해 셸을 얻는다. system 직전 movaps 정렬을 위해 ret 가젯을
+    끼운다. (libc 누출 없는 동적 심볼 해석 악용 — 정적 바이너리 계열과 구분)
+
+  red_task:
+    goal: "BOF(offset 72) → read 로 .bss 에 가짜 Rela/Sym/Str 심기 → PLT0 로 system 해석·호출(정렬 ret) → cat /flag"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "checksec: no canary·no PIE·partial RELRO(lazy). GOT 가 지연 해석되고 쓰기 가능하다." }
+      - { cost: 20, text: "read 로 .bss 에 가짜 Elf64_Rela/Elf64_Sym/심볼문자열을 심고, PLT0 를 조작한 reloc 인덱스로 호출하라." }
+      - { cost: 30, text: "system 직전 스택 16바이트 정렬(movaps) 필요 → ret 가젯 하나 삽입. pwntools Ret2dlresolvePayload 참고." }
+
+  blue_task:
+    goal: "Full RELRO(-z now)로 지연 해석 제거 + 카나리/PIE/경계검증 재빌드로 ret2dlresolve 무력화"
+    success_criteria: |
+      (1) partial RELRO(lazy binding)·오버플로우 가능 여부를 관측 — 지연 해석이 있으면 ret2dlresolve 가능
+      (2) 패치 후 Full RELRO 로 GOT 가 읽기전용·즉시 바인딩이라 _dl_runtime_resolve 경로가 사라져 공격 불가
+    points_breakdown: { detection: 84, patch: 196 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["feederctl"]
+  safety:
+    profile: "hardened"
+    notes: "원격 정적배치 바이너리(no-PIE·no-canary·partial RELRO·의도적 BOF). glibc 2.31(Ubuntu 20.04) 대상. cap_drop/pids_limit/mem_limit, 30초 타임아웃. 참조 익스플로잇은 pwntools 필요."
