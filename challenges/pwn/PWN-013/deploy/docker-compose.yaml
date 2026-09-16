@@ -1,0 +1,12 @@
+services:
+  pwn013_deploy:
+    build: { context: . }
+    container_name: pwn013_deploy
+    ports: ["9023:9023"]
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-pwn013-dev-secret}
+      - PORT=9023
+    mem_limit: 128m
+    pids_limit: 64
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]

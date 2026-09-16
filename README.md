@@ -769,7 +769,7 @@ docker compose down
 
 **소개 · 구조**
 - [무엇을 하는 플랫폼인가](#무엇을-하는-플랫폼인가) · [아키텍처](#아키텍처) · [주요 화면](#주요-화면-스크린샷) · [핵심 기능](#핵심-기능)
-- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (110종)](#챌린지-카탈로그-110종)
+- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (112종)](#챌린지-카탈로그-112종)
 
 **시작 · 품질 · 접근제어**
 - [처음 시작하기](#처음-시작하기) · [경기 운영 방법](#경기-운영-방법) · [빠른 시작](#빠른-시작)
@@ -1079,7 +1079,7 @@ patched/vulnerable 상태를 한 번에 판정합니다.
 
 ---
 
-## 챌린지 카탈로그 (110종)
+## 챌린지 카탈로그 (112종)
 
 web·pwn·crypto·forensics·network·reversing·detection·ai·ICS/OT 9개 분야가 모두 **easy → medium → hard → insane** 난이도 곡선을 갖추고 있습니다.
 표기: `점수(Red/Blue)`. 팀마다 플래그·정답이 HMAC으로 달라 답 공유가 불가능합니다.
@@ -1112,6 +1112,8 @@ web·pwn·crypto·forensics·network·reversing·detection·ai·ICS/OT 9개 분�
 > | PWN-011 | 변전소 제어 릴레이 콘솔 | ROP execve 시스콜 체인(셸 획득) | insane | 9021 |
 > | CRY-010 | 국가 CCTV 관제 키 배포 | RSA Håstad 브로드캐스트(e=3, CRT+세제곱근) | hard | 8142 |
 > | PWN-012 | 터빈 세이프티 PLC 콘솔 | SROP execve(sigreturn 프레임) | insane | 9022 |
+> | CRY-011 | 펌웨어 매니페스트 서명기 | ECDSA 논스 재사용 개인키 복구(secp256k1) | hard | 8143 |
+> | PWN-013 | SCADA HMI 진단 콘솔 | 포맷스트링 GOT 덮어쓰기(printf→win) | hard | 9023 |
 >
 > 개별 기동: `cd challenges/<cat>/<ID>/deploy && CHALLENGE_SECRET=<secret> docker compose up -d --build`
 
