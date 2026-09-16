@@ -1,0 +1,42 @@
+challenge:
+  id: "PWN-014"
+  title: "수처리장 취수펌프 제어 콘솔 - 스택 BOF ret2libc(libc leak)"
+  category: "pwn"
+  difficulty: "hard"
+  points: { red: 240, blue: 240 }
+  asset: "pumpctl"
+  mitre: [T1203, T1059]
+
+  description: |
+    수처리장 취수펌프 제어 콘솔(원격 TCP)이 64바이트 스택 버퍼에 read(0,buf,512) 로 512바이트까지
+    읽어 저장된 반환주소를 덮는다(스택 버퍼 오버플로우). 카나리가 없고 no-PIE 라 바이너리 주소는
+    고정이지만 공유 libc(dynamically-linked)라 libc 주소는 런타임마다 다르다. 따라서 puts@plt 로
+    GOT[puts] 의 libc 실주소를 먼저 유출해 libc_base 를 계산하고(ret2libc + libc leak), 다시 vuln 으로
+    복귀해 system("/bin/sh") 를 호출한 뒤 셸에서 flag 를 읽는다. (정적 바이너리 계열과 달리 libc
+    주소 유출이 핵심)
+
+  red_task:
+    goal: "BOF(offset 72) → puts@plt(puts@got) 로 libc 유출 → libc_base 계산 → ret2libc system(/bin/sh) → cat /flag"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "read(0,buf,512) 인데 buf 는 64바이트다. 반환주소까지 offset 은 72. 카나리는 없다." }
+      - { cost: 20, text: "공유 libc 라 주소가 매번 다르다. puts@plt(puts@got) 로 puts 실주소를 유출하고 vuln 으로 되돌아오라." }
+      - { cost: 30, text: "libc_base = 유출값 - puts_offset. 이후 pop rdi;ret → &\"/bin/sh\" → ret(정렬) → system 으로 셸." }
+
+  blue_task:
+    goal: "읽기 길이를 버퍼 크기로 제한 + 카나리/PIE/Full RELRO 재빌드로 BOF→ret2libc 무력화"
+    success_criteria: |
+      (1) 고정 버퍼에 크기 검증 없는 read 와 카나리/PIE/RELRO 부재를 관측
+      (2) 패치 후 오버플로우가 카나리에 걸려 중단되고 PIE 로 가젯 주소가 무작위화되어 셸 획득 불가
+    points_breakdown: { detection: 72, patch: 168 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["pumpctl"]
+  safety:
+    profile: "hardened"
+    notes: "원격 정적배치 바이너리(no-PIE·no-canary·의도적 스택 BOF). cap_drop/pids_limit/mem_limit, 30초 타임아웃. 동봉 libc.so.6 는 오프셋 참조용(배포 libc 와 동일 glibc 2.36)."
