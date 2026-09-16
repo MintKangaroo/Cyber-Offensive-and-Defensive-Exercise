@@ -1,0 +1,12 @@
+services:
+  pwn015_deploy:
+    build: { context: . }
+    container_name: pwn015_deploy
+    ports: ["9025:9025"]
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-pwn015-dev-secret}
+      - PORT=9025
+    mem_limit: 128m
+    pids_limit: 64
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
