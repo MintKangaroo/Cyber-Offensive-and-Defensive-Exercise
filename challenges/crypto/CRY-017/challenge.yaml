@@ -1,0 +1,41 @@
+challenge:
+  id: "CRY-017"
+  title: "전력거래 봉인입찰 - Paillier 준동형 가변성(malleability) 위조"
+  category: "crypto"
+  difficulty: "hard"
+  points: { red: 240, blue: 240 }
+  asset: "paillier-auction"
+  mitre: [T1552]
+
+  description: |
+    전력거래소가 Paillier 로 암호화된 봉인입찰을 받는다. 서버는 관리자 크레딧 V 의 암호문 c_V=E(V) 를
+    공개하고, POST /api/redeem 은 제출된 암호문을 복호해 평문이 V+grant_delta 이면 flag 를 준다.
+    Paillier 는 덧셈 준동형(E(m)·g^k mod n^2 = E(m+k))이라 개인키·V 를 몰라도
+    c' = c_V·g^grant_delta 를 만들어 제출하면 복호값이 V+grant_delta 가 되어 인가를 통과한다.
+    (무결성 없는 준동형 암호문 신뢰의 가변성 악용)
+
+  red_task:
+    goal: "GET /api/params 의 (n,g,c_V,delta) → c' = c_V·g^delta mod n^2 = E(V+delta) → /api/redeem 으로 flag"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "Paillier 는 준동형이다: E(m)·g^k mod n^2 = E(m+k). 개인키 없이 평문에 상수를 더할 수 있다." }
+      - { cost: 20, text: "redeem 은 복호값이 V+delta 이면 통과. c_V=E(V) 가 공개돼 있으니 delta 만큼 더한 암호문을 만들라." }
+      - { cost: 30, text: "c' = c_V · pow(g, delta, n^2) mod n^2 을 제출. V 를 몰라도 E(V+delta) 가 된다." }
+
+  blue_task:
+    goal: "제출 암호문에 서버 무결성 태그(HMAC)/NIZK 를 요구하거나 비가변 스킴으로 전환해 위조 차단"
+    success_criteria: |
+      (1) 준동형 암호문을 무결성 검증 없이 신뢰해 권한 판단에 쓰는지 관측 — 가변성으로 위조 가능
+      (2) 패치 후 서버 태그가 없는(위조된) 암호문이 거부되어 인가 우회 불가
+    points_breakdown: { detection: 72, patch: 168 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["paillier-auction"]
+  safety:
+    profile: "hardened"
+    notes: "HTTP 서비스형. read_only/tmpfs/cap_drop/mem_limit. Paillier 1024비트 훈련용 파라미터이며 실 거래키 아님."

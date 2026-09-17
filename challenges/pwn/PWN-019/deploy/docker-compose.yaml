@@ -1,0 +1,12 @@
+services:
+  pwn019_deploy:
+    build: { context: . }
+    container_name: pwn019_deploy
+    ports: ["9029:9029"]
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-pwn019-dev-secret}
+      - PORT=9029
+    mem_limit: 128m
+    pids_limit: 64
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
