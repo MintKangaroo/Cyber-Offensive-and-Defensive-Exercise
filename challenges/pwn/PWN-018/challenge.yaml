@@ -1,0 +1,43 @@
+challenge:
+  id: "PWN-018"
+  title: "발전 터빈 제어 콘솔 - ret2csu(csu 범용 가젯 인자 제어)"
+  category: "pwn"
+  difficulty: "hard"
+  points: { red: 260, blue: 260 }
+  asset: "turbinectl"
+  mitre: [T1203, T1059]
+
+  description: |
+    발전 터빈 제어 콘솔(원격 TCP)이 read(0,buf,512) 로 64바이트 버퍼를 넘겨 반환주소(offset 72)를
+    덮는다. no-canary·no-PIE 지만 pop rsi/rdx 같은 개별 가젯이 없어, __libc_csu_init 의 범용 가젯
+    2개(pop rbx;rbp;r12;r13;r14;r15;ret 와 mov rdx,r14;mov rsi,r13;mov edi,r12d;call [r15+rbx*8])로
+    세 인자(rdi/rsi/rdx)를 제어해 win(a,b,c) 를 호출한다. rbx=0·rbp=1·r12=edi·r13=rsi·r14=rdx·
+    r15=&fnptr(win 포인터)로 두고, 인자가 (0xdeadbeef,0xcafebabe,0x13371337)이면 system("cat /flag").
+    system 직전 movaps 정렬을 위해 ret 가젯을 끼운다. glibc 2.31(Ubuntu 20.04)에 csu 가젯 존재.
+    (ROP 인자제어 심화 — 개별 가젯 없이 csu 가젯 활용)
+
+  red_task:
+    goal: "BOF(offset 72) → csu gadget1/gadget2 로 rdi/rsi/rdx 세팅 → win(매직3) 호출(정렬 ret) → cat /flag"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "pop rsi/rdx 가젯이 없다. __libc_csu_init 의 두 범용 가젯을 찾아라." }
+      - { cost: 20, text: "gadget1 로 rbx=0,rbp=1,r12/r13/r14=인자,r15=call대상 포인터 세팅 후 gadget2 로 rdx/rsi/edi 채우고 call [r15+rbx*8]." }
+      - { cost: 30, text: "call 대상은 win 을 가리키는 포인터(fnptr). system 직전 movaps 정렬을 위해 ret 가젯 하나 삽입." }
+
+  blue_task:
+    goal: "경계 검증 + 카나리 + PIE 재빌드로 오버플로우와 고정 주소 csu 가젯을 무력화"
+    success_criteria: |
+      (1) 크기 검증 없는 read(오버플로우)·카나리/PIE 부재·csu 범용 가젯 존재를 관측
+      (2) 패치 후 카나리로 오버플로우가 중단되고 PIE 로 가젯 주소가 무작위화되어 win 도달 불가
+    points_breakdown: { detection: 78, patch: 182 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["turbinectl"]
+  safety:
+    profile: "hardened"
+    notes: "원격 정적배치 바이너리(no-PIE·no-canary·의도적 BOF). glibc 2.31(Ubuntu 20.04) 대상(csu 가젯). cap_drop/pids_limit/mem_limit, 30초 타임아웃."
