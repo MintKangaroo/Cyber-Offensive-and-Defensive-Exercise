@@ -1,0 +1,42 @@
+challenge:
+  id: "PWN-019"
+  title: "배전망 자원 할당기 - House of force(top chunk 변조)"
+  category: "pwn"
+  difficulty: "insane"
+  points: { red: 260, blue: 260 }
+  asset: "gridalloc"
+  mitre: [T1203, T1059]
+
+  description: |
+    배전망 자원 할당기(원격 TCP)의 alloc 이 읽기 길이 len 을 검증하지 않아 힙 오버플로우가 발생한다.
+    첫 청크에서 넘쳐 top chunk 의 size 를 0xffffffffffffffff 로 덮으면, glibc 2.27(top size 검사 2.29
+    도입 이전)에서 거대한 malloc(nb=(g_fnptr-0x10)-top_chunk)이 그대로 처리되어 av->top 을 전역 함수
+    포인터 직전으로 이동시킨다. 다음 malloc 이 g_fnptr 을 반환하므로 win 주소로 덮고 run 하면
+    system("cat /flag") 가 실행된다. 힙 주소는 leak 으로 획득, no-PIE 라 win/g_fnptr 고정.
+    (House of force 힙 익스플로잇 — 구 glibc 대상)
+
+  red_task:
+    goal: "힙 오버플로우로 top size=0xff..→ leak 로 top 계산 → 거대 malloc 로 top 이동 → g_fnptr=win → run → cat /flag"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "alloc 의 len 이 size 보다 커도 된다(힙 오버플로우). 첫 청크 뒤 top chunk 의 size 를 노려라." }
+      - { cost: 20, text: "top size 를 0xffffffffffffffff 로 덮으면(glibc 2.27) 거대 malloc 가 통과. leak 으로 top 주소 계산." }
+      - { cost: 30, text: "nb=(g_fnptr-0x10)-top_chunk 인 malloc 로 top 이동 → 다음 malloc 가 g_fnptr 반환 → win 기록 후 run." }
+
+  blue_task:
+    goal: "쓰기 길이를 할당 크기로 제한(오버플로우 제거) + 최신 glibc(2.29+) top size 검사 활용"
+    success_criteria: |
+      (1) len 미검증으로 top chunk size 변조가 가능한지 관측
+      (2) 패치 후 len<=size 제한으로 오버플로우가 막혀 top 변조·House of force 불가
+    points_breakdown: { detection: 78, patch: 182 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["gridalloc"]
+  safety:
+    profile: "hardened"
+    notes: "원격 정적배치 바이너리(no-PIE·의도적 힙 오버플로우). glibc 2.27(Ubuntu 18.04) 대상(House of force 는 2.29+ 에서 완화). cap_drop/pids_limit/mem_limit, 30초 타임아웃."
