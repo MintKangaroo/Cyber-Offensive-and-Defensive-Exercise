@@ -1,0 +1,42 @@
+challenge:
+  id: "PWN-022"
+  title: "배전 자동화 RTU 명령버퍼 - 스택 피벗(leave;ret 스택 이주)"
+  category: "pwn"
+  difficulty: "hard"
+  points: { red: 280, blue: 280 }
+  asset: "rtupivot"
+  mitre: [T1203, T1059]
+
+  description: |
+    배전 자동화 RTU 명령 콘솔(원격 TCP)이 activate() 에서 char buf[64] 를 넘어서는 스택 버퍼
+    오버플로우를 허용하지만, 오버플로우 가능 범위가 저장된 rbp 와 반환주소(단 하나의 ret 슬롯)까지만
+    닿아 완전한 ROP 체인을 쌓을 공간이 없다. 대신 load_config() 가 고정 주소 .bss 버퍼(g_config, 512B)에
+    임의 데이터를 담을 수 있다. 저장된 rbp 를 &g_config 로, 반환주소를 leave;ret 가젯으로 덮으면
+    두 번째 leave;ret 가 rsp 를 g_config 로 이주(stack pivot)시켜, 미리 적재해 둔 긴 ROP 체인
+    (pop rdi; &"cat /flag"; system)이 실행된다. no-PIE 라 g_config·가젯·system 주소가 고정.
+
+  red_task:
+    goal: "load_config 로 g_config 에 ROP 체인 적재 → activate 오버플로우로 saved_rbp=&g_config·ret=leave;ret → 피벗 → system(cat /flag)"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "activate 의 오버플로우는 저장된 rbp 와 반환주소까지만 닿는다. 체인을 쌓을 공간이 없으니 다른 넓은 버퍼로 rsp 를 옮겨야 한다." }
+      - { cost: 20, text: "load_config 가 고정 주소 .bss(g_config)에 512B 를 담는다. 저장된 rbp 를 &g_config 로, ret 을 leave;ret 가젯으로 덮으면 두 번째 leave;ret 가 rsp 를 g_config 로 이주시킨다." }
+      - { cost: 30, text: "피벗 후 g_config+8 부터 체인 실행: [dummy][pop rdi][&\"cat /flag\"][ret정렬][system][\"cat /flag\\0\"]. 문자열은 g_config 내부에 함께 적재." }
+
+  blue_task:
+    goal: "고정 크기 스택 버퍼에 대한 읽기 길이를 버퍼 크기로 제한해 저장된 rbp/반환주소 침범을 차단"
+    success_criteria: |
+      (1) activate 의 read 길이가 buf 크기를 넘어 저장된 rbp·반환주소를 덮는지 관측 — 스택 피벗의 전제
+      (2) 패치 후 읽기 길이가 buf 크기로 제한되어 저장 rbp/반환주소가 보존됨(정상 응답)
+    points_breakdown: { detection: 84, patch: 196 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["rtupivot"]
+  safety:
+    profile: "hardened"
+    notes: "원격 정적배치 바이너리(no-PIE·no-canary·의도적 스택 오버플로우). glibc 2.31(Ubuntu 20.04). cap_drop/pids_limit/mem_limit, 30초 타임아웃."
