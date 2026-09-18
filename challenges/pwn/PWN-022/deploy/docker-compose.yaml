@@ -1,0 +1,12 @@
+services:
+  pwn022_deploy:
+    build: { context: . }
+    container_name: pwn022_deploy
+    ports: ["9032:9032"]
+    environment:
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-pwn022-dev-secret}
+      - PORT=9032
+    mem_limit: 128m
+    pids_limit: 64
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
