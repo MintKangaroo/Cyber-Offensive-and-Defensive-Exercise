@@ -1,0 +1,41 @@
+challenge:
+  id: "PWN-020"
+  title: "보호계전기 진단 샌드박스 - seccomp 우회(open/read/write ROP)"
+  category: "pwn"
+  difficulty: "hard"
+  points: { red: 260, blue: 260 }
+  asset: "relaysbx"
+  mitre: [T1203, T1211]
+
+  description: |
+    보호계전기 진단 샌드박스(원격 TCP)가 execve/execveat 를 막는 seccomp 필터를 설치해 셸 실행이
+    불가하다. 그러나 read(0,buf,512) 의 스택 BOF(offset 72)는 그대로라, 셸 대신 시스콜 ROP 로
+    open("/flag")→read(fd,buf,n)→write(1,buf,n) 를 수행해 플래그를 직접 읽어 출력할 수 있다(ORW).
+    no-PIE·no-canary 라 가젯(pop rdi/rsi/rdx/rax, syscall)과 전역 버퍼 주소가 고정. syscall 번호는
+    open=2·read=0·write=1. (seccomp 심층방어 우회 — 메모리 손상은 파일 I/O 시스콜로 우회됨)
+
+  red_task:
+    goal: "BOF(offset 72) → open('/flag')→read→write 시스콜 ROP 로 플래그 직접 읽기(execve 없이)"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "execve 가 seccomp 로 막혔다(셸 불가). 하지만 파일 읽기 시스콜은 허용된다." }
+      - { cost: 20, text: "open('/flag',0,0)→read(fd,buf,n)→write(1,buf,n) 를 시스콜 ROP 로 구성하라. 번호 open=2,read=0,write=1." }
+      - { cost: 30, text: "pop rdi/rsi/rdx/rax + syscall 가젯으로 각 시스콜 인자·번호를 세팅. 전역 버퍼/경로 주소는 고정(no-PIE)." }
+
+  blue_task:
+    goal: "경계 검증 + 카나리 + PIE 로 BOF(ROP) 제거하고 seccomp 를 최소 권한으로 축소"
+    success_criteria: |
+      (1) 크기 검증 없는 read(오버플로우)와 광범위한 파일 I/O 허용(ORW 여지)을 관측
+      (2) 패치 후 카나리/경계검증으로 ROP 가 불가능해져 seccomp 우회(ORW)도 무력화
+    points_breakdown: { detection: 78, patch: 182 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["relaysbx"]
+  safety:
+    profile: "hardened"
+    notes: "원격 정적배치 바이너리(no-PIE·no-canary·seccomp execve 차단·의도적 BOF). glibc 2.31(Ubuntu 20.04). 컨테이너 seccomp:unconfined 로 앱 자체 필터만 적용. cap_drop/pids_limit/mem_limit, 30초 타임아웃."
