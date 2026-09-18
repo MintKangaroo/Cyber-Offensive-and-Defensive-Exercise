@@ -1,0 +1,40 @@
+challenge:
+  id: "CRY-019"
+  title: "스마트그리드 단말 대량발급 - 약한 RNG 공유 소수(배치 GCD)"
+  category: "crypto"
+  difficulty: "medium"
+  points: { red: 220, blue: 220 }
+  asset: "smartgrid-bulk-rsa"
+  mitre: [T1552]
+
+  description: |
+    스마트그리드 단말들이 엔트로피 부족 RNG 로 RSA 키를 생성해 서로 다른 두 단말의 공개 모듈러스가
+    소수 하나를 공유한다. 공개된 여러 모듈러스에 대해 쌍별 GCD 를 구하면 공유 소수가 드러나 취약
+    단말의 N=p·q 를 즉시 인수분해할 수 있다(Mining your Ps and Qs, 2012). d=e^-1 mod (p-1)(q-1) 로
+    target_device 의 ciphertext 를 복호해 토큰을 얻어 POST /api/recover 에 제출하면 flag.
+
+  red_task:
+    goal: "GET /api/devices 의 모듈러스들 → 쌍별 GCD 로 공유 소수 발견 → 인수분해·복호 → 토큰 제출"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "여러 단말의 모듈러스가 공개돼 있다. 약한 RNG 면 두 모듈러스가 소수를 공유할 수 있다." }
+      - { cost: 20, text: "target 모듈러스와 다른 모듈러스들의 gcd 를 구해 1 보다 큰 공약수(공유 소수)를 찾아라." }
+      - { cost: 30, text: "p=gcd, q=N/p, d=e^-1 mod (p-1)(q-1) 로 ciphertext 를 복호하면 토큰." }
+
+  blue_task:
+    goal: "고엔트로피 CSPRNG 로 소수를 독립 생성하고 발급 파이프라인에서 공유 소수를 사전 점검"
+    success_criteria: |
+      (1) 서로 다른 모듈러스가 소수를 공유(gcd>1)하는지 관측 — 공유 시 즉시 인수분해 가능
+      (2) 패치 후 모든 소수가 독립이라 쌍별 gcd 가 1 이 되어 배치 GCD 로 인수분해 불가
+    points_breakdown: { detection: 66, patch: 154 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["smartgrid-bulk-rsa"]
+  safety:
+    profile: "hardened"
+    notes: "HTTP 서비스형. read_only/tmpfs/cap_drop/mem_limit. 1024비트 RSA 는 훈련용 파라미터이며 실 단말키 아님."
