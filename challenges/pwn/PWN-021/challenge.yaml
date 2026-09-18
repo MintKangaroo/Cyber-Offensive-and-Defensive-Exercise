@@ -1,0 +1,42 @@
+challenge:
+  id: "PWN-021"
+  title: "변전소 원격제어 큐 관리자 - 힙 선형 오버플로우(인접 청크 함수포인터 탈취)"
+  category: "pwn"
+  difficulty: "medium"
+  points: { red: 240, blue: 240 }
+  asset: "scadaunlink"
+  mitre: [T1203, T1059]
+
+  description: |
+    변전소 원격제어 큐 관리자(원격 TCP)가 각 작업을 힙에 {char data[24]; void(*handler)(void);}
+    (32바이트) 구조로 순차 할당한다. edit 의 쓰기 길이가 data[24] 영역을 넘어도 검증되지 않아,
+    순차 할당으로 인접 배치된 다음 작업(task1)의 handler 필드까지 덮어쓸 수 있다(task0.data 시작
+    에서 80바이트: data(24)+handler(8)+다음청크헤더(16)+다음data(24)+다음handler(8)). 절대 힙 주소
+    leak 없이 상대 오프셋만으로 handler=win 이 되도록 덮고 run 하면 system("cat /flag"). no-PIE 라
+    win 주소만 고정.
+
+  red_task:
+    goal: "task0/task1 순차 생성 → task0.data 오버플로우(80B)로 task1.handler=win 덮기 → run(1) → cat /flag"
+    flag_format: "flag{...}"
+    flag_type: "static"
+    submit_fields: ["flag"]
+    hints:
+      - { cost: 10, text: "edit 의 길이 검증이 data[24] 를 넘어도 통과한다. 순차 할당된 다음 작업이 힙에서 바로 뒤에 온다." }
+      - { cost: 20, text: "오프셋 계산: data(24)+handler(8)+다음청크헤더(prev_size+size,16)+다음data(24) = 72 바이트 뒤가 다음 handler." }
+      - { cost: 30, text: "72바이트 채우고 그 뒤 8바이트에 win 주소(리틀엔디안)를 써서 task1 을 run 하라." }
+
+  blue_task:
+    goal: "쓰기 길이를 data 필드 크기로 제한해 인접 청크 침범을 차단"
+    success_criteria: |
+      (1) 고정 크기 data 필드에 길이 검증 없는 쓰기가 인접 청크까지 침범하는지 관측
+      (2) 패치 후 쓰기 길이가 data 크기로 제한되어 인접 handler 가 보존됨(정상 응답)
+    points_breakdown: { detection: 72, patch: 168 }
+
+  scoring:
+    red_verify: "flag_match"
+    blue_verify: ["safe_probe"]
+
+  artifacts: ["scadaunlink"]
+  safety:
+    profile: "hardened"
+    notes: "원격 정적배치 바이너리(no-PIE·의도적 힙 선형 오버플로우). glibc 2.31(Ubuntu 20.04). cap_drop/pids_limit/mem_limit, 30초 타임아웃."
