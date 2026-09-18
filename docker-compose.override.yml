@@ -7,3 +7,9 @@ services:
   edr_backend:
     ports: !override
       - "18090:8080"
+  # 로컬 초보자 데모(tailscale) 편의: 액세스 토큰 수명을 8시간으로(기본 15분).
+  # 15분이면 사용자가 화면을 보는 사이 토큰이 만료돼 attack_defense 가 401
+  # "missing or invalid token" → Red Portal 타깃 목록/Live Fire 공개 플레인이 비거나 DEGRADED.
+  auth:
+    environment:
+      - AUTH_ACCESS_TTL=28800
