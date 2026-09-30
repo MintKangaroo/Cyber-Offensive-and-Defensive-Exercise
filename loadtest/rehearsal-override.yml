@@ -1,0 +1,9 @@
+# 리허설용 compose 오버라이드
+# ============================
+# 트윈 서비스가 depends_on: edr_backend 라 `make rehearsal` 은 edr_backend 를 함께 기동한다.
+# edr 는 리허설에서 host 로 접근하지 않으며(트윈→edr 는 컨테이너망 http://edr_backend:8080),
+# base 의 host 포트 8080 바인딩이 이미 점유된 호스트에서 `up` 전체가 실패하는 것을 막기 위해
+# 여기서 edr 의 host 포트 발행만 제거한다(컨테이너 내부 8080 은 그대로 → 서비스간 통신 정상).
+services:
+  edr_backend:
+    ports: !override []

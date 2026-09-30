@@ -55,13 +55,17 @@ REHEARSAL_SVCS := config_service event_collector scoring_engine ingest_proxy sie
 	power_plant pp_gateway auth attack_defense ad_registry ad_target_gateway \
 	ad_team_01_notes ad_team_02_notes ad_team_03_notes
 
+# 리허설 오버라이드: 트윈이 depends_on 하는 edr_backend 의 host 포트 발행을 제거해, host 8080 이
+# 점유된 환경에서도 기동이 실패하지 않게 한다(edr 컨테이너 내부 8080 은 유지 → 서비스간 통신 정상).
+REHEARSAL_COMPOSE := $(COMPOSE) -f loadtest/rehearsal-override.yml
+
 rehearsal:
-	$(COMPOSE) up -d --build $(REHEARSAL_SVCS)
+	$(REHEARSAL_COMPOSE) up -d --build $(REHEARSAL_SVCS)
 	@echo "서비스 준비 대기(15s)…"; sleep 15
 	python3 -m scripts.rehearsal.run_rehearsal --stage all \
 		--json loadtest/results/rehearsal_latest.json
 
 # 리허설 서브셋만 내린다(볼륨 유지). 전체 정리는 `$(COMPOSE) down -v`.
 rehearsal-down:
-	$(COMPOSE) stop $(REHEARSAL_SVCS)
-	$(COMPOSE) rm -f $(REHEARSAL_SVCS)
+	$(REHEARSAL_COMPOSE) stop $(REHEARSAL_SVCS)
+	$(REHEARSAL_COMPOSE) rm -f $(REHEARSAL_SVCS)
