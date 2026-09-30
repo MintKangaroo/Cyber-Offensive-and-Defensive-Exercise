@@ -455,3 +455,9 @@ if __name__ == "__main__":
             print(f"  [ERROR] {e}")
         print("=" * 62)
 
+    # 감사 S-1(경미): CLI 를 자동화에서 소비할 때 조용한 통과를 막는다. 측정 자체가 불가능한
+    # (도달 불가) 프로브나 오류가 하나라도 있으면 fail-closed 로 비-0 종료한다 —
+    # run() 요약이 이미 unreachable 을 집계하지만 종료코드로도 강제해 스크립트가 놓치지 않게.
+    s = out["summary"]
+    sys.exit(1 if (s.get("unreachable") or out.get("errors")) else 0)
+
