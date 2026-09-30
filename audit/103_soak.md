@@ -28,7 +28,18 @@ SOAK_DURATION_SEC=28800 ASSET_CHECKPOINT_EVERY=250 SOAK_SCENARIO_ID=soak \
 # 결과: loadtest/soak/results/soak_report.json (overall PASS/FAIL, 서비스별 slope_mib_per_h)
 ```
 
-## 2. Phase 3에서 발견한 소크 관련 결함 (R-1) — 8h 소크 전 처리 권장
+## 1b. 소크 하네스 R-1 게이트 추가 (2026-09-30, 이 세션)
+`run_soak.sh` 에 **R-1 게이트**를 추가했다: 부하로 events.db 가 커진 뒤(종료 시점) event_collector
+health → scoring reconcile(events 크로스체크) → AAR PDF → event_collector health 재확인을 순서로
+판정한다. 무한 replay 회귀가 재발하면 event_collector 가 OOM 으로 죽어 게이트가 FAIL 한다.
+- `aar_report` 를 CORE 에 포함, INSTRUCTOR_TOKEN 은 `.env` 에서 로드(컨테이너와 동일 값).
+- **라이브 검증(6분 가속 소크, scenario=soak, 11,182 이벤트)**: R-1 게이트 **PASS** —
+  reconcile `checked=true total_events=11182`(페이지네이션, OOM 없음), AAR PDF `200 %PDF`(1.1s),
+  event_collector health 200(무거운 replay 전·후). → **R-1 수정이 소크 규모에서 검증됨.**
+- ⚠️ 단, 6분·6샘플 RSS 슬로프는 외삽 노이즈가 커(siem_api 0.7MiB 상승이 23MiB/h 로 확대) 신뢰
+  불가 — RSS 슬로프 판정은 장시간(2h/8h) 실행에서만 유효. 이 짧은 실행의 목적은 R-1 게이트 검증.
+
+## 2. Phase 3에서 발견한 소크 관련 결함 (R-1) — v1.1.0 에서 FIXED
 
 - **R-1**: `/replay/events` 무한 fetchall 이 대용량 events.db 에서 event_collector 를 OOMKill
   (실측 761MB에서 재현, audit/102 §3). 8h 소크는 event_collector events.db 를 크게 키우므로,
