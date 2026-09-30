@@ -14,7 +14,7 @@
 | S-11 | 8h 실 OOM 방지·SIEM 저장소 rollover 실측 미완 | mem_limit(70개)·하드닝 오버레이 3경로 로드·event_collector retention 은 코드상 완비. 실 OOM 은 장시간 런타임(Phase 4 소크)에서만 확정 가능 — 샌드박스 RAM 제약으로 이 환경에서 코드 완결 불가. | Phase 4 8h 정식 소크(`run_soak.sh`)에서 RSS 기울기 판정 |
 | S-3 (잔여) | (a) 담합 탐지가 `passed` 를 뒤집지 않음 (b) 비-스코프(dev) 제출이 body team_id 신뢰 | (a) 담합은 신호만 방출하고 교관이 판정 = 의도된 SOC 주체성 설계. (b) 실경쟁(`range_scope.is_team()`)에서는 identity 로 override 되어 무력화. dev 모드에서만 신뢰. | 담합 정책의 자동 무효화 옵션(교관 설정), 비-스코프 제출 하드닝 |
 | S-7 (잔여) | 막힌 stage 교관 강제 unlock/skip 엔드포인트 없음 | 크로스오버 정답 제출→해금 경로는 FIXED(완주 가능). 강제 override 는 운영 편의 기능. | 교관 force-advance API |
-| R-1 | `/replay/events` 무한 fetchall 이 대용량 events.db(실측 761MB)에서 event_collector OOM → AAR PDF·reconcile 크로스체크 실패 | Phase 3 리허설에서 발견(audit/102 §3). fresh DB 는 정상, retention 이 DB 를 억제하나 장시간 실전 종료 시점(events.db 최대)에 AAR 생성이 위험. 즉시 무효화는 아님(fresh 시작 시 정상). | reconcile/aar 를 커서 페이지네이션 `/replay/page` 배치 소비로 전환(또는 `/replay/events` 방어적 상한). **구조 변경 → 착수 전 설계 승인 필요.** |
+| R-1 | ~~`/replay/events` 무한 fetchall 이 대용량 events.db 에서 event_collector OOM~~ → **v1.1.0 에서 FIXED(PR #115)** | Phase 3 리허설 발견(audit/102 §3). | **해소**: reconcile·AAR 을 커서 페이지네이션 `/replay/page` 배치 소비로 전환(`shared/replay_client.py`). 라이브 검증(2500 이벤트 2페이지·OOM 없음). |
 
 > **핵심 Showstopper 잔여 3건(S-3 배포 시크릿·S-8 유실 가시성·S-9 A/D XFF)은 Phase 2 에서 코드로 FIXED.** 위 잔여는 설계 결정이거나 런타임/운영 경로 한정.
 
