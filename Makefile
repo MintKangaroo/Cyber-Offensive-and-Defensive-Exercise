@@ -1,4 +1,4 @@
-.PHONY: training-up training-down training-status beginner-defense attack-defense-demo attack-defense-reset attack-defense-test attack-defense-runtime-work attack-defense-ha-demo attack-defense-ha-status
+.PHONY: training-up training-down training-status beginner-defense attack-defense-demo attack-defense-reset attack-defense-test attack-defense-runtime-work attack-defense-ha-demo attack-defense-ha-status rehearsal rehearsal-down
 
 # 감사 2.1: 모든 docker compose 기동 경로가 하드닝 오버레이(리소스/rootfs 하드닝)를 함께 로드.
 COMPOSE := docker compose -f docker-compose.yml -f infra/hardening/docker-compose.hardening.yml
@@ -46,3 +46,22 @@ attack-defense-ha-demo:
 
 attack-defense-ha-status:
 	ATTACK_DEFENSE_API_URL=http://localhost:8110 python3 -m services.attack_defense.cli ad ha-status
+
+# 무인 리허설(Phase 3): Live Fire(이벤트 파이프라인) + Attack/Defense 2라운드를 봇으로 완주하고
+# 점수-원장 일치(유실 0)·SIEM 팀 귀속·AAR PDF(한글) 를 검증한다. 메모리 제약상 전체 스택 대신
+# 리허설에 필요한 서브셋만 기동한다(이벤트 파이프라인 + A/D notes 서브셋).
+# ★깨끗한 플래그로 시작하려면 먼저 `make attack-defense-reset`(고착 매치/스테일 볼륨 정리).
+REHEARSAL_SVCS := config_service event_collector scoring_engine ingest_proxy siem_api aar_report \
+	power_plant pp_gateway auth attack_defense ad_registry ad_target_gateway \
+	ad_team_01_notes ad_team_02_notes ad_team_03_notes
+
+rehearsal:
+	$(COMPOSE) up -d --build $(REHEARSAL_SVCS)
+	@echo "서비스 준비 대기(15s)…"; sleep 15
+	python3 -m scripts.rehearsal.run_rehearsal --stage all \
+		--json loadtest/results/rehearsal_latest.json
+
+# 리허설 서브셋만 내린다(볼륨 유지). 전체 정리는 `$(COMPOSE) down -v`.
+rehearsal-down:
+	$(COMPOSE) stop $(REHEARSAL_SVCS)
+	$(COMPOSE) rm -f $(REHEARSAL_SVCS)
