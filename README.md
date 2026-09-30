@@ -4,7 +4,7 @@
 > 데이터센터 · 병원** 등 **11개 ICS/OT 섹터**를 모사한 디지털 트윈 위에서
 > Red(공격) · Blue(방어) · 관전자 · 교관이 함께 훈련하는 **풀스택 사이버 레인지**입니다.
 > 취약 서비스 트윈(**60종**), EDR, SIEM, 시나리오 엔진, 실시간 대시보드, 자동 채점(AAR),
-> 그리고 7개 분야 **70개 CTF 챌린지**를 하나의 `docker compose`로 기동합니다.
+> 그리고 9개 분야 **130개 CTF 챌린지**를 하나의 `docker compose`로 기동합니다.
 >
 > 여기에 **14종 실 ICS 프로토콜을 말하는 디지털 트윈**(Modbus·DNP3·OPC UA·S7comm·IEC104·GOOSE·
 > IEC61850·BACnet·EtherNet/IP·MQTT·HART·Profinet·FF-H1·CCSDS — 공격→물리 파괴→탐지→방어 완전 공방 루프),
@@ -41,7 +41,7 @@
   제공합니다. 자동 실행이나 AI 경쟁 채점은 없습니다.
 - **Higgsfield 브랜드 자산 19개**: 이미지·영상은 분위기 표현에만 사용하며, 지도·차트·계측을 대체하지 않습니다.
 
-**검증 범위:** 운영 버전에 맞춘 의존성 환경에서 백엔드 **687개 통과**(PostgreSQL 복제 검사 6개 포함, 건너뜀 없음),
+**검증 범위:** 백엔드 유닛+계약 테스트 **752 passed / 6 skipped**(skip 6 = PostgreSQL HA, CI 는 postgres 로 통과), 챌린지 **130/130** 검증(`validate_challenges.sh`),
 Command Vitest **54개**, Playwright **17개 흐름**, TypeScript·ESLint와 6개 React 앱의
 게이트웨이 Docker 빌드를 검증했습니다. 격리된 운영 프로필 Docker에서는 개인 기록·실제 채점·권한·토큰 폐기를
 포함해 **HTTP 44건**을 확인했습니다. 기존 테스트의 경고는 유지되며, 원격 CI 결과는 아래 워크플로에서 확인하세요.
@@ -330,8 +330,8 @@ rollback합니다.
 
 검증된 상태:
 
-- 기존 exercise/ICS를 포함한 Python 전체 회귀: **349 passed, 6 skipped**
-  (PostgreSQL 전용 6개는 별도 PostgreSQL 17 실행에서 모두 통과)
+- Python 전체 회귀: **752 passed, 6 skipped**
+  (PostgreSQL HA 6개는 별도 PostgreSQL 실행에서 모두 통과)
 - React/Vitest 컴포넌트 테스트: **19 passed**
 - Playwright 역할·권한·키보드·시각 회귀: **5 passed**
 - 3팀 × 2서비스 실제 Compose health, round 재시작 복구, flag 제출·중복 차단,
@@ -769,7 +769,7 @@ docker compose down
 
 **소개 · 구조**
 - [무엇을 하는 플랫폼인가](#무엇을-하는-플랫폼인가) · [아키텍처](#아키텍처) · [주요 화면](#주요-화면-스크린샷) · [핵심 기능](#핵심-기능)
-- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (112종)](#챌린지-카탈로그-112종)
+- [트윈 취약 서비스 (60종)](#트윈-취약-서비스-60종) · [챌린지 카탈로그 (130종)](#챌린지-카탈로그-130종)
 
 **시작 · 품질 · 접근제어**
 - [처음 시작하기](#처음-시작하기) · [경기 운영 방법](#경기-운영-방법) · [빠른 시작](#빠른-시작)
@@ -1079,9 +1079,10 @@ patched/vulnerable 상태를 한 번에 판정합니다.
 
 ---
 
-## 챌린지 카탈로그 (112종)
+## 챌린지 카탈로그 (130종)
 
-web·pwn·crypto·forensics·network·reversing·detection·ai·ICS/OT 9개 분야가 모두 **easy → medium → hard → insane** 난이도 곡선을 갖추고 있습니다.
+9개 분야 **130종**(web 24·pwn 23·crypto 21·detection 14·ics 13·ai 9·forensics 9·network 9·reversing 8)이
+모두 **easy → medium → hard → insane** 난이도 곡선을 갖추고 있습니다.
 표기: `점수(Red/Blue)`. 팀마다 플래그·정답이 HMAC으로 달라 답 공유가 불가능합니다.
 
 > **🇰🇷 CCE형 국가기반시설 Jeopardy** — 사이버공격방어대회(CCE) 본선 스타일의 국가기반시설 테마
