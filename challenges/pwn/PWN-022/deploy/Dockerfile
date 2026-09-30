@@ -7,7 +7,7 @@ WORKDIR /app
 COPY rtupivot /app/rtupivot
 COPY server.py /app/server.py
 RUN chmod +x /app/rtupivot
-ENV CHALLENGE_SECRET=pwn022-dev-secret
+# CHALLENGE_SECRET 은 런타임 주입(기본값 없음, fail-closed — 감사 S-3).
 ENV PORT=9032
 EXPOSE 9032
 CMD ["python3","server.py"]

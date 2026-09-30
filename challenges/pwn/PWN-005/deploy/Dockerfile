@@ -3,7 +3,7 @@ WORKDIR /app
 COPY sat /app/sat
 COPY server.py /app/server.py
 RUN chmod +x /app/sat
-ENV CHALLENGE_SECRET=pwn005-dev-secret
+# CHALLENGE_SECRET 은 런타임 주입(기본값 없음, fail-closed — 감사 S-3).
 ENV PORT=9015
 EXPOSE 9015
 CMD ["python","server.py"]

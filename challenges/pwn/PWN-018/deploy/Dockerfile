@@ -5,7 +5,7 @@ WORKDIR /app
 COPY turbinectl /app/turbinectl
 COPY server.py /app/server.py
 RUN chmod +x /app/turbinectl
-ENV CHALLENGE_SECRET=pwn018-dev-secret
+# CHALLENGE_SECRET 은 런타임 주입(기본값 없음, fail-closed — 감사 S-3).
 ENV PORT=9028
 EXPOSE 9028
 CMD ["python3","server.py"]

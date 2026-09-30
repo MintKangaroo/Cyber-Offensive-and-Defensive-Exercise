@@ -7,7 +7,7 @@ WORKDIR /app
 COPY scadaunlink /app/scadaunlink
 COPY server.py /app/server.py
 RUN chmod +x /app/scadaunlink
-ENV CHALLENGE_SECRET=pwn021-dev-secret
+# CHALLENGE_SECRET 은 런타임 주입(기본값 없음, fail-closed — 감사 S-3).
 ENV PORT=9031
 EXPOSE 9031
 CMD ["python3","server.py"]

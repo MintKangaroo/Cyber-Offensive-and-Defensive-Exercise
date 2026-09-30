@@ -5,6 +5,7 @@ C-QA Step 2: Deploy Up (25번 문서 1절)
 challenge의 deploy/docker-compose.yaml을 기동하고 /health로 준비 확인(최대 30초 재시도).
 """
 import argparse
+import os
 import subprocess
 import sys
 import time
@@ -25,7 +26,13 @@ def main() -> int:
         print(f"❌ deploy_up: docker-compose.yaml 없음 ({deploy_dir})")
         return 1
 
-    rc = subprocess.run(["docker", "compose", "up", "-d", "--build"], cwd=deploy_dir).returncode
+    # 감사 S-3: deploy/docker-compose.yaml 은 CHALLENGE_SECRET 을 `:?`(fail-fast)로 요구한다
+    # (dev 기본값 제거). QA 하네스는 결정적 더미 secret 을 주입해 기동시킨다(운영 배포는 운영자가
+    # 실 secret 을 export). validate_challenges.sh 와 동일한 기본값을 쓴다.
+    env = dict(os.environ)
+    env.setdefault("CHALLENGE_SECRET", "qa-validate-challenge-secret")
+    rc = subprocess.run(["docker", "compose", "up", "-d", "--build"],
+                        cwd=deploy_dir, env=env).returncode
     if rc != 0:
         print("❌ deploy_up: docker compose up 실패")
         return 1

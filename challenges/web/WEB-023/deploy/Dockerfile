@@ -2,7 +2,7 @@ FROM python:3.11-slim
 WORKDIR /app
 RUN pip install --no-cache-dir fastapi uvicorn
 COPY main.py .
-ENV CHALLENGE_SECRET=web023-dev-secret
+# CHALLENGE_SECRET 은 런타임 주입(기본값 없음, fail-closed — 감사 S-3).
 ENV PATCH_WEB_023=false
 EXPOSE 8126
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8126"]

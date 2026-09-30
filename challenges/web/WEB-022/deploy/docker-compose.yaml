@@ -6,7 +6,7 @@ services:
     ports:
       - "8124:8124"
     environment:
-      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web022-dev-secret}
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:?requires CHALLENGE_SECRET}
       - PATCH_WEB_022=false
     mem_limit: 128m
     read_only: true

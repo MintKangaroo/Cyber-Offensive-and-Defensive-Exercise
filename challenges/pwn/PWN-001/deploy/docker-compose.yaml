@@ -6,7 +6,7 @@ services:
     ports:
       - "9011:9011"
     environment:
-      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-pwn001-dev-secret}
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:?requires CHALLENGE_SECRET}
       - PORT=9011
     mem_limit: 128m
     pids_limit: 64

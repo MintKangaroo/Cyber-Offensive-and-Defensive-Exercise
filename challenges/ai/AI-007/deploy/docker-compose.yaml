@@ -7,7 +7,7 @@ services:
     ports:
       - "8107:8107"
     environment:
-      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-ai007-dev-secret}
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:?requires CHALLENGE_SECRET}
     read_only: true
     tmpfs:
       - /tmp

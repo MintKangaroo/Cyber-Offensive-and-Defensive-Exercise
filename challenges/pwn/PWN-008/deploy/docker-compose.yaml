@@ -4,7 +4,7 @@ services:
     container_name: pwn008_deploy
     ports: ["9018:9018"]
     environment:
-      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-pwn008-dev-secret}
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:?requires CHALLENGE_SECRET}
       - PORT=9018
     mem_limit: 128m
     pids_limit: 64

@@ -4,7 +4,7 @@ services:
     container_name: pwn004_deploy
     ports: ["9014:9014"]
     environment:
-      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-pwn004-dev-secret}
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:?requires CHALLENGE_SECRET}
       - PORT=9014
     mem_limit: 128m
     pids_limit: 64

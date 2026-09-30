@@ -6,7 +6,7 @@ services:
     ports:
       - "8112:8112"
     environment:
-      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web012-dev-secret}
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:?requires CHALLENGE_SECRET}
       - STAGE_TIMEOUT=10
     mem_limit: 128m
     read_only: true

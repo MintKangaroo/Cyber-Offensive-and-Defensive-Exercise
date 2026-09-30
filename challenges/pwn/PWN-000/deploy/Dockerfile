@@ -4,7 +4,7 @@ WORKDIR /app
 COPY lng /app/lng
 COPY server.py /app/server.py
 RUN chmod +x /app/lng
-ENV CHALLENGE_SECRET=pwn000-dev-secret
+# CHALLENGE_SECRET 은 런타임 주입(기본값 없음, fail-closed — 감사 S-3).
 ENV PORT=9010
 EXPOSE 9010
 CMD ["python", "server.py"]

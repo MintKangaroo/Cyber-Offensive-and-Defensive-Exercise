@@ -7,7 +7,7 @@ WORKDIR /app
 COPY gridalloc /app/gridalloc
 COPY server.py /app/server.py
 RUN chmod +x /app/gridalloc
-ENV CHALLENGE_SECRET=pwn019-dev-secret
+# CHALLENGE_SECRET 은 런타임 주입(기본값 없음, fail-closed — 감사 S-3).
 ENV PORT=9029
 EXPOSE 9029
 CMD ["python3","server.py"]
