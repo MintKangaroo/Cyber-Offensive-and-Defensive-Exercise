@@ -7,12 +7,24 @@
 - team_id는 요청 헤더(X-Team-Id)에서 가져오며 없으면 "default".
 """
 
+import logging
 import os
 import time
 import requests
 
+_log = logging.getLogger("event_client")
+
 EVENT_COLLECTOR_URL = os.environ.get("EVENT_COLLECTOR_URL", "http://event_collector:8010")
 _TIMEOUT = 1.5
+# 감사 S-8: 발행 실패(Event Collector/ingest_proxy 다운·지연)를 조용히 삼키지 않고 계측한다.
+# best-effort 원칙(트윈 응답은 막지 않음)은 유지하되, 유실을 가시화해 사후 이의제기 시
+# "이 구간에 트윈→collector 발행이 N건 실패했다"는 증거를 남긴다.
+_dropped = 0
+
+
+def dropped_count() -> int:
+    """이 프로세스가 시작 이후 Event Collector 로 발행하지 못한(유실된) 이벤트 누적 수."""
+    return _dropped
 # 매치별 트윈 셋(P3): 이 트윈이 발행하는 이벤트의 기본 파티션 키. per-match 배포 시
 # MATCH_SCENARIO_ID=match_x 를 주면 scenario_id 미지정 호출이 전부 자동으로 매치에 태깅된다
 # (코어 3섹터처럼 호출부마다 scenario_id를 안 넘겨도 매치별 이벤트/점수 격리가 적용됨).
@@ -57,6 +69,9 @@ def emit_event(
         from shared.service_auth import range_agent_headers
         requests.post(f"{EVENT_COLLECTOR_URL}/events", json=payload,
                       headers=range_agent_headers(target_asset), timeout=_TIMEOUT)
-    except requests.exceptions.RequestException:
-        # Event Collector 다운 시에도 트윈 서비스 자체 응답은 지연/실패하면 안 됨
-        pass
+    except requests.exceptions.RequestException as exc:
+        # Event Collector 다운 시에도 트윈 서비스 자체 응답은 지연/실패하면 안 됨(best-effort).
+        # 단, 감사 S-8: 유실을 조용히 삼키지 않고 카운터+경고로 가시화한다.
+        global _dropped
+        _dropped += 1
+        _log.warning("event_collector 발행 실패 — 이벤트 유실(누적 %d): %s", _dropped, exc)

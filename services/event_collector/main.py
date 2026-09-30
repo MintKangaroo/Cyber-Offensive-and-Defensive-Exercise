@@ -396,7 +396,9 @@ def metrics():
     except Exception:
         pending = None
     conn.close()
-    return {"service": "event_collector", **_METRICS, "dlq_pending": pending}
+    # 감사 S-8: SSE 느린 구독자 드롭 카운터도 노출(조용한 유실 가시화).
+    return {"service": "event_collector", **_METRICS, "dlq_pending": pending,
+            "sse_dropped": bus.dropped}
 
 
 @app.get("/health")
@@ -543,24 +545,33 @@ def _spool_to_dlq(event_id: str, payload: dict, err: Optional[str]) -> None:
     _METRICS["dlq_spooled"] += 1
 
 
+async def _drain_dlq_once() -> int:
+    """DLQ 1회 드레인 패스. scoring 복구 시 스풀된 이벤트를 재전달하고 재전달 건수를 반환한다.
+    (루프에서 분리 = 감사 S-8 회귀 테스트가 드레인 경로를 결정론적으로 검증할 수 있게.)"""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT event_id, payload FROM scoring_dlq ORDER BY created_at ASC LIMIT 100"
+    ).fetchall()
+    conn.close()
+    redelivered = 0
+    for row in rows:
+        ok, _ = await _post_scoring(json.loads(row["payload"]))
+        if ok:
+            conn = get_db()
+            conn.execute("DELETE FROM scoring_dlq WHERE event_id=?", (row["event_id"],))
+            conn.commit(); conn.close()
+            _METRICS["dlq_redelivered"] += 1
+            redelivered += 1
+    return redelivered
+
+
 async def _dlq_drain_loop():
     """감사 3.5: 주기적으로 DLQ를 재전달. scoring_engine 복구 시 스풀된 이벤트를 0건 유실로 흘려보낸다."""
     while True:
         await asyncio.sleep(_DLQ_DRAIN_INTERVAL)
         try:
             _prune_old_events()  # 감사 4.8: events.db 보존 정책 적용
-            conn = get_db()
-            rows = conn.execute(
-                "SELECT event_id, payload FROM scoring_dlq ORDER BY created_at ASC LIMIT 100"
-            ).fetchall()
-            conn.close()
-            for row in rows:
-                ok, _ = await _post_scoring(json.loads(row["payload"]))
-                if ok:
-                    conn = get_db()
-                    conn.execute("DELETE FROM scoring_dlq WHERE event_id=?", (row["event_id"],))
-                    conn.commit(); conn.close()
-                    _METRICS["dlq_redelivered"] += 1
+            await _drain_dlq_once()
         except Exception:
             # 드레인 루프는 절대 죽지 않는다(다음 주기에 재시도).
             pass

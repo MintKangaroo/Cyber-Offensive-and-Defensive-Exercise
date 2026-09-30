@@ -42,6 +42,9 @@ class SSEBus:
         self._seq = 0
         self._buffer: deque[Message] = deque(maxlen=buffer_size)
         self._subs: set[asyncio.Queue] = set()
+        # 감사 S-8: 느린 구독자에게 흘린(drop) 메시지 누적 수. 조용한 유실을 가시화해
+        # /metrics·상황판에서 관측할 수 있게 한다(publish 는 여전히 절대 막지 않음).
+        self._dropped = 0
 
     def publish(self, topic: str, data: dict[str, Any]) -> int:
         """토픽에 메시지 발행. 순증하는 id 반환. 동기 함수(sync/async 어디서든 호출 가능)."""
@@ -52,7 +55,9 @@ class SSEBus:
             try:
                 q.put_nowait(msg)
             except asyncio.QueueFull:
-                pass  # 느린 구독자만 이 메시지를 놓친다(재연결 시 Last-Event-ID 로 복구 가능)
+                # 느린 구독자만 이 메시지를 놓친다(재연결 시 Last-Event-ID 로 복구 가능).
+                # 감사 S-8: 조용히 삼키지 않고 계측한다.
+                self._dropped += 1
         return self._seq
 
     def replay(self, last_id: int, topics: Optional[Iterable[str]]) -> list[Message]:
@@ -77,6 +82,11 @@ class SSEBus:
     @property
     def last_id(self) -> int:
         return self._seq
+
+    @property
+    def dropped(self) -> int:
+        """느린 구독자에게 흘린(유실) 메시지 누적 수(감사 S-8 가시성)."""
+        return self._dropped
 
 
 def visible_to(msg: Message, role: str, match_id: str, now: float,
