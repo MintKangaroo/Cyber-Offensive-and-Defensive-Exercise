@@ -6,7 +6,7 @@ services:
     ports:
       - "8132:8132"
     environment:
-      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web026-dev-secret}
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:?requires CHALLENGE_SECRET}
       - PATCH_WEB_026=false
     mem_limit: 160m
     cap_drop: ["ALL"]

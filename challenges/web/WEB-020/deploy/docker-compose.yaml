@@ -6,7 +6,7 @@ services:
     ports:
       - "8120:8120"
     environment:
-      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web020-dev-secret}
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:?requires CHALLENGE_SECRET}
       - PATCH_WEB_020=false
     mem_limit: 200m
     cap_drop: ["ALL"]

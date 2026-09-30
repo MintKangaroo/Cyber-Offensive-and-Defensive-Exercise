@@ -7,7 +7,7 @@ WORKDIR /app
 COPY relaysbx /app/relaysbx
 COPY server.py /app/server.py
 RUN chmod +x /app/relaysbx
-ENV CHALLENGE_SECRET=pwn020-dev-secret
+# CHALLENGE_SECRET 은 런타임 주입(기본값 없음, fail-closed — 감사 S-3).
 ENV PORT=9030
 EXPOSE 9030
 CMD ["python3","server.py"]

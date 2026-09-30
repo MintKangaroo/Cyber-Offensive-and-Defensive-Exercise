@@ -4,7 +4,7 @@ services:
     container_name: cry012_deploy
     ports: ["8144:8144"]
     environment:
-      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-cry012-dev-secret}
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:?requires CHALLENGE_SECRET}
       - PATCH_CRY_012=false
     mem_limit: 160m
     read_only: true

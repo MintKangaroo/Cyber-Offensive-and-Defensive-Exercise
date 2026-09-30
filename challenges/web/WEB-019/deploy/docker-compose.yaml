@@ -6,7 +6,7 @@ services:
     ports:
       - "8119:8119"
     environment:
-      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web019-dev-secret}
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:?requires CHALLENGE_SECRET}
       - PATCH_WEB_019=false
     mem_limit: 160m
     read_only: true

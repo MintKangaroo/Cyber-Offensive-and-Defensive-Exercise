@@ -7,5 +7,5 @@ services:
     ports:
       - "8109:8109"
     environment:
-      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web009-dev-secret}
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:?requires CHALLENGE_SECRET}
       - PATCH_WEB_009=${PATCH_WEB_009:-false}

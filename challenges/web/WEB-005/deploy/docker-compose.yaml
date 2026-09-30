@@ -8,7 +8,7 @@ services:
     ports:
       - "8100:8100"
     environment:
-      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web005-dev-secret}
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:?requires CHALLENGE_SECRET}
       - PATCH_WEB_005=false
       - FLAG_PATH=/tmp/flag.txt
     # --- 하드닝(safety_scan 요구: cap_drop / read_only / mem_limit) ---

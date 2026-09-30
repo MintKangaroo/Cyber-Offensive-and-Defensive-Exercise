@@ -5,7 +5,7 @@ WORKDIR /app
 COPY feederctl /app/feederctl
 COPY server.py /app/server.py
 RUN chmod +x /app/feederctl
-ENV CHALLENGE_SECRET=pwn017-dev-secret
+# CHALLENGE_SECRET 은 런타임 주입(기본값 없음, fail-closed — 감사 S-3).
 ENV PORT=9027
 EXPOSE 9027
 CMD ["python3","server.py"]

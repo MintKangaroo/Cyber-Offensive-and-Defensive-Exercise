@@ -4,7 +4,7 @@ services:
     container_name: pwn002_deploy
     ports: ["9012:9012"]
     environment:
-      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-pwn002-dev-secret}
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:?requires CHALLENGE_SECRET}
       - PORT=9012
     mem_limit: 128m
     pids_limit: 64

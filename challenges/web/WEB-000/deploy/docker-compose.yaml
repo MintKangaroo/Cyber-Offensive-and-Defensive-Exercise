@@ -7,5 +7,5 @@ services:
     ports:
       - "8101:8101"
     environment:
-      - CHALLENGE_SECRET=${CHALLENGE_SECRET:-web000-dev-secret}
+      - CHALLENGE_SECRET=${CHALLENGE_SECRET:?requires CHALLENGE_SECRET}
       - PATCH_WEB_000=false
