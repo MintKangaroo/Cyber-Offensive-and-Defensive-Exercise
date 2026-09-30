@@ -8,22 +8,38 @@ from typing import Any, Optional
 
 import requests
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except Exception:  # dotenv 없어도 환경변수만으로 동작
-    pass
+# ⚠️ import 시점에 .env 를 로드하지 않는다. 이 모듈을 import 하는 유닛 테스트(test_rehearsal_harness)
+# 수집 시 실제 .env(SERVICE_TOKEN 등)가 프로세스 환경에 주입되면 fail-closed/dev 동작을 검사하는
+# 다른 테스트가 오염된다. .env 로드는 실제 리허설 실행 시 load_env() 로만 수행한다.
 
-# --- 서비스 엔드포인트(호스트 기준, 서브셋 기동 시 발행 포트) ---
-EVENT_COLLECTOR = os.environ.get("EVENT_COLLECTOR_HOST_URL", "http://localhost:8010").rstrip("/")
-SCORING_ENGINE = os.environ.get("SCORING_ENGINE_HOST_URL", "http://localhost:8020").rstrip("/")
-SIEM_API = os.environ.get("SIEM_API_HOST_URL", "http://localhost:8040").rstrip("/")
-AAR_REPORT = os.environ.get("AAR_REPORT_HOST_URL", "http://localhost:8090").rstrip("/")
-AD_API = os.environ.get("ATTACK_DEFENSE_API_URL", "http://localhost:8100").rstrip("/")
-AUTH_API = os.environ.get("AUTH_API_URL", "http://localhost:8051").rstrip("/")
+# --- 서비스 엔드포인트(호스트 기준, 서브셋 기동 시 발행 포트). load_env() 가 환경에서 갱신 ---
+EVENT_COLLECTOR = "http://localhost:8010"
+SCORING_ENGINE = "http://localhost:8020"
+SIEM_API = "http://localhost:8040"
+AAR_REPORT = "http://localhost:8090"
+AD_API = "http://localhost:8100"
+AUTH_API = "http://localhost:8051"
+SERVICE_TOKEN = ""
+INSTRUCTOR_TOKEN = "dev-instructor-token"
 
-SERVICE_TOKEN = os.environ.get("SERVICE_TOKEN", "")
-INSTRUCTOR_TOKEN = os.environ.get("INSTRUCTOR_TOKEN", "dev-instructor-token")
+
+def load_env() -> None:
+    """리허설 실행 진입점에서만 호출. .env 를 로드하고 엔드포인트/토큰을 환경에서 갱신한다."""
+    global EVENT_COLLECTOR, SCORING_ENGINE, SIEM_API, AAR_REPORT, AD_API, AUTH_API
+    global SERVICE_TOKEN, INSTRUCTOR_TOKEN
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except Exception:  # dotenv 없어도 환경변수만으로 동작
+        pass
+    EVENT_COLLECTOR = os.environ.get("EVENT_COLLECTOR_HOST_URL", "http://localhost:8010").rstrip("/")
+    SCORING_ENGINE = os.environ.get("SCORING_ENGINE_HOST_URL", "http://localhost:8020").rstrip("/")
+    SIEM_API = os.environ.get("SIEM_API_HOST_URL", "http://localhost:8040").rstrip("/")
+    AAR_REPORT = os.environ.get("AAR_REPORT_HOST_URL", "http://localhost:8090").rstrip("/")
+    AD_API = os.environ.get("ATTACK_DEFENSE_API_URL", "http://localhost:8100").rstrip("/")
+    AUTH_API = os.environ.get("AUTH_API_URL", "http://localhost:8051").rstrip("/")
+    SERVICE_TOKEN = os.environ.get("SERVICE_TOKEN", "")
+    INSTRUCTOR_TOKEN = os.environ.get("INSTRUCTOR_TOKEN", "dev-instructor-token")
 
 
 def service_headers() -> dict[str, str]:
