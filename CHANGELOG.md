@@ -3,6 +3,24 @@
 형식: [Keep a Changelog](https://keepachangelog.com/), 버전: [SemVer](https://semver.org/).
 
 ## [Unreleased]
+
+## [1.1.0] - 2026-09-30
+운영 준비 마감 라운드(v1.0 감사 → v1.1). 상세 근거는 `audit/100~103`.
+### 릴리스 마감 요약
+- **감사 재판정·잔여 마감**: Showstopper S-1~S-11 재판정(7 FIXED·4 PARTIAL) 후 잔여를 코드로 마감 —
+  S-9(A/D 게이트웨이 X-Forwarded-For 로 팀 src_ip 귀속), S-8(event_client·sse_bus 유실 가시화 + DLQ
+  드레인 분리), S-3(서비스형 배포 스캐폴드 dev 시크릿 제거·`:?` fail-fast), S-1/S-2(safe_probe CLI
+  fail-closed·망 주석). 위험 수용/개선 후보는 `docs/POST_V1_BACKLOG.md`.
+- **무인 리허설**: `scripts/rehearsal/` 봇 하네스 + `make rehearsal` — Live Fire + A/D 2라운드 완주
+  검증(점수-이벤트 원장 유실 0·SIEM 팀 귀속·AAR PDF 한글). PASS=13 FAIL=0(audit/102).
+- **R-1 수정**: reconcile·AAR 을 `/replay/page` 커서 페이지네이션으로 전환 — 대용량 events.db 에서
+  event_collector OOM(무한 fetchall) 제거. 라이브 검증(2500 이벤트 2페이지, OOM 없음).
+- **의존성 보안**: pyjwt 2.13.0 → 2.14.0 (CVE-2026-102265~102274 10건).
+- **문서 실측화**: CLAUDE.md 신설, HANDOFF.md 전면 재작성, README 수치(챌린지 130·테스트 752/6),
+  docs/29 리허설 절차 갱신.
+- **챌린지 카탈로그 130종**(web24·pwn23·crypto21·detection14·ics13·ai9·forensics9·network9·reversing8).
+- 검증: 백엔드 752 passed / 6 skipped(PostgreSQL HA), 챌린지 130/130, CI 13잡 green.
+
 ### Added
 - **ICS 챌린지 13종 실 프로토콜 재저작**: ICS-000~012를 HTTP 목업/합성 로그 → **실 프로토콜**로 전면
   재저작. 라이브 서버형(ICS-000 Modbus/TCP·ICS-001 OPC UA — 실 서버에 직접 익스플로잇)과 pcap 포렌식형
