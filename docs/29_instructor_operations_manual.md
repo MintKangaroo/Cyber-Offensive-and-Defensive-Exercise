@@ -30,10 +30,23 @@ python infra/ci/isolation_test.py     # Docker 환경에서 실제 실행(21번 
   확장이 아직이면, MVP 단계에서는 "관전자에게 교관 콘솔 URL을 안 알려주는" 수준의 운영적
   통제로 대체 — 코드 레벨 인증 전까지는 운영으로 커버).
 
-### 1.5 리허설
-- 팀 하나를 교관이 직접 Red 역할로 돌며 시나리오 stage 1개 이상 실제로 완주해보기.
-- Blue 쪽도 safe_probe 실행 → patch_console로 패치 1건 실제 적용해보기.
-- NOC/EDR 대시보드에 반응이 뜨는지 확인.
+### 1.5 리허설 (자동화 — 실측 절차)
+훈련 전 `make rehearsal` 로 무인 리허설을 돌려 핵심 경로를 검증한다(Phase 3, audit/102 참고).
+Live Fire(이벤트 파이프라인) + Attack/Defense 2라운드를 봇으로 완주하며 다음을 자동 판정한다:
+점수-이벤트 원장 일치(유실 0)·SIEM 경보 팀 귀속(src_ip)·AAR PDF(한글)·A/D 레드 공격 accepted.
+
+```bash
+# 깨끗한 플래그로 시작(고착 매치/스테일 볼륨 정리) — A/D 리허설의 전제.
+make attack-defense-reset
+# 무인 리허설: 서브셋 기동 → 완주 검증 → 결과 JSON(loadtest/results/rehearsal_latest.json)
+make rehearsal          # 끝나면 서브셋 해제: make rehearsal-down
+```
+- 기대: `[rehearsal] PASS=N FAIL=0 → ✅ 완주(무결함)`. FAIL 이 있으면 그 항목의 근거를 보고 조치.
+- 메모리 여유가 부족하면(가용 < 2Gi) 서브셋만 순차로 돌린다:
+  `python3 -m scripts.rehearsal.run_rehearsal --stage livefire` 후 `--stage ad`.
+- ⚠️ 과거 소크/부하 잔여로 `events.db` 가 매우 크면(수백 MB) AAR/reconcile 이 실패할 수 있다
+  (audit/102 R-1). 리허설 전 fresh 상태를 권장(reset).
+- 수동 보완(선택): 교관이 직접 Red 로 시나리오 stage 완주, Blue 로 `safe_probe`→patch_console 패치 1건.
 
 ---
 
