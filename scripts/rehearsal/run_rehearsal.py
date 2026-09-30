@@ -89,6 +89,8 @@ def main() -> int:
     ap.add_argument("--json", default="")
     args = ap.parse_args()
 
+    C.load_env()  # 실행 시점에만 .env 로드(유닛 테스트 오염 방지)
+
     print("=" * 66)
     print(" 무인 리허설 (Phase 3) — Live Fire + Attack/Defense 2라운드")
     print("=" * 66)
