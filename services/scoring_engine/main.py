@@ -436,20 +436,31 @@ def reconcile(scenario_id: str = "default"):
     events_crosscheck: dict = {"checked": False}
     try:
         import httpx
-        r = httpx.get(f"{EVENT_COLLECTOR_URL}/replay/events",
-                      params={"scenario_id": scenario_id}, timeout=3.0)
-        r.raise_for_status()
-        evs = r.json().get("events", [])
-        scoreable = [e for e in evs if e.get("event_type") in SCOREABLE_EVENT_TYPES]
-        missing = [e["event_id"] for e in scoreable if e.get("event_id") not in known_sources]
+        from shared.replay_client import iter_event_pages_sync, ReplayChanged
+        # audit/102 R-1: 무한 /replay/events(전체 fetchall) 대신 커서 페이지네이션으로 순회한다
+        # (event_collector 가 페이지당만 적재 → 대용량 events.db 에서도 OOM 없음). 페이지 단위로
+        # 집계해 이 프로세스도 전체 이벤트를 메모리에 쌓지 않는다.
+        total = scoreable_n = missing_n = 0
+        missing_ids: list[str] = []
+        for page in iter_event_pages_sync(httpx.get, EVENT_COLLECTOR_URL, scenario_id, timeout=5.0):
+            total += len(page)
+            for e in page:
+                if e.get("event_type") in SCOREABLE_EVENT_TYPES:
+                    scoreable_n += 1
+                    if e.get("event_id") not in known_sources:
+                        missing_n += 1
+                        if len(missing_ids) < 50:
+                            missing_ids.append(e["event_id"])
         events_crosscheck = {
             "checked": True,
-            "total_events": len(evs),
-            "scoreable_events": len(scoreable),
+            "total_events": total,
+            "scoreable_events": scoreable_n,
             "achievements_with_source": len(known_sources),
-            "scoreable_without_achievement": len(missing),
-            "missing_event_ids": missing[:50],   # 과다 방지 상한
+            "scoreable_without_achievement": missing_n,
+            "missing_event_ids": missing_ids,   # 표시용 50 상한(카운트는 missing_n)
         }
+    except ReplayChanged:  # 진행 중 원장 변경 → 검사 불가(오탐 방지)
+        events_crosscheck = {"checked": False, "error": "ReplayChanged"}
     except Exception as e:  # event_collector 다운/불가 → 검사 불가(오탐 방지)
         events_crosscheck = {"checked": False, "error": type(e).__name__}
 
