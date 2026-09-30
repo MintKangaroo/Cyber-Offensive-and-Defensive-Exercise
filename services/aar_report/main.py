@@ -86,9 +86,11 @@ async def get_aar_report(scenario_id: str = "default", authorization: str = Head
     source_status = {"events": "ready", "scores": "ready", "alerts": "ready", "incidents": "ready", "injects": "ready", "integrity": "ready"}
     async with httpx.AsyncClient(timeout=10.0, headers={"Authorization": authorization}) as client:
         try:
-            events_resp = await client.get(f"{EVENT_COLLECTOR_URL}/replay/events", params={"scenario_id": scenario_id})
-            events_resp.raise_for_status()
-            events = events_resp.json().get("events", [])
+            # audit/102 R-1: 무한 /replay/events 대신 커서 페이지네이션(event_collector OOM 방지).
+            from shared.replay_client import fetch_all_events_async, ReplayChanged
+            events = await fetch_all_events_async(client, EVENT_COLLECTOR_URL, scenario_id)
+        except ReplayChanged as e:
+            raise HTTPException(409, f"event_collector 원장 변경 중: {e}")
         except httpx.HTTPError as e:
             raise HTTPException(502, f"event_collector 조회 실패: {e}")
 
@@ -202,8 +204,13 @@ async def get_timeline(scenario_id: str = "default", authorization: str = Header
             return default
 
     async with httpx.AsyncClient(timeout=10.0, headers={"Authorization": authorization}) as client:
-        events = await _get_json(f"{EVENT_COLLECTOR_URL}/replay/events", "events", [],
-                                 params={"scenario_id": scenario_id})
+        # audit/102 R-1: 커서 페이지네이션으로 이벤트 수집(event_collector OOM 방지). 조회 실패는
+        # 관대하게 빈 목록으로(타임라인 부분 렌더).
+        from shared.replay_client import fetch_all_events_async, ReplayChanged
+        try:
+            events = await fetch_all_events_async(client, EVENT_COLLECTOR_URL, scenario_id)
+        except (httpx.HTTPError, ReplayChanged, ValueError):
+            events = []
         alerts = await _get_json(f"{SIEM_API_URL}/alerts", "alerts", [])
         incidents = await _get_json(f"{INCIDENT_URL}/incidents", "incidents", [])
         injects = await _get_json(f"{INJECTS_URL}/injects/scoreboard", "scoreboard", [])

@@ -110,13 +110,15 @@ def test_reconcile_detects_missing_achievement(se, monkeypatch):
     m, c = se
     c.post("/score/ingest", json=_ev(event_id="present"))
     # event_collector가 스코어러블 이벤트 2개를 보고하지만 하나(lost)는 achievement 없음.
+    # reconcile 은 커서 페이지네이션(/replay/page)으로 순회한다(R-1 수정) → 단일 완결 페이지로 모킹.
     class _R:
+        status_code = 200
         def raise_for_status(self): pass
         def json(self):
             return {"events": [
                 {"event_id": "present", "event_type": "red_attack_started"},
                 {"event_id": "lost", "event_type": "flag_exfiltrated"},
-            ]}
+            ], "next_cursor": "", "complete": True}
     monkeypatch.setattr(m, "EVENT_COLLECTOR_URL", "http://x")
     import httpx
     monkeypatch.setattr(httpx, "get", lambda *a, **k: _R())
