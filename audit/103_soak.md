@@ -53,3 +53,92 @@ health → scoring reconcile(events 크로스체크) → AAR PDF → event_colle
 - 8h 정식 소크(실HW/여유 RAM 세션). 명령은 §1.
 - 대회 규모(다팀·다관전자) 동시성 실측(U-3의 실부하 재현) — saturation.yml 는 event_collector
   단일 축. 전체 스택 동시성은 실HW 필요.
+
+---
+
+## 6. 8시간 정식 소크 실측 완료 (2026-10-02~03)
+`SOAK_DURATION_SEC=28800 SOAK_RATE=40 SOAK_SCENARIO_ID=soak` — detached 완주(stamp 20261002T231634Z).
+
+**부하**: 1,120,816 요청 / 8h, 실패 **2건**(fail_rate 1.8e-6), avg 6.6ms, rate_actual 38.9/s. **사실상 무유실**.
+
+**RSS 슬로프(warmup 제외 회귀)** — `soak_report.json`:
+| 서비스 | first→last MiB | peak | slope MiB/h | 판정 |
+|---|---|---|---|---|
+| config_service | 42.0→35.3 | 43.6 | -1.17 | PASS |
+| event_collector | 76.0→157.6 | 177.7 | **+13.28** | **WARN** |
+| scoring_engine | 55.2→52.7 | 57.9 | -0.51 | PASS |
+| siem_api | 57.2→54.3 | 59.6 | -0.50 | PASS |
+| **OVERALL** | | | | **WARN** |
+
+### 발견 F-1: event_collector 지속부하 워킹셋 성장(WARN, 누수 아님)
+- 8h간 76→158 MiB(+13.3 MiB/h). 단, **부하 중단 후 재시작 시 53 MiB 로 회수** → 영구 힙 누수가
+  아니라 부하 중 워킹셋(쓰기 버퍼·SSE 링버퍼·SQLite 페이지 캐시). 512m 한도엔 한참 여유.
+- 연관: events.db 가 **740MB**(약 91만 유니크 이벤트)까지 성장 — retention(`_prune_old_events`)이
+  효과적으로 못 막음(S-11 rollover 계열, 백로그). 워킹셋 성장은 DB 성장과 상관.
+
+### 발견 R-2: reconcile/AAR 이 초대형 events.db(~90만+)에서 실용 불가 (성능)
+- R-1(무한 fetchall OOM)은 FIXED(event_collector 전후 health 200, OOM 없음)지만, 종료 시점 R-1 게이트가
+  reconcile checked=false(ReadTimeout)·AAR PDF 미완(>180s, RSS 368MiB)으로 FAIL.
+- **근본원인**: `/replay/page` 가 `event_id IN (stream_journal 전체 subquery)` + **매 페이지 TEMP B-TREE
+  로 ~91만 행 재정렬** → 페이지당 **6.5초**(사실상 O(N²)). `idx_events_scope` 는 team_id 선두라
+  scenario-only 필터에 무용.
+- **검증된 수정안(R-2 fix, 설계 승인 대기)**: 복합 인덱스 `events(scenario_id,timestamp,event_id)` +
+  `/replay/page` 를 커서 범위스캔으로 재작성(스냅샷 상한을 journal-IN 대신 (timestamp,event_id) 상한 커서로).
+  실측: 페이지당 6.5s → **<0.01s (~650배)**, 플랜서 TEMP B-TREE 제거. 전체 페이지네이션 ~45분→~5초.
+- 영향: 다음 주 짧은 테스트엔 무관(소량 이벤트). 실 8h+ 훈련의 **종료 시 AAR PDF** 생성에 중요.
+
+---
+
+## 7. R-2·R-3 수정 + 라이브 검증 (2026-10-03, 740MB/907k DB 대상)
+8h 소크가 노출한 결함을 실제 740MB·907,263 이벤트 DB에 대해 수정·검증했다.
+
+### R-2 FIXED — /replay/page 인덱스+EXISTS
+- `idx_events_scn_ts ON events(scenario_id,timestamp,event_id)` 추가(init_db, 기존 DB는 기동 시 생성).
+- 스냅샷 상한을 `event_id IN(stream_journal 전체)` → `EXISTS(SELECT 1 FROM stream_journal j WHERE
+  j.event_id=events.event_id AND j.seq<=?)` 로 변경 → ORDER BY 가 인덱스 사용(TEMP B-TREE 제거).
+- 결과 동일성 확인: 카운트 907,263 == 907,263(스냅샷 격리 보존). 단일 페이지 6.3s→0.28s.
+- reconcile(soak) 라이브: **checked=True, total=907,263, 58s 완료**(이전 5s 타임아웃 실패 → 해소).
+- 회귀: `tests/unit/test_replay_pagination_perf.py`(인덱스 존재·scenario 페이지네이션 완전성·IN 재도입 가드).
+
+### R-3 FIXED(상한) — aar_report 메모리 보호
+- R-2 후 OOM 이 aar_report 로 이동(907k 이벤트를 리스트로 전부 로드 → OOMKilled exit137).
+- `AAR_MAX_EVENTS`(기본 400,000) 로 fetch 를 bound, 상한 적용 시 summary 에 `events_truncated`·
+  `events_considered` 표기(정직). AAR PDF 라이브: **200·PDF·2p·32.7s·aar_report 259MiB(OOM 없음)**.
+- 전량 증분 집계(page-fold aggregation)는 후속 과제(현재는 bounded window 집계).
+
+### 결합 R-1 게이트: **PASS**
+`{ec_health:200, reconcile:{checked:true,total:907263}, aar_pdf:{http:200,pdf:true}, ec_health_after:200}`
+→ 907k DB에서 reconcile·AAR 모두 OOM 없이 완료. 8h 소크의 R-1 게이트 FAIL 원인 해소.
+
+### 남은 후속(백로그)
+- F-1 event_collector 워킹셋 성장(+13 MiB/h, 누수 아님)·events.db 740MB → retention/rollover 강화(S-11 계열).
+- R-3 전량 증분 집계(초대형 scenario 에서 상한 없이 전체 AAR).
+
+---
+
+## 8. 대규모 동시성/포화 테스트 (2026-10-03)
+사용자 요청으로 소크(지속 안정)와 별개로 처리량·동시성 축을 측정.
+
+### 8.1 event_collector 포화 램프 (동시성 10→300, 각 15s)
+| conc | EPS | p50 | p95 | err |
+|---|---|---|---|---|
+| 10 | 185 | 56ms | 88ms | 0 |
+| 50 | 175 | 283ms | 400ms | 0 |
+| 100 | 147 | 616ms | 1018ms | 0 |
+| 200 | 155 | 1300ms | 1739ms | 0 |
+| 300 | 150 | 1739ms | 3039ms | 0 |
+- **에러 0**(전 구간 무손실), 동시성↑시 EPS 평탄·지연만 상승(요청 큐잉). 메모리 ~68MiB 안정.
+- 부하 중 event_collector CPU ~70%(미포화) → **병목은 서버가 아니라 python 스레드(GIL) 클라이언트**
+  (~180 EPS 클라이언트 천장). 서버 참 포화점(~450 EPS)은 네이티브 k6(saturation.yml, 이 환경에
+  k6 미설치)가 권위. **이 테스트가 확정한 것**: event_collector 는 300 동시 클라이언트까지
+  무손실·무크래시·메모리 안정(강건성).
+
+### 8.2 A/D 다팀 동시성(정확성)
+- **동일 유효 플래그 20회 동시 제출(레이스)**: 추가 accepted **0** → **중복 가점 없음**(스코어링 무결성
+  동시성 안전). 전부 200.
+- **다팀 60회 동시 무효 제출**: 전부 200(우아한 거부), **500/크래시 0**, 1.1s, 엔진 생존.
+- 결론: A/D 엔진은 동시 제출 레이스에서 **이중 채점 없고** 대량 동시 부하에서 **크래시/500 없음**.
+  (python-GIL 클라이언트라 raw 처리량 상한 측정은 아님 — 동시성 안전/정확성 검증.)
+
+### 8.3 남은 것(실HW)
+- 네이티브 k6 기반 참 포화점(~450 EPS) 재확인·다관전자 SSE 팬아웃 부하: k6 설치 환경/실HW.

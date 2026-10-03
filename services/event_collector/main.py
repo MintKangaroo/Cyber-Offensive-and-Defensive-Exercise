@@ -274,6 +274,10 @@ def init_db():
     conn.execute("CREATE INDEX IF NOT EXISTS idx_events_trace_id ON events(trace_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_events_scope ON events(team_id,scenario_id,timestamp,event_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_events_defender ON events(defender_team_id,scenario_id,timestamp,event_id)")
+    # audit/103 R-2: scenario-only replay(/replay/page; reconcile·AAR)가 ORDER BY timestamp,event_id 를
+    # 인덱스로 처리하도록(TEMP B-TREE 재정렬 제거). team_id 선두인 idx_events_scope 는 scenario-only
+    # 필터에 쓰이지 않아 대형 DB(~90만+)에서 페이지당 수 초가 걸렸다. 이 인덱스로 페이지당 ms 단위.
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_events_scn_ts ON events(scenario_id,timestamp,event_id)")
     # 우선순위 4: 권위 자산 상태 체크포인트. 저널 위치(seq/revision)에 고정된 자산 상태 fold를
     # 영속화해, replay 가 윈도 이전 상태를 "unknown" 으로 추정하지 않고 앵커로 삼게 한다.
     conn.execute(
@@ -664,7 +668,10 @@ def replay_page(scenario_id:str='default',team_id:Optional[str]=None,cursor:str=
         state=journal.decode_cursor(conn,cursor) if cursor else {'scope':binding,'upper':journal.bounds(conn)[1],'revision':journal.revision(conn),'after':None}
         if state.get('revision')!=journal.revision(conn):raise HTTPException(409,'Retained history changed; restart replay loading')
         if state.get('scope')!=binding:raise HTTPException(403,'Cursor belongs to a different exercise scope')
-        cond.append('event_id IN (SELECT event_id FROM stream_journal WHERE seq<=?)');params.append(state['upper'])
+        # audit/103 R-2: 스냅샷 상한(seq<=upper)을 event_id IN(저널 전체 subquery) 대신 EXISTS 상관
+        # 서브쿼리로 적용 → ORDER BY 가 idx_events_scn_ts 를 타 매 페이지 TEMP B-TREE 재정렬을 없앤다
+        # (대형 DB에서 페이지당 6.5s→ms). 결과 집합은 IN 과 동일(스냅샷 격리 보존, 실측 카운트 일치).
+        cond.append('EXISTS (SELECT 1 FROM stream_journal j WHERE j.event_id=events.event_id AND j.seq<=?)');params.append(state['upper'])
         if state['after']:
             cond.append('(timestamp,event_id)>(?,?)');params.extend(state['after'])
         limit=max(1,min(limit,5000))
