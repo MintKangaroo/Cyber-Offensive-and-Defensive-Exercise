@@ -53,3 +53,36 @@ health → scoring reconcile(events 크로스체크) → AAR PDF → event_colle
 - 8h 정식 소크(실HW/여유 RAM 세션). 명령은 §1.
 - 대회 규모(다팀·다관전자) 동시성 실측(U-3의 실부하 재현) — saturation.yml 는 event_collector
   단일 축. 전체 스택 동시성은 실HW 필요.
+
+---
+
+## 6. 8시간 정식 소크 실측 완료 (2026-10-02~03)
+`SOAK_DURATION_SEC=28800 SOAK_RATE=40 SOAK_SCENARIO_ID=soak` — detached 완주(stamp 20261002T231634Z).
+
+**부하**: 1,120,816 요청 / 8h, 실패 **2건**(fail_rate 1.8e-6), avg 6.6ms, rate_actual 38.9/s. **사실상 무유실**.
+
+**RSS 슬로프(warmup 제외 회귀)** — `soak_report.json`:
+| 서비스 | first→last MiB | peak | slope MiB/h | 판정 |
+|---|---|---|---|---|
+| config_service | 42.0→35.3 | 43.6 | -1.17 | PASS |
+| event_collector | 76.0→157.6 | 177.7 | **+13.28** | **WARN** |
+| scoring_engine | 55.2→52.7 | 57.9 | -0.51 | PASS |
+| siem_api | 57.2→54.3 | 59.6 | -0.50 | PASS |
+| **OVERALL** | | | | **WARN** |
+
+### 발견 F-1: event_collector 지속부하 워킹셋 성장(WARN, 누수 아님)
+- 8h간 76→158 MiB(+13.3 MiB/h). 단, **부하 중단 후 재시작 시 53 MiB 로 회수** → 영구 힙 누수가
+  아니라 부하 중 워킹셋(쓰기 버퍼·SSE 링버퍼·SQLite 페이지 캐시). 512m 한도엔 한참 여유.
+- 연관: events.db 가 **740MB**(약 91만 유니크 이벤트)까지 성장 — retention(`_prune_old_events`)이
+  효과적으로 못 막음(S-11 rollover 계열, 백로그). 워킹셋 성장은 DB 성장과 상관.
+
+### 발견 R-2: reconcile/AAR 이 초대형 events.db(~90만+)에서 실용 불가 (성능)
+- R-1(무한 fetchall OOM)은 FIXED(event_collector 전후 health 200, OOM 없음)지만, 종료 시점 R-1 게이트가
+  reconcile checked=false(ReadTimeout)·AAR PDF 미완(>180s, RSS 368MiB)으로 FAIL.
+- **근본원인**: `/replay/page` 가 `event_id IN (stream_journal 전체 subquery)` + **매 페이지 TEMP B-TREE
+  로 ~91만 행 재정렬** → 페이지당 **6.5초**(사실상 O(N²)). `idx_events_scope` 는 team_id 선두라
+  scenario-only 필터에 무용.
+- **검증된 수정안(R-2 fix, 설계 승인 대기)**: 복합 인덱스 `events(scenario_id,timestamp,event_id)` +
+  `/replay/page` 를 커서 범위스캔으로 재작성(스냅샷 상한을 journal-IN 대신 (timestamp,event_id) 상한 커서로).
+  실측: 페이지당 6.5s → **<0.01s (~650배)**, 플랜서 TEMP B-TREE 제거. 전체 페이지네이션 ~45분→~5초.
+- 영향: 다음 주 짧은 테스트엔 무관(소량 이벤트). 실 8h+ 훈련의 **종료 시 AAR PDF** 생성에 중요.

@@ -1,0 +1,14 @@
+{
+  "scenario": "soak",
+  "checks": {
+    "event_collector_health": 200,
+    "reconcile": {
+      "http": 200,
+      "checked": false,
+      "total_events": null
+    },
+    "aar_pdf": "ERR HTTPError",
+    "event_collector_health_after": 200
+  },
+  "verdict": "FAIL"
+}

@@ -45,3 +45,14 @@
     }
   }
 }
+
+container                 first     last     peak  growth%    MiB/h restart  verdict
+----------------------------------------------------------------------------------------
+config_service             42.0     35.3     43.6    -16.0    -1.17       0  PASS
+event_collector            76.0    157.6    177.7    107.3    13.28       0  WARN
+scoring_engine             55.2     52.7     57.9     -4.5    -0.51       0  PASS
+siem_api                   57.2     54.3     59.6     -5.0    -0.50       0  PASS
+----------------------------------------------------------------------------------------
+OVERALL: WARN
+[soak-analyze] wrote /home/mintkangaroo/Project/Cyber_offensive_Defense_Project/cyber-range-platform/loadtest/soak/results/soak_report.json
+R-1 gate: {"event_collector_health": 200, "reconcile": {"http": 200, "checked": false, "total_events": null}, "aar_pdf": "ERR HTTPError", "event_collector_health_after": 200} -> FAIL
