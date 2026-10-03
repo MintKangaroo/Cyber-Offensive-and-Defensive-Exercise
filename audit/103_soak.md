@@ -86,3 +86,30 @@ health → scoring reconcile(events 크로스체크) → AAR PDF → event_colle
   `/replay/page` 를 커서 범위스캔으로 재작성(스냅샷 상한을 journal-IN 대신 (timestamp,event_id) 상한 커서로).
   실측: 페이지당 6.5s → **<0.01s (~650배)**, 플랜서 TEMP B-TREE 제거. 전체 페이지네이션 ~45분→~5초.
 - 영향: 다음 주 짧은 테스트엔 무관(소량 이벤트). 실 8h+ 훈련의 **종료 시 AAR PDF** 생성에 중요.
+
+---
+
+## 7. R-2·R-3 수정 + 라이브 검증 (2026-10-03, 740MB/907k DB 대상)
+8h 소크가 노출한 결함을 실제 740MB·907,263 이벤트 DB에 대해 수정·검증했다.
+
+### R-2 FIXED — /replay/page 인덱스+EXISTS
+- `idx_events_scn_ts ON events(scenario_id,timestamp,event_id)` 추가(init_db, 기존 DB는 기동 시 생성).
+- 스냅샷 상한을 `event_id IN(stream_journal 전체)` → `EXISTS(SELECT 1 FROM stream_journal j WHERE
+  j.event_id=events.event_id AND j.seq<=?)` 로 변경 → ORDER BY 가 인덱스 사용(TEMP B-TREE 제거).
+- 결과 동일성 확인: 카운트 907,263 == 907,263(스냅샷 격리 보존). 단일 페이지 6.3s→0.28s.
+- reconcile(soak) 라이브: **checked=True, total=907,263, 58s 완료**(이전 5s 타임아웃 실패 → 해소).
+- 회귀: `tests/unit/test_replay_pagination_perf.py`(인덱스 존재·scenario 페이지네이션 완전성·IN 재도입 가드).
+
+### R-3 FIXED(상한) — aar_report 메모리 보호
+- R-2 후 OOM 이 aar_report 로 이동(907k 이벤트를 리스트로 전부 로드 → OOMKilled exit137).
+- `AAR_MAX_EVENTS`(기본 400,000) 로 fetch 를 bound, 상한 적용 시 summary 에 `events_truncated`·
+  `events_considered` 표기(정직). AAR PDF 라이브: **200·PDF·2p·32.7s·aar_report 259MiB(OOM 없음)**.
+- 전량 증분 집계(page-fold aggregation)는 후속 과제(현재는 bounded window 집계).
+
+### 결합 R-1 게이트: **PASS**
+`{ec_health:200, reconcile:{checked:true,total:907263}, aar_pdf:{http:200,pdf:true}, ec_health_after:200}`
+→ 907k DB에서 reconcile·AAR 모두 OOM 없이 완료. 8h 소크의 R-1 게이트 FAIL 원인 해소.
+
+### 남은 후속(백로그)
+- F-1 event_collector 워킹셋 성장(+13 MiB/h, 누수 아님)·events.db 740MB → retention/rollover 강화(S-11 계열).
+- R-3 전량 증분 집계(초대형 scenario 에서 상한 없이 전체 AAR).

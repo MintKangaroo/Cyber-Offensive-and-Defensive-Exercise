@@ -36,6 +36,11 @@ SIEM_API_URL = os.environ.get("SIEM_API_URL", "http://siem_api:8040")
 INCIDENT_URL = os.environ.get("INCIDENT_URL", "http://incident:8095")
 INJECTS_URL = os.environ.get("INJECTS_URL", "http://injects:8096")
 CHALLENGE_PORTAL_URL = os.environ.get("CHALLENGE_PORTAL_URL", "http://challenge_portal:8060")
+# audit/103 R-3: AAR 은 이벤트를 전부 메모리에 올려 집계한다(10여 개 O(N) 함수). 초대형 단일
+# scenario(8h+ 소크 실측 ~91만)에서 aar_report 가 OOM 된다. 메모리 안전 상한으로 bound 하고,
+# 상한이 걸리면 결과에 events_truncated 로 정직하게 표시한다(기본 40만 ≈ 512m 내 안전).
+# 전량 증분 집계(page-fold)는 후속 과제. 0 이면 무제한(소규모 환경).
+AAR_MAX_EVENTS = int(os.environ.get("AAR_MAX_EVENTS", "400000") or "0") or None
 PDF_OUTPUT_DIR = Path(os.environ.get("AAR_PDF_DIR", "/tmp/aar_reports"))
 PDF_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # 감사 4.8: 보존 정책 — 오래됐거나(일수) 개수 상한을 넘는 PDF를 자동 정리(용량 무한 증가 방지).
@@ -88,7 +93,8 @@ async def get_aar_report(scenario_id: str = "default", authorization: str = Head
         try:
             # audit/102 R-1: 무한 /replay/events 대신 커서 페이지네이션(event_collector OOM 방지).
             from shared.replay_client import fetch_all_events_async, ReplayChanged
-            events = await fetch_all_events_async(client, EVENT_COLLECTOR_URL, scenario_id)
+            events = await fetch_all_events_async(client, EVENT_COLLECTOR_URL, scenario_id,
+                                                  max_events=AAR_MAX_EVENTS)
         except ReplayChanged as e:
             raise HTTPException(409, f"event_collector 원장 변경 중: {e}")
         except httpx.HTTPError as e:
@@ -151,6 +157,10 @@ async def get_aar_report(scenario_id: str = "default", authorization: str = Head
             "teams": list(scores.get("teams", {}).keys()),
             "final_scores": scores.get("teams", {}),
             "generated_at": time.time(),
+            # audit/103 R-3: AAR 집계에 쓴 이벤트 수. 상한(AAR_MAX_EVENTS)에 닿으면 truncated=True
+            # (초대형 scenario 에서 메모리 보호 — 집계가 해당 window 로 제한됨을 정직하게 표기).
+            "events_considered": len(events),
+            "events_truncated": AAR_MAX_EVENTS is not None and len(events) >= AAR_MAX_EVENTS,
         },
         "red_performance": {
             "stages_completed": len(stage_events),
@@ -208,7 +218,8 @@ async def get_timeline(scenario_id: str = "default", authorization: str = Header
         # 관대하게 빈 목록으로(타임라인 부분 렌더).
         from shared.replay_client import fetch_all_events_async, ReplayChanged
         try:
-            events = await fetch_all_events_async(client, EVENT_COLLECTOR_URL, scenario_id)
+            events = await fetch_all_events_async(client, EVENT_COLLECTOR_URL, scenario_id,
+                                                  max_events=AAR_MAX_EVENTS)
         except (httpx.HTTPError, ReplayChanged, ValueError):
             events = []
         alerts = await _get_json(f"{SIEM_API_URL}/alerts", "alerts", [])
