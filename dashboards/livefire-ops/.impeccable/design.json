@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-19T00:00:00Z",
+  "title": "Design System: Live-Fire Ops Console",
+  "extensions": {
+    "colorMeta": {
+      "space":   { "role": "neutral", "displayName": "Deep Space", "canonical": "#050a15", "tonalRamp": ["#02050b", "#050a15", "#091120", "#0d1a2c", "#13243b", "#1b3350", "#2e496a", "#4a6a94"] },
+      "bg":      { "role": "neutral", "displayName": "Base Navy", "canonical": "#091120", "tonalRamp": ["#040810", "#071020", "#091120", "#0d1a2c", "#13243b", "#1b3350", "#2e496a", "#5f7b9e"] },
+      "panel":   { "role": "neutral", "displayName": "Panel Navy", "canonical": "#0d1a2c", "tonalRamp": ["#060c16", "#0a1322", "#0d1a2c", "#0f1f34", "#13243b", "#1b3350", "#2e496a", "#45607e"] },
+      "line":    { "role": "neutral", "displayName": "Hairline Border", "canonical": "#21374f", "tonalRamp": ["#0d1826", "#162739", "#21374f", "#2e496a", "#3a5a82", "#486c99", "#5f7b9e", "#8aa3c2"] },
+      "txt":     { "role": "neutral", "displayName": "Primary Text", "canonical": "#e9f0f9", "tonalRamp": ["#45607e", "#5f7b9e", "#8aa3c2", "#a9bcd4", "#c7d6ea", "#e9f0f9", "#f4f8fc", "#ffffff"] },
+      "red":     { "role": "primary", "displayName": "Live Red", "canonical": "#ff5b60", "tonalRamp": ["#3a0e10", "#5c1619", "#8a1f24", "#b82e34", "#e23b43", "#ff5b60", "#ff8d90", "#ffc2c4"] },
+      "red2":    { "role": "primary", "displayName": "Action Red", "canonical": "#e23b43", "tonalRamp": ["#330d10", "#541519", "#7d1f25", "#a82b32", "#e23b43", "#ff5b60", "#ff8d90", "#ffc2c4"] },
+      "redbg":   { "role": "primary", "displayName": "Threat Red Wash", "canonical": "#1c0f15", "tonalRamp": ["#0d0608", "#1c0f15", "#2a1013", "#3a1a1e", "#5c1619", "#8a1f24", "#e23b43", "#ff8d90"] },
+      "cyan":    { "role": "secondary", "displayName": "HUD Cyan", "canonical": "#54b8ec", "tonalRamp": ["#0c2636", "#124a63", "#1d6a8c", "#2f8cb8", "#4fb3e6", "#54b8ec", "#86cef0", "#bde6f8"] },
+      "tick":    { "role": "secondary", "displayName": "Tick Cyan", "canonical": "#4fb3e6", "tonalRamp": ["#0c2636", "#124a63", "#1d6a8c", "#2f8cb8", "#4fb3e6", "#6fc4ee", "#9ad8f3", "#c8ecfa"] },
+      "blue":    { "role": "secondary", "displayName": "System Blue", "canonical": "#3f7fd6", "tonalRamp": ["#0b1f30", "#122f4e", "#1d4a7a", "#2a63a8", "#3f7fd6", "#6a9ce0", "#9bbdeb", "#cadef5"] },
+      "orange":  { "role": "tertiary", "displayName": "Strike Orange", "canonical": "#ff7a44", "tonalRamp": ["#3a1709", "#5c2410", "#8a371a", "#b84d26", "#e26236", "#ff7a44", "#ffa377", "#ffcbb0"] },
+      "green":   { "role": "tertiary", "displayName": "Patched Green", "canonical": "#49c88a", "tonalRamp": ["#0d2a1e", "#114733", "#1a6b4c", "#268f67", "#36b07f", "#49c88a", "#7ddbac", "#b4ecce"] },
+      "amber":   { "role": "tertiary", "displayName": "Alert Amber", "canonical": "#f2b84b", "tonalRamp": ["#2a2410", "#473c15", "#6b5a1f", "#8f782a", "#c09a2a", "#f2b84b", "#f6ce80", "#fae3b4"] },
+      "purple":  { "role": "tertiary", "displayName": "Signal Purple", "canonical": "#9a7ae6", "tonalRamp": ["#1f1538", "#2f2054", "#45307a", "#5c3fa8", "#7a56c8", "#9a7ae6", "#bda3ef", "#dccdf7"] }
+    },
+    "typographyMeta": {
+      "display":    { "displayName": "Operation Display", "purpose": "Uppercase latin broadcast titles — topbar brand, facility console title. Saira Condensed." },
+      "heading-ko": { "displayName": "Korean Heading", "purpose": "Korean facility names and section headings at heavy weight. Noto Sans KR 800/900." },
+      "data":       { "displayName": "Telemetry Data", "purpose": "All numbers quoted from the twin — timers, patch-count LED, stat values, scores. JetBrains Mono." },
+      "body":       { "displayName": "Body", "purpose": "Base UI text, team names, log prose. Noto Sans KR 400." },
+      "label":      { "displayName": "HUD Label", "purpose": "Field keys, overlay headers, enum badges, column headers. JetBrains Mono uppercase, wide tracking, sub color." }
+    },
+    "shadows": [
+      { "name": "active-node-ring", "value": "0 0 0 5px #ff556033", "purpose": "Zero-blur solid red ring around the active arena target node. The only box-shadow in the system; a HUD accent, not elevation — flat by doctrine, no ambient or cast shadow." }
+    ],
+    "motion": [
+      { "name": "reduced-motion-kill", "value": "animation: none; transition: none", "purpose": "Under prefers-reduced-motion all animation and transition are disabled globally." }
+    ],
+    "effects": [
+      { "name": "overlay-backdrop-blur", "value": "backdrop-filter: blur(2px)", "purpose": "Legibility backdrop under floating arena HUD overlays (.ov) so the dome reads through faintly. A HUD readability device, not a glow — recorded, not a decorative effect." }
+    ],
+    "breakpoints": [
+      { "name": "tablet", "value": "1024px" },
+      { "name": "mobile", "value": "560px" }
+    ],
+    "fonts": [
+      { "name": "Saira Condensed", "source": "self-hosted woff2 (/fonts/fonts.css)", "weights": [500, 600, 700] },
+      { "name": "JetBrains Mono", "source": "self-hosted woff2 (/fonts/fonts.css)", "weights": [400, 500, 700] },
+      { "name": "Noto Sans KR", "source": "Google Fonts CDN", "weights": [400, 500, 700, 900] }
+    ]
+  },
+  "components": [
+    {
+      "name": "Execute Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary attack-execute action in the facility console exploit bar.",
+      "html": "<button class=\"ds-btn-exec\">coil0 &rarr; SIS OFF</button>",
+      "css": ".ds-btn-exec { font-family: 'Saira Condensed', 'Noto Sans KR', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #fff; background: var(--lf-red2, #e23b43); border: 1px solid #ff7a7e; border-radius: 0; padding: 9px 18px; cursor: pointer; transition: background 0.15s; } .ds-btn-exec:hover { background: var(--lf-red, #ff5b60); } .ds-btn-exec:focus-visible { outline: 2px solid var(--lf-cyan, #54b8ec); outline-offset: 1px; } .ds-btn-exec:disabled { opacity: 0.6; cursor: default; }"
+    },
+    {
+      "name": "Back / Breadcrumb Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Ghost control returning from a facility console to the arena.",
+      "html": "<button class=\"ds-btn-back\">&lt; 현황 ARENA</button>",
+      "css": ".ds-btn-back { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--lf-mut, #8aa3c2); background: none; border: none; padding: 0 16px; height: 100%; cursor: pointer; transition: color 0.15s; } .ds-btn-back:hover { color: var(--lf-cyan, #54b8ec); } .ds-btn-back:focus-visible { outline: 2px solid var(--lf-cyan, #54b8ec); outline-offset: 1px; }"
+    },
+    {
+      "name": "Bracket-HUD Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "Flat content panel with tick-cyan L-shaped corner brackets; the console's primary container.",
+      "html": "<div class=\"ds-panel\"><div class=\"ds-panel-head\">PLC 레지스터 · LIVE</div><div class=\"ds-panel-body\">…</div></div>",
+      "css": ".ds-panel { position: relative; background: var(--lf-panel, #0d1a2c); border: 1px solid var(--lf-line, #21374f); border-radius: 0; } .ds-panel::before, .ds-panel::after { content: ''; position: absolute; width: 9px; height: 9px; border: 1.5px solid var(--lf-tick, #4fb3e6); opacity: 0.7; } .ds-panel::before { left: -1px; top: -1px; border-right: none; border-bottom: none; } .ds-panel::after { right: -1px; bottom: -1px; border-left: none; border-top: none; } .ds-panel-head { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--lf-sub, #5f7b9e); padding: 8px 12px; background: var(--lf-panel2, #0f1f34); border-bottom: 1px solid var(--lf-line, #21374f); }"
+    },
+    {
+      "name": "Service Status Enum Badge",
+      "kind": "chip",
+      "refersTo": "enum-compromised",
+      "description": "Tiny mono status badge for service-state (up / compromised / down) and solve-log tags.",
+      "html": "<span class=\"ds-enum ds-enum-up\">UP</span> <span class=\"ds-enum ds-enum-compromised\">COMPROMISED</span> <span class=\"ds-enum ds-enum-down\">DOWN</span>",
+      "css": ".ds-enum { font-family: 'JetBrains Mono', monospace; font-size: 8px; font-weight: 700; letter-spacing: 0.06em; padding: 1px 5px; border-radius: 0; } .ds-enum-up { background: #0d2a1e; color: var(--lf-green, #49c88a); } .ds-enum-compromised { background: #2a1013; color: var(--lf-red, #ff5b60); } .ds-enum-down { background: #2a2410; color: var(--lf-amber, #f2b84b); }"
+    },
+    {
+      "name": "Kill-Chain Chevron",
+      "kind": "nav",
+      "refersTo": "panel",
+      "description": "Rightward-pointing phase cell in the kill-chain strip; done=blue, active=red fill.",
+      "html": "<div class=\"ds-chevron ds-chevron-active\"><span class=\"n\">04</span> OBJECTIVE <span class=\"pts\">+100</span></div>",
+      "css": ".ds-chevron { position: relative; display: flex; align-items: center; gap: 8px; padding: 6px 14px 6px 22px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--lf-dim, #45607e); clip-path: polygon(14px 0, 100% 0, 100% 100%, 14px 100%, 0 50%); } .ds-chevron .n { font-size: 9px; color: #38506b; } .ds-chevron .pts { margin-left: auto; font-size: 9px; } .ds-chevron-done { color: var(--lf-blue, #3f7fd6); background: #0b1f30; } .ds-chevron-active { color: #fff; background: var(--lf-red2, #e23b43); } .ds-chevron-active .n { color: #ffd0d1; }"
+    },
+    {
+      "name": "Arena Facility Node",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "Percent-positioned status node in the radial dome constellation; status is fill color and ring thickness only.",
+      "html": "<button class=\"ds-node ds-node-active\"><span class=\"ring2\"></span><span class=\"ring\"></span><span class=\"sq\"></span><span class=\"lb\">발전소 SIS<br><span class=\"id\">PP-005</span></span></button>",
+      "css": ".ds-node { position: relative; background: none; border: none; cursor: pointer; text-align: center; width: 92px; color: inherit; padding: 0; } .ds-node .sq { display: block; width: 11px; height: 11px; margin: 0 auto; background: var(--lf-orange, #ff7a44); } .ds-node .lb { font-family: 'JetBrains Mono', monospace; font-size: 8.5px; color: #c7d6ea; margin-top: 4px; line-height: 1.25; } .ds-node .lb .id { color: var(--lf-mut, #8aa3c2); font-size: 8px; } .ds-node-active .sq { width: 15px; height: 15px; background: var(--lf-red, #ff5b60); box-shadow: 0 0 0 5px #ff556033; } .ds-node .ring, .ds-node .ring2 { position: absolute; left: 50%; top: 7px; border-radius: 50%; transform: translate(-50%, -50%); } .ds-node-active .ring { width: 46px; height: 46px; border: 1.5px solid #ff5560aa; } .ds-node-active .ring2 { width: 78px; height: 78px; border: 1px solid #ff556055; } .ds-node:hover .sq { outline: 1px solid #ffffff55; outline-offset: 3px; }"
+    },
+    {
+      "name": "Live Register Row",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "A row of the facility twin register table — name · addr · value · state, value toned by severity.",
+      "html": "<div class=\"ds-reg\"><div class=\"rn\">SAFETY_INTERLOCK <span class=\"ra\">coil0</span></div><div class=\"rv red\">OFF</div><div class=\"rs al\">BYPASS</div></div>",
+      "css": ".ds-reg { display: grid; grid-template-columns: 1fr 78px 62px; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; border-bottom: 1px solid #132639; } .ds-reg > div { padding: 5px 9px; } .ds-reg .rn { color: var(--lf-mut, #8aa3c2); } .ds-reg .ra { color: var(--lf-sub, #5f7b9e); font-size: 9px; } .ds-reg .rv { text-align: right; font-weight: 700; } .ds-reg .rv.red { color: var(--lf-red, #ff5b60); } .ds-reg .rv.amber { color: var(--lf-amber, #f2b84b); } .ds-reg .rv.blue { color: var(--lf-blue, #3f7fd6); } .ds-reg .rs { text-align: center; font-size: 8px; font-weight: 700; } .ds-reg .rs.al { color: var(--lf-red, #ff5b60); } .ds-reg .rs.ok { color: var(--lf-green, #49c88a); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Broadcast War Room",
+    "overview": "A national live-fire cyber-range operations console built to be read like a televised CCE / Locked Shields broadcast board, not a CTF flag-submission form. It opens on a radial dome status arena — the whole country's critical-infrastructure under live fire as a constellation of facility nodes fanning up from a single apex — and drills into a flat, dense, per-facility operator console (OT intrusion map, physical-twin schematic, live register table, service-status board, kill-chain chevrons). Everything on screen is grounded in real twin code: asset names, protocols, ports, registers, vulnerability IDs and scores are quoted, never invented. The world sits on the platform's shared dark tokens but overlays its own CCE-broadcast language: a deep navy space field, a strict red↔blue duality (red = attack / Red-team / live danger; cyan and blue = defense / systems / telemetry), hairline-bordered flat panels, bracket-HUD corner ticks, and operator-display typography. The finished build removed the bottom radial bloom/vignette an earlier pass carried — surfaces are flat, lit only by tonal layering and hairline borders.",
+    "keyCharacteristics": [
+      "Deep-navy broadcast space with a radial dome-and-constellation signature.",
+      "Red↔blue duality as the core semantic axis; status is color, fill, ring-thickness, never glow.",
+      "Flat hairline panels with bracket-HUD corner ticks; zero corner radius.",
+      "Tri-font HUD stack: Saira Condensed (latin display), Noto Sans KR (korean headings), JetBrains Mono (all data).",
+      "Drawn single-stroke SVG icons only; no emoji, no icon fonts."
+    ],
+    "rules": [
+      { "name": "The Red↔Blue Duality Rule", "body": "Red always means attacker / live danger; cyan and blue always mean defense / system / telemetry. Never color a defensive readout red or an attack readout blue — the two poles carry the whole broadcast's meaning.", "section": "colors" },
+      { "name": "The Status-Is-Not-Glow Rule", "body": "Node and register status is expressed through fill color, ring thickness, and label color only. The single box-shadow on the active node is a zero-blur solid ring (0 0 0 5px), not a halo. No bloom, no glow, no vignette.", "section": "colors" },
+      { "name": "The Mono-For-Truth Rule", "body": "Any value quoted from the twin — register, port, protocol, score, timer, vuln ID, timestamp — is set in JetBrains Mono. Prose and names are sans; data is mono. The mono face is the signal that this is real telemetry, not copy.", "section": "typography" },
+      { "name": "The Flat-Panel Rule", "body": "Surfaces never lift. Elevation is one tonal step up plus a hairline border; if a surface needs to feel active it changes its border color or fill ground, never its shadow.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep the red↔blue duality absolute: red = attack/live, cyan+blue = defense/system.",
+      "Do set every twin-sourced value (register, port, score, timer, vuln ID) in JetBrains Mono.",
+      "Do express status through fill, ring thickness, and label color; keep panels flat with a hairline border and one tonal step.",
+      "Do use the bracket-HUD corner tick, kill-chain chevron, and hexagon brand as the only non-rectangular silhouettes.",
+      "Do draw icons as single-stroke 24×24 SVG with currentColor."
+    ],
+    "donts": [
+      "Don't add glow, bloom, vignette, grain, or scanlines — the finish removed the radial bloom on purpose.",
+      "Don't round corners; the only radius in the system is the 6px scrollbar thumb.",
+      "Don't use emoji or icon fonts for iconography.",
+      "Don't ship a CTF flag-submission panel, a generic SOC panel-grid, or neon cyberpunk treatment.",
+      "Don't reach for a system display face; latin display is Saira Condensed, korean is Noto Sans KR, data is JetBrains Mono."
+    ]
+  }
+}
