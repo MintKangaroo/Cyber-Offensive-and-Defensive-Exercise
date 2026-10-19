@@ -53,6 +53,7 @@ export function ArenaView({ data, status, onSelectFacility }: { data: ArenaData;
       </header>
 
       <div className="arena">
+        <div className="arena-stage">
         <Dome />
 
         {data.nodes.map((n) => (
@@ -68,6 +69,7 @@ export function ArenaView({ data, status, onSelectFacility }: { data: ArenaData;
             <span className="lb">{n.label}<br /><span className="id">{n.code}</span></span>
           </button>
         ))}
+        </div>
 
         <section className="ov timers" aria-label="라이브파이어 클럭">
           <div className="ovh">⟡ LIVE FIRE CLOCK</div>
