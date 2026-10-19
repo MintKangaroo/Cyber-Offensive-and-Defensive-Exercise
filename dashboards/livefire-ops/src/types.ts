@@ -88,6 +88,8 @@ export interface FacilityConfig {
   registers: RegisterRow[];
   services: ServiceRow[];
   exploit: { label: string; detail: string };
+  strikeLog: StrikeLogEntry[]; // 시설별 스트라이크 로그(발전소 상수 재사용 금지)
+  footLine: string; // 하단 티커의 시설별 활성 라인
 }
 
 export type IconKind =

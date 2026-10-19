@@ -9,7 +9,7 @@ import {
   subscribeStream,
   type StreamEvent,
 } from "./api";
-import { FACILITIES, powerKillChain, SCOREBOARD, STRIKE_LOG } from "./data";
+import { FACILITIES, powerKillChain, SCOREBOARD } from "./data";
 import type { FacilityConfig, PhaseStep, RegisterRow, StrikeLogEntry } from "./types";
 
 type View = "arena" | "facility";
@@ -96,17 +96,20 @@ export default function App() {
 
   const consoleData: ConsoleData = useMemo(() => {
     const isPower = sector === "power";
-    const liveStrikes = extraStrikes.length ? [...extraStrikes, ...STRIKE_LOG].slice(0, 6) : STRIKE_LOG;
+    // 스트라이크 로그/티커는 시설별(발전소 상수 재사용 금지). 발전소만 라이브 이벤트를 앞에 합친다.
+    const strikeLog = isPower && extraStrikes.length
+      ? [...extraStrikes, ...facility.strikeLog].slice(0, 6)
+      : facility.strikeLog;
     return {
       phases: isPower ? powerKillChain() : genericKillChain(),
       scoreboard: SCOREBOARD,
-      strikeLog: liveStrikes,
+      strikeLog,
       registers: isPower && liveRegisters ? liveRegisters : undefined,
-      footLine,
+      footLine: isPower ? footLine : facility.footLine,
       atkScore: 150,
       defScore: 40,
     };
-  }, [sector, liveRegisters, footLine, extraStrikes]);
+  }, [sector, facility, liveRegisters, footLine, extraStrikes]);
 
   const arenaData = useMemo(() => ({ ...DEFAULT_ARENA, activeLine: footLine.startsWith("ACTUAL_RPM") ? `RED·TEAM-01 → 발전소 안전계통 · ${footLine}` : DEFAULT_ARENA.activeLine }), [footLine]);
 

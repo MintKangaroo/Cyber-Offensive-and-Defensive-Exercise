@@ -37,10 +37,10 @@ export function ArenaView({ data, status, onSelectFacility }: { data: ArenaData;
         <div className="brand">
           <div className="cce">CC</div>
           <div>
-            <div className="t1">CYBER LIVE-FIRE EXERCISE · 2026</div>
             <div className="t2 lf-op">
               국가 기반시설 공방 현황 <span className="sub">· LIVE FIRE STATUS</span>
             </div>
+            <div className="t1">CYBER LIVE-FIRE EXERCISE · 2026</div>
           </div>
         </div>
         <div className="topright">

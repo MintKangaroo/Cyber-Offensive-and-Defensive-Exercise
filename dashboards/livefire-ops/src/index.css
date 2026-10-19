@@ -59,7 +59,8 @@ button { font-family: inherit; }
   height: 100vh;
   position: relative;
   overflow: hidden;
-  background: radial-gradient(1400px 900px at 50% 118%, #0d1b33 0%, #081222 42%, #040810 100%);
+  /* 평탄한 네이비 심도 — 하단 radial 블룸(비네트/글로우) 제거(계약 준수). */
+  background: linear-gradient(180deg, #0a1426 0%, #070e1c 56%, #050a15 100%);
 }
 .lf-arena .stars {
   position: absolute; inset: 0; pointer-events: none;
@@ -97,13 +98,14 @@ button { font-family: inherit; }
   position: absolute; transform: translate(-50%, -50%); text-align: center; z-index: 5; width: 92px;
   background: none; border: none; cursor: pointer; color: inherit; padding: 0;
 }
-.lf-arena .node .sq { width: 11px; height: 11px; margin: 0 auto; background: var(--lf-orange); box-shadow: 0 0 10px #ff7a4488; }
+.lf-arena .node .sq { width: 11px; height: 11px; margin: 0 auto; background: var(--lf-orange); }
 .lf-arena .node .lb { font-family: var(--lf-f-mono); font-size: 8.5px; color: #c7d6ea; margin-top: 4px; line-height: 1.25; }
-.lf-arena .node .lb .id { color: var(--lf-sub); font-size: 7.5px; }
-.lf-arena .node.defended .sq { background: var(--lf-cyan); box-shadow: 0 0 10px #54b8ec88; }
-.lf-arena .node.patched .sq { background: var(--lf-green); box-shadow: 0 0 8px #4fd49a77; }
+.lf-arena .node .lb .id { color: var(--lf-mut); font-size: 8px; }
+.lf-arena .node.defended .sq { background: var(--lf-cyan); }
+.lf-arena .node.patched .sq { background: var(--lf-green); }
 .lf-arena .node.active { width: 116px; z-index: 7; }
-.lf-arena .node.active .sq { width: 15px; height: 15px; background: var(--lf-red); box-shadow: 0 0 16px var(--lf-red), 0 0 0 6px #ff556022; }
+/* 상태는 채움·링 두께·라벨색으로만(글로우 금지). 0 0 0 Npx 은 블러 없는 단색 링. */
+.lf-arena .node.active .sq { width: 15px; height: 15px; background: var(--lf-red); box-shadow: 0 0 0 5px #ff556033; }
 .lf-arena .node.active .lb { color: #ffd7da; font-size: 9.5px; font-weight: 700; }
 .lf-arena .node .ring, .lf-arena .node .ring2 { position: absolute; left: 50%; top: 7px; border-radius: 50%; transform: translate(-50%, -50%); }
 .lf-arena .node.active .ring { width: 46px; height: 46px; border: 1.5px solid #ff5560aa; }
@@ -327,7 +329,7 @@ button { font-family: inherit; }
   .lf-arena { height: auto; min-height: 100vh; }
   .lf-arena .topbar { position: static; height: auto; flex-wrap: wrap; gap: 8px; padding: 10px 16px; }
   .lf-arena .arena { position: static; inset: auto; display: flex; flex-direction: column; gap: 12px; padding: 12px 16px; }
-  .lf-arena .arena-stage { position: relative; inset: auto; height: 68vw; min-height: 300px; max-height: 440px; }
+  .lf-arena .arena-stage { position: relative; inset: auto; height: 74vw; min-height: 340px; max-height: 480px; }
   .lf-arena .ov { position: static; inset: auto; width: auto; left: auto; right: auto; top: auto; bottom: auto; }
   .lf-arena .log { display: flex; flex-direction: column; max-height: 300px; }
   .lf-arena .logbody { overflow: auto; }
@@ -337,6 +339,11 @@ button { font-family: inherit; }
   .lf-console .stat { flex: 1 0 50%; }
   .lf-console .title .l2 { font-size: 15px; }
   .lf-arena .topright { gap: 12px; font-size: 9px; }
+  /* 좁은 폭 성좌 라벨 충돌 완화: 2차 ID 드롭 + 라벨 축소 + 노드 폭 축소 */
+  .lf-arena .node { width: 64px; }
+  .lf-arena .node.active { width: 72px; }
+  .lf-arena .node .lb { font-size: 7px; line-height: 1.05; }
+  .lf-arena .node .lb .id { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -131,6 +131,13 @@ const POWER: FacilityConfig = {
     { name: "HMI HTTP 8002", state: "compromised" },
   ],
   exploit: { label: "coil0 → SIS OFF", detail: "Modbus FC5 · T0878" },
+  strikeLog: [
+    { id: "pp1", time: "41:12", phase: "objective", text: "SIS coil0 latch OFF · T0878", tag: "CRIT", current: true },
+    { id: "pp2", time: "40:58", phase: "objective", text: "safety/override · PP-005", tag: "+100" },
+    { id: "pp3", time: "39:03", phase: "lateral_movement", text: "modbus coil0 write · PP-006", tag: "+30" },
+    { id: "pp4", time: "36:40", phase: "initial_access", text: "HMI default creds · PP-002", tag: "+20" },
+  ],
+  footLine: "00:41:12 · asset_compromised · power_plant · sustained_overspeed_sis_disabled · CRITICAL · phase=objective",
 };
 
 // 병원: services/hospital_ot/main.py — PACS/HIS/의료기기 VLAN, HSP-001~005.
@@ -175,6 +182,13 @@ const HOSPITAL: FacilityConfig = {
     { name: "HIS HTTP", state: "up" },
   ],
   exploit: { label: "주입펌프 과투여 주입", detail: "HSP-003 · device unauth" },
+  strikeLog: [
+    { id: "hs1", time: "22:40", phase: "lateral_movement", text: "의료기기 VLAN 피벗 · device segment", tag: "진행중", current: true },
+    { id: "hs2", time: "21:18", phase: "lateral_movement", text: "PACS 영상 IDOR 열람 · HSP-001", tag: "+30" },
+    { id: "hs3", time: "19:52", phase: "privilege_escalation", text: "HIS 환자정보 SQLi · HSP-002", tag: "+30" },
+    { id: "hs4", time: "17:05", phase: "initial_access", text: "병원 IT 진입 · 기본계정", tag: "+20" },
+  ],
+  footLine: "22:40 · lateral_movement · hospital_ot · medical_device_vlan_pivot · HIGH · phase=lateral_movement",
 };
 
 // 상수도: services/water_utility/main.py — 정수/배수·펌프·염소, WTR-001~005.
@@ -214,6 +228,13 @@ const WATER: FacilityConfig = {
     { name: "Historian", state: "up" },
   ],
   exploit: { label: "염소 과투입 주입", detail: "WTR-001 · dosing tamper" },
+  strikeLog: [
+    { id: "wt1", time: "33:02", phase: "lateral_movement", text: "염소 주입 조작 · WTR-001", tag: "진행중", current: true },
+    { id: "wt2", time: "31:40", phase: "lateral_movement", text: "배수지 펌프 제어 탈취 · WTR-002", tag: "+30" },
+    { id: "wt3", time: "29:15", phase: "initial_access", text: "SCADA HMI 기본계정 · WTR-003", tag: "+20" },
+    { id: "wt4", time: "27:30", phase: "recon", text: "정수장 자산 매핑", tag: "—" },
+  ],
+  footLine: "33:02 · lateral_movement · water_utility · chlorine_overdose_reservoir_overflow · HIGH · phase=lateral_movement",
 };
 
 // 나머지 섹터 — 간소 설정(generic 스키매틱). 실 트윈 docstring 기반 식별자 유지.
@@ -247,6 +268,13 @@ function generic(
     registers,
     services,
     exploit,
+    strikeLog: [
+      { id: `${id}1`, time: "28:10", phase: "lateral_movement", text: `${crown.name} 제어 접근 · ${crown.vulns[0]}`, tag: "진행중", current: true },
+      { id: `${id}2`, time: "26:30", phase: "privilege_escalation", text: "운영 콘솔 권한상승", tag: "+30" },
+      { id: `${id}3`, time: "24:05", phase: "initial_access", text: "IT 진입 · 초기 침투", tag: "+20" },
+      { id: `${id}4`, time: "22:00", phase: "recon", text: `${name} 자산 매핑`, tag: "—" },
+    ],
+    footLine: `28:10 · lateral_movement · ${id} · ${crown.vulns[0]} · phase=lateral_movement`,
   };
 }
 

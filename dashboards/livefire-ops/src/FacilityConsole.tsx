@@ -40,8 +40,8 @@ export function FacilityConsole({
       <div className="top">
         <button className="back" onClick={onBack} aria-label="현황 아레나로 돌아가기">◂ 현황</button>
         <div className="title">
-          <div className="l1">[ 사이버 공방 훈련 · LIVE-FIRE ]</div>
           <div className="l2 lf-op">OPERATION <span className="r">BLACKOUT</span></div>
+          <div className="l1">[ 사이버 공방 훈련 · LIVE-FIRE ]</div>
         </div>
         <div className="statrow">
           <div className="stat"><span className="k">Round</span><span className="v">03 / 06</span></div>
