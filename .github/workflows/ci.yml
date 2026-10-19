@@ -242,7 +242,7 @@ jobs:
       - name: npm audit (대시보드 프런트, High↑)
         continue-on-error: true   # 전이 dev 의존성 노이즈가 많아 초기엔 경고로 운용(baseline 정착 후 차단 전환)
         run: |
-          for d in dashboards/livefire dashboards/redportal dashboards/blueportal dashboards/siem services/edr/console; do
+          for d in dashboards/livefire dashboards/redportal dashboards/blueportal dashboards/siem dashboards/livefire-ops services/edr/console; do
             [ -f "$d/package.json" ] || continue
             echo "== npm audit: $d =="
             (cd "$d" && npm audit --audit-level=high || true)
@@ -289,7 +289,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        workspace: [dashboards/redportal, dashboards/blueportal, dashboards/siem, services/edr/console]
+        workspace: [dashboards/redportal, dashboards/blueportal, dashboards/siem, dashboards/livefire-ops, services/edr/console]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
