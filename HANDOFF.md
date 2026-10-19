@@ -36,13 +36,33 @@
   T-19 NOC 자산·T-23 PCAP. 채점품질: T-1·T-7·T-30.
 
 ## 4. 남은 작업 (다음 세션)
-1. **v1.0.0 태그 결정(승인 필요)**: 기존 stale 태그(`dc8f526`)를 현재 HEAD 로 옮길지 / 새 버전으로 갈지.
-   CHANGELOG `[Unreleased]` → `[1.0.0]` 정리(이미 존재하는 `[1.0.0] - 이전` 섹션과 충돌 정리).
-2. **R-1 수정**(설계 승인 후): reconcile/AAR 의 replay 페이지네이션.
-3. **8h 정식 소크**(여유 RAM/실HW): `SOAK_DURATION_SEC=28800 bash loadtest/soak/run_soak.sh`.
-   R-1 수정 후 소크 종료 시 AAR/reconcile 판정 추가.
-4. A/D 팀 src_ip **라이브** 귀속(팀별 컨테이너 출발지 구분) — 실HW.
-5. 수동 접근성/키보드 감사·로컬 AI 모델 평가(환경/수동 필수).
+
+### ★★ 최우선 — 몰입형 Red 라이브파이어 작전 콘솔 재설계 (사용자 핵심 요청)
+**상세 브리프·다음 세션 프롬프트: [`docs/NEXTGEN_IMMERSIVE_REDTEAM.md`](docs/NEXTGEN_IMMERSIVE_REDTEAM.md)**
+- **문제의식(사용자)**: 지금 Red 포털(`dashboards/redportal`)이 **CTF 문제풀이처럼** 느껴진다.
+  "진짜 내가 **병원을 공격**하고, **발전소 취약점을 파고들어** 시설을 다운/파괴하고 있다"는
+  **Locked Shields/Cyber Flag 급 라이브파이어 작전 몰입**을 원한다.
+- **방향**: 레드 = 시설 다운/파괴 목표(정찰→취약점 발견→익스플로잇→**실제 물리 피해**(터빈
+  과속·SIS 무력화→파국/정전)→킬체인). 작전/워룸 톤. 타깃 = 국가 기반시설 섹터.
+  **진짜 도메인에 근거**(지어내기 금지): `services/power_plant/main.py`(실 Modbus/DNP3·레지스터·
+  SIS·PP-001~007·asset_compromised 물리파국), `shared/event_schema.py` RedPhase 킬체인, 11 ICS 트윈.
+- **범위**: Red 공격 경험에 집중. **SOC/블루 모니터링 대시보드는 만들지 말 것** — 별도
+  **"SOC Dashboard" 프로젝트가 협업으로 담당**(블루 탐지·패치 메커닉만 존재).
+- **산출물**: `impeccable` 스킬로 최고 craft 작전 콘솔(실제 발전소 트윈 라이브 연결) +
+  **before/after 스크린샷**(기존 포털 vs 새 콘솔).
+
+### 그 외 (중요도 순, 코드로 가능)
+1. **retention/rollover 강화 (소크 발견 F-1·S-11 계열)**: 8h 소크서 events.db 740MB·event_collector
+   RSS +13MiB/h(워킹셋, 누수는 아님). 긴 훈련에 실질 도움.
+2. **R-3 전량 증분 집계**: AAR 가 지금 `AAR_MAX_EVENTS`(40만) 상한으로 메모리 보호. 상한 없이
+   전체 집계하려면 page-fold 증분 집계로 리팩터(audit/103 §7).
+3. 네이티브 **k6 포화점**(~450 EPS) 재확인(k6 설치 필요), 다관전자 SSE 팬아웃 부하.
+
+### 환경/수동 필수(코드 완결 불가)
+- 수동 접근성/스크린리더 감사(사람), 로컬 AI 모델 평가(실모델).
+
+> **완료됨(이번·직전 세션)**: v1.1.0 릴리스(태그), Showstopper 잔여 마감, R-1/R-2/R-3 수정,
+> **8h 정식 소크 완주**(1.12M req·무유실), A/D src_ip 라이브 검증, pyjwt CVE 범프. → `audit/100~104`.
 
 ## 5. 시작 절차 (clean host)
 ```bash
