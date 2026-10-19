@@ -8,7 +8,7 @@ import axe from "axe-core";
 vi.mock("./api", () => ({
   fetchPowerTelemetry: vi.fn().mockResolvedValue(null),
   powerRegistersFromTelemetry: vi.fn(),
-  executeStrike: vi.fn().mockResolvedValue(false),
+  executeStep: vi.fn().mockResolvedValue({ ok: true, live: false }),
   subscribeStream: vi.fn().mockReturnValue(() => {}),
 }));
 

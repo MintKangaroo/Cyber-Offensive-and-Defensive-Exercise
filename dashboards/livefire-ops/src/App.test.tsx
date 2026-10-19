@@ -5,7 +5,7 @@ import { render, screen, act, fireEvent } from "@testing-library/react";
 vi.mock("./api", () => ({
   fetchPowerTelemetry: vi.fn().mockResolvedValue(null),
   powerRegistersFromTelemetry: vi.fn(),
-  executeStrike: vi.fn().mockResolvedValue(false),
+  executeStep: vi.fn().mockResolvedValue({ ok: true, live: false }),
   subscribeStream: vi.fn().mockReturnValue(() => {}),
 }));
 
@@ -54,5 +54,22 @@ describe("Live-Fire Ops console", () => {
     expect(screen.getByText(/HOSPITAL OT/)).toBeInTheDocument();
     expect(screen.getByText(/환자 안전 계통/)).toBeInTheDocument();
     expect(screen.getByText(/INFUSION_RATE/)).toBeInTheDocument();
+  });
+
+  it("킬체인 단계를 실행하면 완료 표기되고 다음 단계가 활성화된다(발전소)", async () => {
+    await renderApp();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /발전소 SIS/ }));
+    });
+    // 체인이 뜨고 초기엔 완료 단계가 없다(첫 단계 라벨은 체인+exbar 양쪽에 표시됨)
+    expect(screen.getAllByText("HMI 기본계정 로그인").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("완료")).not.toBeInTheDocument();
+    // 다음 단계 실행
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /EXECUTE STRIKE/ }));
+    });
+    // 첫 단계가 완료로 표기되고, 다음 단계(측면이동)로 전진한다
+    expect(screen.getAllByText("완료").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/터빈 RPM 명령 상향/).length).toBeGreaterThanOrEqual(1);
   });
 });

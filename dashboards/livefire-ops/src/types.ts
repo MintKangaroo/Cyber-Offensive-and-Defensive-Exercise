@@ -90,6 +90,17 @@ export interface FacilityConfig {
   exploit: { label: string; detail: string };
   strikeLog: StrikeLogEntry[]; // 시설별 스트라이크 로그(발전소 상수 재사용 금지)
   footLine: string; // 하단 티커의 시설별 활성 라인
+  attackChain: AttackStep[]; // 킬체인 단계별 실행공격
+}
+
+/** 킬체인 실행 단계. action 이 있으면 실제 트윈 엔드포인트를 호출(발전소=라이브). */
+export interface AttackStep {
+  id: string;
+  phase: RedPhase;
+  label: string;
+  vuln: string;
+  points: number;
+  action?: { method: "POST"; path: string; body: Record<string, unknown> };
 }
 
 export type IconKind =

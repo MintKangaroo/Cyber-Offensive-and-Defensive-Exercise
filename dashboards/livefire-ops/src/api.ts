@@ -3,7 +3,7 @@
 //  - 발전소 트윈 공격 엔드포인트 호출(EXECUTE STRIKE) → 물리 파국 유발
 //  - event_collector :8010 /stream SSE → 스트라이크/이벤트 피드
 // 백엔드 미도달 시 정적 목업으로 폴백(오프라인에서도 UI 동작).
-import type { PowerTelemetry, RegisterRow } from "./types";
+import type { AttackStep, PowerTelemetry, RegisterRow } from "./types";
 
 const COLLECTOR_URL = import.meta.env.VITE_COLLECTOR_URL || "http://localhost:8010";
 const POWER_TWIN_URL = import.meta.env.VITE_POWER_TWIN_URL || "http://localhost:8002";
@@ -51,20 +51,23 @@ export function powerRegistersFromTelemetry(t: PowerTelemetry): RegisterRow[] {
   ];
 }
 
-/** EXECUTE STRIKE — 실 트윈 훈련 엔드포인트 구동(발전소: 안전 오버라이드 → SIS OFF, PP-005 objective). */
-export async function executeStrike(sector: string): Promise<boolean> {
-  if (sector !== "power") return false; // 수직 슬라이스: 발전소만 라이브 구동
-  try {
-    const r = await fetch(`${POWER_TWIN_URL}/api/safety/override`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ override: true }),
-      signal: withTimeout(2500),
-    });
-    return r.ok;
-  } catch {
-    return false;
+/** 킬체인 단계 실행 — step.action 이 있고 발전소면 실제 트윈 엔드포인트를 호출(라이브).
+ *  라이브 미연결 시설은 서사 진행({live:false})만 하고 물리는 움직이지 않는다(정직). */
+export async function executeStep(sector: string, step: AttackStep): Promise<{ ok: boolean; live: boolean }> {
+  if (sector === "power" && step.action) {
+    try {
+      const r = await fetch(`${POWER_TWIN_URL}${step.action.path}`, {
+        method: step.action.method,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(step.action.body),
+        signal: withTimeout(2500),
+      });
+      return { ok: r.ok, live: true };
+    } catch {
+      return { ok: false, live: false };
+    }
   }
+  return { ok: true, live: false }; // 서사 진행(③에서 실제 엔드포인트 연결 예정)
 }
 
 export interface StreamEvent {

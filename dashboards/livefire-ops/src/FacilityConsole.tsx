@@ -2,7 +2,7 @@ import { SectorIcon } from "./components/icons";
 import { Schematic, SCHEMATIC_TITLE } from "./components/schematics";
 import type { ConnStatus } from "./api";
 import { FACILITIES, FACILITY_ORDER, PHASE_LABEL } from "./data";
-import type { FacilityConfig, PhaseStep, RegisterRow, ScoreRow, StrikeLogEntry } from "./types";
+import type { AttackStep, FacilityConfig, PhaseStep, RegisterRow, ScoreRow, StrikeLogEntry } from "./types";
 
 const STATUS_LABEL: Record<ConnStatus, string> = { live: "LIVE", connecting: "연결중", mock: "DEMO" };
 
@@ -23,17 +23,20 @@ export interface ConsoleData {
 }
 
 export function FacilityConsole({
-  facility, data, status, onBack, onSelectFacility, onExecute, executing,
+  facility, data, status, done, nextStepId, executingStep, onBack, onSelectFacility, onExecuteStep,
 }: {
   facility: FacilityConfig;
   data: ConsoleData;
   status: ConnStatus;
+  done: Set<string>;
+  nextStepId: string | null;
+  executingStep: string | null;
   onBack: () => void;
   onSelectFacility: (id: FacilityConfig["id"]) => void;
-  onExecute: () => void;
-  executing: boolean;
+  onExecuteStep: (step: AttackStep) => void;
 }) {
   const registers = data.registers ?? facility.registers;
+  const nextStep = facility.attackChain.find((s) => s.id === nextStepId) ?? null;
   return (
     <div className="lf-console">
       {/* TOP */}
@@ -213,10 +216,41 @@ export function FacilityConsole({
                   ))}
                 </div>
               </div>
+              <div>
+                <div className="sub">킬체인 공격 · ATTACK CHAIN {status === "live" ? "· LIVE 트윈" : ""}</div>
+                <div className="chain">
+                  {facility.attackChain.map((s) => {
+                    const st = done.has(s.id) ? "done" : s.id === nextStepId ? "next" : "locked";
+                    return (
+                      <div className={`cstep ${st}`} key={s.id}>
+                        <span className="cph">{PHASE_LABEL[s.phase]}</span>
+                        <span className="cl">{s.label}</span>
+                        <span className="cv">{s.vuln}</span>
+                        <span className="cpts">+{s.points}</span>
+                        {st === "next" ? (
+                          <button className="cx" onClick={() => onExecuteStep(s)} disabled={!!executingStep}>
+                            {executingStep === s.id ? "실행중" : "EXEC"}
+                          </button>
+                        ) : (
+                          <span className="cstate">{st === "done" ? "완료" : "대기"}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
             <div className="exbar">
-              <div className="exinfo">▸ <b>{facility.exploit.label}</b> · {facility.exploit.detail}</div>
-              <button className="exbtn" onClick={onExecute} disabled={executing}>{executing ? "EXECUTING…" : "EXECUTE STRIKE"}</button>
+              {nextStep ? (
+                <>
+                  <div className="exinfo">▸ 다음 <b>{nextStep.label}</b> · {nextStep.vuln} · {PHASE_LABEL[nextStep.phase]} +{nextStep.points}</div>
+                  <button className="exbtn" onClick={() => onExecuteStep(nextStep)} disabled={!!executingStep}>
+                    {executingStep === nextStep.id ? "EXECUTING…" : "EXECUTE STRIKE"}
+                  </button>
+                </>
+              ) : (
+                <div className="exinfo" style={{ color: "var(--lf-red)" }}>▸ 작전 완료 · OPERATION COMPLETE · 전 단계 실행됨</div>
+              )}
             </div>
           </div>
         </div>

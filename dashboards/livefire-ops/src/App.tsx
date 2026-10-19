@@ -3,24 +3,37 @@ import { ArenaView, DEFAULT_ARENA } from "./ArenaView";
 import { FacilityConsole, type ConsoleData } from "./FacilityConsole";
 import {
   type ConnStatus,
-  executeStrike,
+  executeStep,
   fetchPowerTelemetry,
   powerRegistersFromTelemetry,
   subscribeStream,
   type StreamEvent,
 } from "./api";
-import { FACILITIES, powerKillChain, SCOREBOARD } from "./data";
-import type { FacilityConfig, PhaseStep, RegisterRow, StrikeLogEntry } from "./types";
+import { FACILITIES, PHASE_LABEL, SCOREBOARD } from "./data";
+import type { AttackStep, FacilityConfig, PhaseStep, RedPhase, RegisterRow, StrikeLogEntry } from "./types";
 
 type View = "arena" | "facility";
 
-function genericKillChain(): PhaseStep[] {
+/** 실행된 단계(done)로부터 킬체인 phase 상태를 계산 — recon 는 항상 완료, impact 는 전단계 완료 시 활성. */
+function computePhases(chain: AttackStep[], done: Set<string>): PhaseStep[] {
+  const order: RedPhase[] = [];
+  for (const s of chain) if (!order.includes(s.phase)) order.push(s.phase);
+  let activeAssigned = false;
+  const mid: PhaseStep[] = order.map((ph) => {
+    const steps = chain.filter((s) => s.phase === ph);
+    const allDone = steps.every((s) => done.has(s.id));
+    const pts = steps.reduce((a, s) => a + s.points, 0);
+    let state: PhaseStep["state"];
+    if (allDone) state = "done";
+    else if (!activeAssigned) { state = "active"; activeAssigned = true; }
+    else state = "todo";
+    return { phase: ph, label: PHASE_LABEL[ph], points: pts, state };
+  });
+  const allChainDone = chain.length > 0 && chain.every((s) => done.has(s.id));
   return [
     { phase: "recon", label: "RECON", state: "done" },
-    { phase: "initial_access", label: "INITIAL ACCESS", points: 20, state: "done" },
-    { phase: "lateral_movement", label: "LATERAL MOVEMENT", points: 30, state: "active" },
-    { phase: "objective", label: "OBJECTIVE", points: 100, state: "todo" },
-    { phase: "impact", label: "IMPACT", state: "todo" },
+    ...mid,
+    { phase: "impact", label: "IMPACT", state: allChainDone ? "active" : "todo" },
   ];
 }
 
@@ -42,12 +55,14 @@ export default function App() {
   const [sector, setSector] = useState<FacilityConfig["id"]>(init.sector);
   const [status, setStatus] = useState<ConnStatus>("connecting");
   const [liveRegisters, setLiveRegisters] = useState<RegisterRow[] | null>(null);
-  const [footLine, setFootLine] = useState<string>(
-    "00:41:12 · asset_compromised · power_plant · sustained_overspeed_sis_disabled · CRITICAL · phase=objective",
-  );
+  const [liveFootLine, setLiveFootLine] = useState<string | null>(null);
   const [extraStrikes, setExtraStrikes] = useState<StrikeLogEntry[]>([]);
-  const [executing, setExecuting] = useState(false);
+  const [done, setDone] = useState<Set<string>>(new Set());
+  const [executingStep, setExecutingStep] = useState<string | null>(null);
   const everLive = useRef(false);
+
+  // 시설 전환 시 작전 진행(실행 단계·라이브 로그) 초기화 — 각 시설은 독립 작전.
+  useEffect(() => { setDone(new Set()); setExtraStrikes([]); }, [sector]);
 
   // 발전소 라이브 텔레메트리 폴링 — 게이지/레지스터가 실제로 움직임.
   useEffect(() => {
@@ -59,7 +74,7 @@ export default function App() {
       if (t) {
         everLive.current = true;
         setLiveRegisters(powerRegistersFromTelemetry(t));
-        setFootLine(
+        setLiveFootLine(
           `ACTUAL_RPM ${t.actual_rpm.toLocaleString()} · COOLANT ${t.coolant_flow}/${t.coolant_temp}°C · SIS ${t.interlock ? "ARMED" : "BYPASS"} · DAMAGE ${t.damage}%${t.failed ? " · CATASTROPHIC_FAILURE" : ""}`,
         );
         setStatus("live");
@@ -80,7 +95,7 @@ export default function App() {
           {
             id: `live-${Date.now()}-${prev.length}`,
             time: new Date().toLocaleTimeString("en-GB").slice(3),
-            phase: (e.phase as StrikeLogEntry["phase"]) ?? "lateral_movement",
+            phase: (e.phase as RedPhase) ?? "lateral_movement",
             text: `${e.event_type}${e.vuln_id ? ` · ${e.vuln_id}` : ""}${e.target_asset ? ` · ${e.target_asset}` : ""}`,
             tag: "LIVE",
             current: true,
@@ -93,36 +108,55 @@ export default function App() {
   }, []);
 
   const facility = FACILITIES[sector];
+  const isPower = sector === "power";
+
+  // 다음 실행 가능한 단계(순차 게이팅) — done 에 없는 첫 단계.
+  const nextStepId = facility.attackChain.find((s) => !done.has(s.id))?.id ?? null;
+  // 실행으로 누적되는 공격 점수(라이브). ②에서 event_collector 집계로 대체 예정.
+  const atkScore = facility.attackChain.filter((s) => done.has(s.id)).reduce((a, s) => a + s.points, 0);
 
   const consoleData: ConsoleData = useMemo(() => {
-    const isPower = sector === "power";
-    // 스트라이크 로그/티커는 시설별(발전소 상수 재사용 금지). 발전소만 라이브 이벤트를 앞에 합친다.
-    const strikeLog = isPower && extraStrikes.length
+    const strikeLog = extraStrikes.length
       ? [...extraStrikes, ...facility.strikeLog].slice(0, 6)
       : facility.strikeLog;
     return {
-      phases: isPower ? powerKillChain() : genericKillChain(),
+      phases: computePhases(facility.attackChain, done),
       scoreboard: SCOREBOARD,
       strikeLog,
       registers: isPower && liveRegisters ? liveRegisters : undefined,
-      footLine: isPower ? footLine : facility.footLine,
-      atkScore: 150,
+      footLine: isPower && liveFootLine ? liveFootLine : facility.footLine,
+      atkScore,
       defScore: 40,
     };
-  }, [sector, facility, liveRegisters, footLine, extraStrikes]);
+  }, [facility, isPower, liveRegisters, liveFootLine, extraStrikes, done, atkScore]);
 
-  const arenaData = useMemo(() => ({ ...DEFAULT_ARENA, activeLine: footLine.startsWith("ACTUAL_RPM") ? `RED·TEAM-01 → 발전소 안전계통 · ${footLine}` : DEFAULT_ARENA.activeLine }), [footLine]);
+  const arenaData = useMemo(
+    () => ({ ...DEFAULT_ARENA, activeLine: liveFootLine ? `RED·TEAM-01 → 발전소 안전계통 · ${liveFootLine}` : DEFAULT_ARENA.activeLine }),
+    [liveFootLine],
+  );
 
   const onSelectFacility = useCallback((s: FacilityConfig["id"]) => { setSector(s); setView("facility"); }, []);
-  const onExecute = useCallback(async () => {
-    setExecuting(true);
-    await executeStrike(sector);
-    setExtraStrikes((prev) => [
-      { id: `strike-${Date.now()}`, time: new Date().toLocaleTimeString("en-GB").slice(3), phase: "objective", text: `${facility.exploit.label} · ${facility.exploit.detail}`, tag: "FIRED", current: true },
-      ...prev.map((s) => ({ ...s, current: false })),
-    ]);
-    setTimeout(() => setExecuting(false), 1200);
-  }, [sector, facility]);
+
+  const onExecuteStep = useCallback(async (step: AttackStep) => {
+    if (done.has(step.id) || executingStep) return;
+    setExecutingStep(step.id);
+    const res = await executeStep(sector, step);
+    if (res.ok) {
+      setDone((prev) => new Set(prev).add(step.id));
+      setExtraStrikes((prev) => [
+        {
+          id: `step-${step.id}`,
+          time: new Date().toLocaleTimeString("en-GB").slice(3),
+          phase: step.phase,
+          text: `${step.label} · ${step.vuln}${res.live ? "" : " (narrative)"}`,
+          tag: `+${step.points}`,
+          current: true,
+        },
+        ...prev.map((s) => ({ ...s, current: false })),
+      ]);
+    }
+    setExecutingStep(null);
+  }, [sector, done, executingStep]);
 
   return (
     <div className="lf-root">
@@ -133,10 +167,12 @@ export default function App() {
           facility={facility}
           data={consoleData}
           status={status}
+          done={done}
+          nextStepId={nextStepId}
+          executingStep={executingStep}
           onBack={() => setView("arena")}
           onSelectFacility={setSector}
-          onExecute={onExecute}
-          executing={executing}
+          onExecuteStep={onExecuteStep}
         />
       )}
     </div>

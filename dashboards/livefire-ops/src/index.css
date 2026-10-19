@@ -293,6 +293,23 @@ button { font-family: inherit; }
 .lf-console .exbtn { margin-left: auto; font-family: var(--lf-f-op); font-weight: 700; font-size: 12px; letter-spacing: 0.08em; color: #fff; background: var(--lf-red2); border: 1px solid #ff7a7e; padding: 9px 18px; cursor: pointer; }
 .lf-console .exbtn:hover { background: var(--lf-red); }
 .lf-console .exbtn:disabled { opacity: 0.6; cursor: default; }
+/* 킬체인 실행 단계 */
+.lf-console .chain { display: flex; flex-direction: column; gap: 4px; }
+.lf-console .cstep { display: grid; grid-template-columns: 92px 1fr auto auto 54px; gap: 8px; align-items: center; padding: 6px 9px; border: 1px solid var(--lf-line); background: #0a1726; font-family: var(--lf-f-mono); font-size: 10px; }
+.lf-console .cstep .cph { font-size: 8px; letter-spacing: 0.06em; color: var(--lf-sub); }
+.lf-console .cstep .cl { font-family: var(--lf-f-sans); color: var(--lf-mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-console .cstep .cv { color: var(--lf-amber); font-size: 9px; }
+.lf-console .cstep .cpts { color: var(--lf-sub); font-size: 9px; }
+.lf-console .cstep .cstate { text-align: right; font-size: 8px; letter-spacing: 0.06em; color: var(--lf-sub); }
+.lf-console .cstep.done { border-color: #243a28; }
+.lf-console .cstep.done .cl { color: var(--lf-txt); }
+.lf-console .cstep.done .cstate, .lf-console .cstep.done .cph { color: var(--lf-green); }
+.lf-console .cstep.next { border-color: var(--lf-red); background: var(--lf-redbg); }
+.lf-console .cstep.next .cl { color: #ffd9da; }
+.lf-console .cstep.locked { opacity: 0.5; }
+.lf-console .cx { font-family: var(--lf-f-op); font-weight: 700; font-size: 10px; letter-spacing: 0.08em; color: #fff; background: var(--lf-red2); border: 1px solid #ff7a7e; padding: 4px 8px; cursor: pointer; }
+.lf-console .cx:hover { background: var(--lf-red); }
+.lf-console .cx:disabled { opacity: 0.6; cursor: default; }
 .lf-console .foot { display: flex; align-items: stretch; border-top: 1px solid var(--lf-line2); background: #0b1829; font-family: var(--lf-f-mono); font-size: 10px; }
 .lf-console .foot .fl { padding: 8px 14px; border-right: 1px solid var(--lf-line); color: #ff9b9e; display: flex; gap: 9px; align-items: center; }
 .lf-console .foot .fl .k { color: var(--lf-sub); letter-spacing: 0.14em; }

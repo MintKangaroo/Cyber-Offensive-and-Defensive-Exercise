@@ -138,6 +138,13 @@ const POWER: FacilityConfig = {
     { id: "pp4", time: "36:40", phase: "initial_access", text: "HMI default creds · PP-002", tag: "+20" },
   ],
   footLine: "00:41:12 · asset_compromised · power_plant · sustained_overspeed_sis_disabled · CRITICAL · phase=objective",
+  // ★ 라이브 실행 체인 — 각 단계가 실제 발전소 트윈 엔드포인트를 순차 호출한다.
+  attackChain: [
+    { id: "pp-ia", phase: "initial_access", label: "HMI 기본계정 로그인", vuln: "PP-002", points: 20, action: { method: "POST", path: "/api/hmi/login", body: { username: "operator", password: "operator" } } },
+    { id: "pp-lm1", phase: "lateral_movement", label: "PLC 터빈 RPM 명령 상향 → 5600", vuln: "PP-001", points: 30, action: { method: "POST", path: "/api/plc/write", body: { register: "TURBINE_RPM", value: 5600 } } },
+    { id: "pp-lm2", phase: "lateral_movement", label: "냉각수 유량 차단 → 30", vuln: "PP-001", points: 30, action: { method: "POST", path: "/api/plc/write", body: { register: "COOLANT_FLOW", value: 30 } } },
+    { id: "pp-obj", phase: "objective", label: "안전계통(SIS) 무력화 → 과속 파국", vuln: "PP-005", points: 100, action: { method: "POST", path: "/api/safety/override", body: { override: true } } },
+  ],
 };
 
 // 병원: services/hospital_ot/main.py — PACS/HIS/의료기기 VLAN, HSP-001~005.
@@ -189,6 +196,12 @@ const HOSPITAL: FacilityConfig = {
     { id: "hs4", time: "17:05", phase: "initial_access", text: "병원 IT 진입 · 기본계정", tag: "+20" },
   ],
   footLine: "22:40 · lateral_movement · hospital_ot · medical_device_vlan_pivot · HIGH · phase=lateral_movement",
+  attackChain: [
+    { id: "hs-ia", phase: "initial_access", label: "병원 IT 진입 · 기본계정", vuln: "HSP-000", points: 20 },
+    { id: "hs-pe", phase: "privilege_escalation", label: "HIS 환자정보 SQLi", vuln: "HSP-002", points: 30 },
+    { id: "hs-lm", phase: "lateral_movement", label: "PACS 영상 IDOR · 의료기기 VLAN 피벗", vuln: "HSP-001", points: 30 },
+    { id: "hs-obj", phase: "objective", label: "주입펌프 과투여 → 환자 위해", vuln: "HSP-003", points: 100 },
+  ],
 };
 
 // 상수도: services/water_utility/main.py — 정수/배수·펌프·염소, WTR-001~005.
@@ -235,6 +248,12 @@ const WATER: FacilityConfig = {
     { id: "wt4", time: "27:30", phase: "recon", text: "정수장 자산 매핑", tag: "—" },
   ],
   footLine: "33:02 · lateral_movement · water_utility · chlorine_overdose_reservoir_overflow · HIGH · phase=lateral_movement",
+  attackChain: [
+    { id: "wt-ia", phase: "initial_access", label: "SCADA HMI 기본계정", vuln: "WTR-003", points: 20 },
+    { id: "wt-lm1", phase: "lateral_movement", label: "배수지 펌프 제어 탈취", vuln: "WTR-002", points: 30 },
+    { id: "wt-lm2", phase: "lateral_movement", label: "염소 주입 조작", vuln: "WTR-001", points: 30 },
+    { id: "wt-obj", phase: "objective", label: "배수지 범람 → 급수 중단", vuln: "WTR-004", points: 100 },
+  ],
 };
 
 // 나머지 섹터 — 간소 설정(generic 스키매틱). 실 트윈 docstring 기반 식별자 유지.
@@ -275,6 +294,12 @@ function generic(
       { id: `${id}4`, time: "22:00", phase: "recon", text: `${name} 자산 매핑`, tag: "—" },
     ],
     footLine: `28:10 · lateral_movement · ${id} · ${crown.vulns[0]} · phase=lateral_movement`,
+    attackChain: [
+      { id: `${id}-ia`, phase: "initial_access", label: "IT 진입 · 초기 침투", vuln: "INIT", points: 20 },
+      { id: `${id}-pe`, phase: "privilege_escalation", label: "운영 콘솔 권한상승", vuln: "PRIV", points: 30 },
+      { id: `${id}-lm`, phase: "lateral_movement", label: `${crown.name} 제어 접근`, vuln: crown.vulns[0], points: 30 },
+      { id: `${id}-obj`, phase: "objective", label: objective, vuln: crown.vulns[0], points: 100 },
+    ],
   };
 }
 
