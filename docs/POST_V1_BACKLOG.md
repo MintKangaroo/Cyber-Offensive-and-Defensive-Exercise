@@ -11,7 +11,7 @@
 | ID | 잔여 | 위험 수용 사유 | 후속 |
 |---|---|---|---|
 | S-10 | 팀 롤백 시 prod k8s PVC 에 공격자 웹셸 데이터 잔존 가능 | sandbox(emptyDir) 경로는 롤아웃 시 소거되어 안전. prod PVC 경로만 해당하며, v1.0 표준 배포는 docker-compose/sandbox. 리셋 계통(RESET_TARGETS 8종)·다운타임 보정은 FIXED. | prod k8s 롤백 시 PVC purge 옵션(런타임 k8s 검증 필요) |
-| S-11 | 8h 실 OOM 방지·SIEM 저장소 rollover 실측 미완 | mem_limit(70개)·하드닝 오버레이 3경로 로드·event_collector retention 은 코드상 완비. 실 OOM 은 장시간 런타임(Phase 4 소크)에서만 확정 가능 — 샌드박스 RAM 제약으로 이 환경에서 코드 완결 불가. | Phase 4 8h 정식 소크(`run_soak.sh`)에서 RSS 기울기 판정 |
+| S-11 | 8h 실 OOM 방지·SIEM 저장소 rollover 실측 미완 → **Phase 4 8h 소크 RUN(2026-10-03)**: OOM/재시작 0, 단 event_collector RSS 기울기 **WARN**(아래 §3 실측) | mem_limit(70개)·하드닝 오버레이 3경로 로드·event_collector retention 은 코드상 완비. 8h 소크에서 OOM·재시작 0 확인. event_collector RSS 는 +13.28 MiB/h(WARN, fail 임계 20 미만)로 **관찰 지속 대상**(파국 아님). | event_collector RSS 성장(+13.28 MiB/h) 근본원인 추적(장시간 재소크 필요) |
 | S-3 (잔여) | (a) 담합 탐지가 `passed` 를 뒤집지 않음 (b) 비-스코프(dev) 제출이 body team_id 신뢰 | (a) 담합은 신호만 방출하고 교관이 판정 = 의도된 SOC 주체성 설계. (b) 실경쟁(`range_scope.is_team()`)에서는 identity 로 override 되어 무력화. dev 모드에서만 신뢰. | 담합 정책의 자동 무효화 옵션(교관 설정), 비-스코프 제출 하드닝 |
 | S-7 (잔여) | 막힌 stage 교관 강제 unlock/skip 엔드포인트 없음 | 크로스오버 정답 제출→해금 경로는 FIXED(완주 가능). 강제 override 는 운영 편의 기능. | 교관 force-advance API |
 | R-1 | ~~`/replay/events` 무한 fetchall 이 대용량 events.db 에서 event_collector OOM~~ → **v1.1.0 에서 FIXED(PR #115)** | Phase 3 리허설 발견(audit/102 §3). | **해소**: reconcile·AAR 을 커서 페이지네이션 `/replay/page` 배치 소비로 전환(`shared/replay_client.py`). 라이브 검증(2500 이벤트 2페이지·OOM 없음). |
@@ -56,6 +56,23 @@ v1.0 에서는 위험 수용하고 아래에 개선 후보로 이관한다(신�
 - Phase 3 리허설: U-1(Modbus 502)·U-4(격리 egress)·U-8(체커 실 HTTP)·U-9(prod 프로파일)
 - Phase 4 소크: U-3(포화점)·U-6(8h OOM)·S-11(rollover)
 - U-2(공격→SIEM 지연): 측정 하네스 신규(Phase 3에서 간단 계측)
+
+### 실측 결과(Phase 3/4)
+- **Phase 3 무인 리허설 — PASS (13/0)** · 산출물 `loadtest/results/rehearsal_latest.json`.
+  Live Fire 킬체인 5/5 200·원장 완전성(발행=원장)·dlq_drop 0·점수-원장 일치·SIEM 경보 src_ip
+  귀속·AAR PDF 200(한글 폰트)·A/D 2라운드 수락.
+- **Phase 4 8h 정식 소크(2026-10-02~03) — 부하 CLEAN, RSS WARN** · 산출물
+  `loadtest/soak/results/*20261002T231634Z*`, `soak_report.json`.
+  - 부하: 28,825s 동안 1,120,816 전송 / 1,120,814 2xx(fail 2, rate 1.8e-6), 38.9/40 req/s. 재시작·OOM 0.
+  - RSS 기울기: config_service·scoring_engine·siem_api **PASS**(평탄~하락). **event_collector WARN**
+    (76→157 MiB, +13.28 MiB/h; warn 임계 5 초과·fail 임계 20 미만) → S-11 관찰 지속.
+  - R-1 종료 게이트: 기록상 FAIL 이었으나 **원인은 하네스 결함**(부하 `scenario_id='soak-exercise'`
+    vs 게이트 조회 `'soak'` 불일치 → 빈 시나리오 reconcile/AAR). event_collector 는 무거운 replay
+    후에도 health 200(= R-1 OOM 회귀 아님). **수정**: `run_soak.sh` 가 `SOAK_SCENARIO_ID` 를 단일
+    소스로 export(부하·게이트 동일값). 정렬된 scenario_id 로 게이트 로직 재실측 → **PASS**
+    (health 200·reconcile checked=true·AAR PDF 200 %PDF·health 200). 회귀:
+    `tests/unit/test_soak_gate_scenario_id.py`. 단, 8h 성장 DB 에서의 AAR HTTPError 원인은
+    미니 재현(클린 DB)에서 재현되지 않아 **UNVERIFIED** — 정식 재소크에서 최종 확인 필요.
 
 ---
 

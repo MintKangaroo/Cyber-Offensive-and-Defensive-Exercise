@@ -3,6 +3,24 @@
 형식: [Keep a Changelog](https://keepachangelog.com/), 버전: [SemVer](https://semver.org/).
 
 ## [Unreleased]
+### Fixed
+- **소크 R-1 종료 게이트 거짓 FAIL(하네스 결함)**: 부하(`soak_load.py`)는
+  `scenario_id='soak-exercise'` 로 이벤트를 발행하는데 종료 게이트(`run_soak.sh`)는 `'soak'` 로
+  reconcile/AAR 을 조회해 **빈 시나리오**를 판정(→ reconcile checked=false·AAR PDF HTTPError →
+  FAIL). 실제 event_collector 는 성장한 events.db replay 후에도 health 200(= R-1 OOM 회귀 아님).
+  `run_soak.sh` 가 `SOAK_SCENARIO_ID` 를 단일 소스로 export 해 부하·게이트가 같은 값을 쓰도록 정렬.
+  정렬된 scenario_id 로 게이트 로직 재실측 → PASS(health 200·reconcile checked=true/5·AAR 200
+  %PDF·health 200). 회귀 테스트 `tests/unit/test_soak_gate_scenario_id.py`.
+### Added
+- **Live Fire 데모 오케스트레이터**(`scripts/demo/livefire_demo.py`): scenario_engine 활성화
+  (→ phase_clock 1Hz 타이머) + 섹터 트윈 킬체인 구동(→ 물리 게이지·이벤트·점수)을 원샷으로
+  수행하는 무인 진행기. 회귀 테스트 `tests/unit/test_livefire_demo.py`(8케이스).
+### Notes
+- **Phase 4 8h 정식 소크 실측(2026-10-02~03)**: 부하 CLEAN(1,120,816 전송 / 2xx 1,120,814,
+  fail_rate 1.8e-6, 38.9/40 req/s, 재시작·OOM 0). RSS 기울기 — config_service·scoring_engine·
+  siem_api PASS, **event_collector WARN**(+13.28 MiB/h, fail 임계 20 미만) → 관찰 지속(S-11).
+  아래 [1.1.0] 의 "2시간 가속 소크 PASS(누수 없음)" 기록은 2h 가속 런 한정이며, 8h 정식 런의
+  event_collector RSS WARN 가 더 정확한 최신 실측이다(상세 `docs/POST_V1_BACKLOG.md §3`).
 
 ## [1.1.0] - 2026-09-30
 운영 준비 마감 라운드(v1.0 감사 → v1.1). 상세 근거는 `audit/100~103`.

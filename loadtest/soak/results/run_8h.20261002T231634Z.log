@@ -1,0 +1,75 @@
+[run-soak 23:16:34] bringing up core stack: siem_logs_init event_collector scoring_engine config_service siem_api aar_report
+ Container cyber-range-platform-siem_logs_init-1 Exited 
+ Container siem_api Starting 
+ Container aar_report Started 
+ Container config_service Started 
+ Container siem_api Started 
+[run-soak 23:17:19] waiting for core health (event_collector:8010, siem_api:8040, scoring:8020)
+[run-soak 23:17:28] stack healthy. siem rules: {"events_by_source":{"twin":71747},"alerts_by_severity":{"2":710,"4":8},"top_signatures":[{"rule_id":"TWIN-IDOR-SCAN-001","title":"IDOR 순차 스캔 의심 (Mission Plan)","c":710},{"rule_id":"TWIN-P
+[run-soak 23:17:28] starting sampler (interval=120s) -> /home/mintkangaroo/Project/Cyber_offensive_Defense_Project/cyber-range-platform/loadtest/soak/results/mem_samples.20261002T231634Z.csv
+[run-soak 23:17:28] starting load: duration=28800s rate=40/s
+[run-soak 07:17:54] load finished rc=0
+[run-soak 07:17:54] === ANALYSIS ===
+{
+  "overall": "WARN",
+  "slope_warn_mib_h": 5.0,
+  "slope_fail_mib_h": 20.0,
+  "containers": {
+    "config_service": {
+      "samples": 231,
+      "first_mib": 42.0,
+      "last_mib": 35.3,
+      "peak_mib": 43.6,
+      "growth_pct": -16.0,
+      "slope_mib_per_h": -1.17,
+      "restart_delta": 0,
+      "verdict": "PASS"
+    },
+    "event_collector": {
+      "samples": 231,
+      "first_mib": 76.0,
+      "last_mib": 157.6,
+      "peak_mib": 177.7,
+      "growth_pct": 107.3,
+      "slope_mib_per_h": 13.28,
+      "restart_delta": 0,
+      "verdict": "WARN"
+    },
+    "scoring_engine": {
+      "samples": 231,
+      "first_mib": 55.2,
+      "last_mib": 52.7,
+      "peak_mib": 57.9,
+      "growth_pct": -4.5,
+      "slope_mib_per_h": -0.51,
+      "restart_delta": 0,
+      "verdict": "PASS"
+    },
+    "siem_api": {
+      "samples": 231,
+      "first_mib": 57.2,
+      "last_mib": 54.3,
+      "peak_mib": 59.6,
+      "growth_pct": -5.0,
+      "slope_mib_per_h": -0.5,
+      "restart_delta": 0,
+      "verdict": "PASS"
+    }
+  }
+}
+
+container                 first     last     peak  growth%    MiB/h restart  verdict
+----------------------------------------------------------------------------------------
+config_service             42.0     35.3     43.6    -16.0    -1.17       0  PASS
+event_collector            76.0    157.6    177.7    107.3    13.28       0  WARN
+scoring_engine             55.2     52.7     57.9     -4.5    -0.51       0  PASS
+siem_api                   57.2     54.3     59.6     -5.0    -0.50       0  PASS
+----------------------------------------------------------------------------------------
+OVERALL: WARN
+[soak-analyze] wrote /home/mintkangaroo/Project/Cyber_offensive_Defense_Project/cyber-range-platform/loadtest/soak/results/soak_report.json
+[run-soak 07:17:54] === R-1 gate: 종료 시점 AAR/reconcile (성장한 events.db) ===
+R-1 gate: {"event_collector_health": 200, "reconcile": {"http": 200, "checked": false, "total_events": null}, "aar_pdf": "ERR HTTPError", "event_collector_health_after": 200} -> FAIL
+[run-soak 07:18:12] R-1 gate rc=5 (결과 /home/mintkangaroo/Project/Cyber_offensive_Defense_Project/cyber-range-platform/loadtest/soak/results/soak_r1_gate.20261002T231634Z.json)
+[run-soak 07:18:12] tearing down core stack
+[run-soak 07:18:24] DONE. results in /home/mintkangaroo/Project/Cyber_offensive_Defense_Project/cyber-range-platform/loadtest/soak/results (stamp=20261002T231634Z). analyze_rc=0 r1_gate_rc=5
+[run-soak 07:18:24] cleanup: stopping sampler/load

@@ -20,6 +20,10 @@ export SOAK_RATE="${SOAK_RATE:-40}"
 export SOAK_SAMPLE_INTERVAL="${SOAK_SAMPLE_INTERVAL:-60}"
 export SOAK_SAMPLE_CSV="$RESULTS/mem_samples.${STAMP}.csv"
 export SOAK_SUMMARY="$RESULTS/load_summary.${STAMP}.json"
+# 부하(soak_load.py)와 종료 게이트(R-1 아래)가 반드시 같은 scenario_id 를 쓰도록 단일 소스로 export.
+# (과거 결함: 부하 기본 'soak-exercise' vs 게이트 기본 'soak' 가 어긋나 게이트가 빈 시나리오를 조회 →
+#  reconcile checked=false·AAR PDF HTTPError 로 거짓 FAIL. event_collector 는 replay 후에도 health 200.)
+export SOAK_SCENARIO_ID="${SOAK_SCENARIO_ID:-soak-exercise}"
 
 # dev 우회(부하 스크립트는 토큰 없이 수집) + 더미 시크릿(fail-closed 회피).
 # SERVICE_TOKEN 을 명시적으로 비워 .env 의 실토큰 주입을 무력화 → 이 격리 소크 스택은
@@ -94,10 +98,10 @@ if [ -z "${INSTRUCTOR_TOKEN:-}" ] && [ -f "$ROOT/.env" ]; then
   INSTRUCTOR_TOKEN="$(grep -E '^INSTRUCTOR_TOKEN=' "$ROOT/.env" | head -1 | cut -d= -f2-)"
 fi
 export INSTRUCTOR_TOKEN
-SOAK_SCENARIO_ID="${SOAK_SCENARIO_ID:-soak}" python3 - "$R1_GATE" <<'PY' | tee -a "$RESULTS/analysis.${STAMP}.txt"
+SOAK_SCENARIO_ID="${SOAK_SCENARIO_ID:-soak-exercise}" python3 - "$R1_GATE" <<'PY' | tee -a "$RESULTS/analysis.${STAMP}.txt"
 import json, os, sys, urllib.request
 out = sys.argv[1]
-scen = os.environ.get("SOAK_SCENARIO_ID", "soak")
+scen = os.environ.get("SOAK_SCENARIO_ID", "soak-exercise")
 tok = os.environ.get("INSTRUCTOR_TOKEN", "dev-instructor-token")
 def get(url, headers=None, timeout=60):
     req = urllib.request.Request(url, headers=headers or {})

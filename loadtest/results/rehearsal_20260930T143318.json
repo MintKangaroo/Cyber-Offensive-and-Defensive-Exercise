@@ -1,0 +1,157 @@
+{
+  "started_at": 1790746398.4928293,
+  "stages": {
+    "livefire": {
+      "scenario": "reh-livefire-2baf5810",
+      "reconcile": {
+        "scenario_id": "reh-livefire-2baf5810",
+        "all_match": true,
+        "score_consistency": true,
+        "events_crosscheck": {
+          "checked": true,
+          "total_events": 5,
+          "scoreable_events": 5,
+          "achievements_with_source": 5,
+          "scoreable_without_achievement": 0,
+          "missing_event_ids": []
+        },
+        "detail": [
+          {
+            "team_id": "team-01",
+            "actor": "red",
+            "computed_from_achievements": 230,
+            "stored_team_score": 230,
+            "achievement_count": 5,
+            "match": true
+          }
+        ]
+      },
+      "metrics": {
+        "service": "event_collector",
+        "forwarded_ok": 5,
+        "forward_retries": 0,
+        "dlq_spooled": 0,
+        "dlq_redelivered": 0,
+        "dlq_drop": 0,
+        "ingest_batches": 5,
+        "ingest_committed": 5,
+        "ingest_batch_max_observed": 1,
+        "dlq_pending": 0,
+        "sse_dropped": 0
+      },
+      "siem": {
+        "fresh_alerts": 2,
+        "src_ip": "192.168.48.9"
+      },
+      "aar": {
+        "http": 200,
+        "size": 6888,
+        "korean": true
+      }
+    },
+    "ad": {
+      "rounds": [
+        {
+          "round": 1,
+          "seq": 5,
+          "stolen": 5,
+          "accepted": 1,
+          "score_delta": 10
+        },
+        {
+          "round": 2,
+          "seq": 6,
+          "stolen": 6,
+          "accepted": 1,
+          "score_delta": 10
+        }
+      ],
+      "state_status": "running"
+    }
+  },
+  "finished_at": 1790746431.8054557,
+  "passed": 13,
+  "failed": 0,
+  "checks": [
+    {
+      "ok": true,
+      "label": "킬체인 5단계 이벤트 발행 200",
+      "evidence": "codes=[200, 200, 200, 200, 200]"
+    },
+    {
+      "ok": true,
+      "label": "이벤트 원장 완전성(발행=원장)",
+      "evidence": "emitted=5 ledger=5"
+    },
+    {
+      "ok": true,
+      "label": "이벤트 유실 0(dlq_drop==0)",
+      "evidence": "dlq_drop=0"
+    },
+    {
+      "ok": null,
+      "label": "forwarded_ok 증가",
+      "evidence": "+5 (pending=0)"
+    },
+    {
+      "ok": null,
+      "label": "SSE 드롭 카운터(S-8 가시성)",
+      "evidence": "sse_dropped=0"
+    },
+    {
+      "ok": true,
+      "label": "점수 합계 일치(stored==computed)",
+      "evidence": "all_match=True"
+    },
+    {
+      "ok": true,
+      "label": "이벤트-점수 원장 일치(유실 0)",
+      "evidence": "total=5 missing=0"
+    },
+    {
+      "ok": true,
+      "label": "트윈 공격이 SIEM 경보를 발화(공격 시각 이후)",
+      "evidence": "fresh=2 rule=TWIN-IDOR-SCAN-001"
+    },
+    {
+      "ok": true,
+      "label": "SIEM 경보에 공격 출발지 src_ip 귀속",
+      "evidence": "src_ip=192.168.48.9 (트윈GW=$remote_addr; A/D 팀귀속은 ad_target_gateway XFF=S-9)"
+    },
+    {
+      "ok": true,
+      "label": "AAR PDF 생성(200 · %PDF)",
+      "evidence": "http=200 type=application/pdf size=6888"
+    },
+    {
+      "ok": true,
+      "label": "AAR PDF 한글 폰트 렌더(HYSMyeongJo/CID)",
+      "evidence": "marker=HYSMyeongJo"
+    },
+    {
+      "ok": true,
+      "label": "교관: 매치 시작(running)",
+      "evidence": "status=running"
+    },
+    {
+      "ok": true,
+      "label": "라운드1: 레드가 현재 플래그 탈취·제출 accepted",
+      "evidence": "stolen=5 accepted=1 +10"
+    },
+    {
+      "ok": true,
+      "label": "교관: 라운드1 확정→라운드2 진행",
+      "evidence": "http=200"
+    },
+    {
+      "ok": true,
+      "label": "라운드2: 레드가 현재 플래그 탈취·제출 accepted",
+      "evidence": "stolen=6 accepted=1 +10"
+    },
+    {
+      "ok": null,
+      "label": "A/D 매치 상태",
+      "evidence": "status=running"
+    }
+  ]
+}
