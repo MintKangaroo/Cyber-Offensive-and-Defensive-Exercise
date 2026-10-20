@@ -132,6 +132,44 @@ audit state first, resolve exact `ad-...` namespaces with `kubectl get ns`, and
 follow the event retention policy. `stop()` scales only the selected
 Deployment to zero.
 
+## Verified local run (kind)
+
+The hardened manifests have been run end-to-end on a real single-node
+[`kind`](https://kind.sigs.k8s.io/) cluster (k8s v1.31) — pods actually reach
+`Running`, not just admitted. This is the reproducible procedure; it exercises
+the real `KubernetesRuntime.deploy()` path (not the `gen_ad_teams.py --k8s`
+template, which pins a placeholder digest for structural validation only).
+
+1. **Registry reachable by digest.** `kind` nodes cannot see the host Docker
+   image store, so the digest-pin contract needs a registry both the host (push)
+   and the nodes (pull) can reach. Run a local `registry:2`, create the cluster
+   with a containerd `config_path`, and add a `hosts.toml` mapping
+   `localhost:5001 → http://kind-registry:5000` on each node (the upstream
+   kind "local registry" recipe). Build the three demo-service images, push them,
+   and capture their real `RepoDigests`.
+2. **RWX storage is mandatory** (prerequisite #3). The default kind storage
+   class `standard` (`rancher.io/local-path`) is `ReadWriteOnce` only, so a live
+   team PVC stays `Pending` with
+   `ProvisioningFailed: ... Only support ReadWriteOnce access mode` and the pod
+   never schedules. This is expected: the surge rollout (`maxSurge: 1`) briefly
+   co-mounts `/data`, so the contract requires `ReadWriteMany`. Install an
+   RWX provider (e.g. the sig-storage NFS-ganesha external provisioner, which
+   serves an in-cluster `nfs` StorageClass) rather than relaxing the contract.
+3. **Deploy** with `KubernetesRuntimeConfig(image_registry=<registry>,
+   allowed_registry=<registry>, storage_class="nfs", dry_run=False,
+   context="kind-...")` and call `runtime.deploy(instance)` per team×service,
+   with each `instance["image_reference"]` set to the pushed `repo@sha256:...`.
+
+**Observed result** (2 teams × 3 services = 6 pods): every Deployment rolled out
+to `1/1 Running`; each PVC `Bound` as `RWX` on the `nfs` class; images pulled by
+digest from the local registry; per-namespace `default-deny-all` +
+game/management-ingress NetworkPolicies, `ResourceQuota` (live `pods: 3/12`) and
+`LimitRange` admitted; `/health` on the game port (9000) served through a
+port-forward. Note that kind's default CNI (`kindnet`) admits but does **not
+enforce** NetworkPolicy — policy *enforcement* still needs a policy-capable CNI
+(prerequisite #1), so this run verifies pod runtime and manifest acceptance, not
+network isolation.
+
 ## Current limitations
 
 - The adapter does not install the API/control-plane workload, ingress, HA
