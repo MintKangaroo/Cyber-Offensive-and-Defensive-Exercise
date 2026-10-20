@@ -9,7 +9,9 @@ mock 된 소스 응답으로 월보드 데이터 소스를 검증한다:
   - availability 평균(모니터링 중인 자산만)
 도커/라이브 스택 없이 순수 함수만 돌린다.
 """
-from services.range_control.exercise_overview import aggregate_overview
+from services.range_control.exercise_overview import (
+    aggregate_overview, compute_weighted_total, weights_from_env, DEFAULT_WEIGHTS,
+)
 
 
 def _match(match_id="m1", scenario_id="s1", range_id="r1",
@@ -132,3 +134,61 @@ def test_multiple_matches_scenario_isolation():
     assert byteam["r1t"]["red_score"] == 10
     assert byteam["r2t"]["red_score"] == 99
     assert byteam["r1t"]["match_id"] == "m1" and byteam["r2t"]["match_id"] == "m2"
+
+
+# ── 단일 가중 총점 (대회급 격차 #3 (b)) ─────────────────────────────────────────
+
+def test_weighted_total_folds_availability_and_components():
+    """twin availability 가 가중 총점에 실제로 반영된다(기본 가중치)."""
+    scores, injects, incidents, noc = _all_up_sources()
+    out = aggregate_overview([_match()], scores, injects, incidents, noc, None)
+    teams = {t["team_id"]: t for t in out["teams"]}
+    # blue-a: blue 80 + avail 90%*300(=270) + inject 75%*200(=150) - 2*10(=20) = 480
+    assert teams["blue-a"]["weighted_total"] == 480.0
+    assert teams["blue-a"]["availability_scored"] is True
+    # red-a: red 120 + avail 270 + inject 0 - 1*10 = 380
+    assert teams["red-a"]["weighted_total"] == 380.0
+    assert out["weights"] == DEFAULT_WEIGHTS
+
+
+def test_ranking_sorted_desc_with_ranks():
+    scores, injects, incidents, noc = _all_up_sources()
+    out = aggregate_overview([_match()], scores, injects, incidents, noc, None)
+    ranking = out["ranking"]
+    assert [r["team_id"] for r in ranking] == ["blue-a", "red-a"]  # 480 > 380
+    assert [r["rank"] for r in ranking] == [1, 2]
+    assert ranking[0]["weighted_total"] == 480.0
+
+
+def test_availability_unscored_when_noc_down():
+    """NOC down → availability_scored False, 가용성 기여 0(총점에서 빠짐)."""
+    scores, injects, incidents, _ = _all_up_sources()
+    out = aggregate_overview([_match()], scores, injects, incidents, {}, None)
+    blue = {t["team_id"]: t for t in out["teams"]}["blue-a"]
+    assert blue["availability_scored"] is False
+    # avail 기여 0: blue 80 + inject 150 - 20 = 210 (270 빠짐)
+    assert blue["weighted_total"] == 210.0
+
+
+def test_custom_weights_param_overrides():
+    scores, injects, incidents, noc = _all_up_sources()
+    w = dict(DEFAULT_WEIGHTS, availability=0.0, inject=0.0, incident_penalty=0.0)
+    out = aggregate_overview([_match()], scores, injects, incidents, noc, None, weights=w)
+    blue = {t["team_id"]: t for t in out["teams"]}["blue-a"]
+    assert blue["weighted_total"] == 80.0  # blue_score 만 남음
+    assert out["weights"]["availability"] == 0.0
+
+
+def test_weights_from_env_override_and_bad_value_ignored():
+    w = weights_from_env({"EXERCISE_WEIGHT_AVAILABILITY": "100", "EXERCISE_WEIGHT_RED": "oops"})
+    assert w["availability"] == 100.0           # 덮어씀
+    assert w["red"] == DEFAULT_WEIGHTS["red"]    # 잘못된 값은 무시(기본 유지)
+
+
+def test_compute_weighted_total_incident_cap():
+    """open 인시던트 페널티는 incident_cap 까지만."""
+    w = dict(DEFAULT_WEIGHTS, incident_cap=3.0, incident_penalty=10.0, availability=0.0, inject=0.0)
+    row = {"availability_pct": None, "inject_score_pct": 0, "open_incidents": 50,
+           "red_score": 0, "blue_score": 100}
+    # 50건이지만 cap 3 → -30
+    assert compute_weighted_total(row, w) == 70.0
