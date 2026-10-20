@@ -62,6 +62,12 @@ INCIDENT_TOKEN = os.environ.get("INCIDENT_TOKEN", "")
 _SEV_MAP = {5: "critical", 4: "high", 3: "medium"}
 NOISE_ENABLED = os.environ.get("SIEM_NOISE_ENABLED", "false").lower() == "true"
 NOISE_EPS = float(os.environ.get("SIEM_NOISE_EPS", "2.0"))
+# 다일(48~72h) 내구성(S-11): SIEM SQLite 저장소(events+events_fts, alerts)는 rollover/retention 이
+# 없어 무한 증가했다. event_collector 의 _prune_old_events()+백그라운드 루프 패턴을 그대로 가져온다.
+# 안전 기본값 0 = 비활성(event_collector 의 EVENTS_RETENTION_DAYS 와 동일 정책 — 운영자가 명시 opt-in).
+# 접근 로그(파일)의 용량 상한은 shared/siem_access_log.py 의 RotatingFileHandler 가 별도로 담당한다.
+SIEM_RETENTION_DAYS = float(os.environ.get("SIEM_RETENTION_DAYS", "0"))
+SIEM_RETENTION_INTERVAL_SEC = float(os.environ.get("SIEM_RETENTION_INTERVAL_SEC", "3600"))
 
 app = FastAPI(title="SIEM API (M5 통합)")
 from shared import scope as range_scope
@@ -246,8 +252,34 @@ async def _noise_loop() -> None:
     await gen.run_forever()
 
 
+def _prune_siem_stores() -> dict[str, int]:
+    """다일 내구성(S-11): SIEM SQLite 저장소에 age 기반 보존 정책을 적용한다.
+    SIEM_RETENTION_DAYS<=0 이면 비활성(0건). 반환: 저장소별 삭제 건수."""
+    if SIEM_RETENTION_DAYS <= 0:
+        return {"events": 0, "alerts": 0}
+    cutoff = time.time() - SIEM_RETENTION_DAYS * 86400
+    return {
+        "events": backend.prune_older_than(cutoff),
+        "alerts": alert_store.prune_older_than(cutoff),
+    }
+
+
+async def _retention_loop() -> None:
+    """event_collector 의 _dlq_drain_loop 패턴 — 주기적으로 보존 정책을 적용. 절대 죽지 않는다."""
+    while True:
+        await asyncio.sleep(SIEM_RETENTION_INTERVAL_SEC)
+        try:
+            # SQLite I/O 는 동기이므로 이벤트 루프를 막지 않게 스레드로 넘긴다.
+            await asyncio.to_thread(_prune_siem_stores)
+        except Exception:
+            pass
+
+
 @on_startup(app)
 async def startup():
+    # 다일 내구성(S-11): SIEM 저장소 보존 루프(SIEM_RETENTION_DAYS>0 일 때만 실제 삭제).
+    asyncio.create_task(_retention_loop())
+
     # M5.1: 트윈 구조화 로그. 섹터 격리(감사 2.5)로 트윈 access 로그가 자기 섹터 하위
     # (/var/log/siem/{asset}/{asset}_access.log)로 이동했다. siem_api는 볼륨 전체를 :ro로
     # 마운트하므로 전 섹터를 읽는다.

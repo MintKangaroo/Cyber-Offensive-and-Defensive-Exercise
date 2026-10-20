@@ -13,10 +13,19 @@ import json
 import logging
 import os
 import time
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Callable, Awaitable
 
 LOG_DIR = Path(os.environ.get("SIEM_LOG_DIR", "/var/log/siem"))
+
+# 다일(48~72h) 내구성(S-11): 트윈 access 로그는 지금까지 평범한 FileHandler 라 무한 증가했다
+# (실측: siem_logs ~169MB 누적). 크기 기반 rotation 으로 자산당 로그를 상한선 아래로 묶는다.
+# SIEM 의 file_tailer 는 inode 교체를 감지해 재오픈하도록 설계돼 있어(logrotate 대응) rotation 과
+# 호환된다. 다일 운영에 맞는 기본값(비활성 아님): 50MiB * 5 백업 = 자산당 ~300MiB 상한.
+# SIEM_LOG_MAX_BYTES=0 이면 rotation 비활성(기존 FileHandler 동작과 동일 — 하위호환).
+SIEM_LOG_MAX_BYTES = int(os.environ.get("SIEM_LOG_MAX_BYTES", str(50 * 1024 * 1024)))
+SIEM_LOG_BACKUP_COUNT = int(os.environ.get("SIEM_LOG_BACKUP_COUNT", "5"))
 
 
 def get_siem_logger(asset_name: str) -> logging.Logger:
@@ -28,7 +37,14 @@ def get_siem_logger(asset_name: str) -> logging.Logger:
         # 파일 핸들러(디렉토리 없으면 생성 시도, 실패해도 stdout은 계속 나가게)
         try:
             LOG_DIR.mkdir(parents=True, exist_ok=True)
-            file_handler = logging.FileHandler(LOG_DIR / f"{asset_name}_access.log")
+            log_path = LOG_DIR / f"{asset_name}_access.log"
+            if SIEM_LOG_MAX_BYTES > 0:
+                # 크기 기반 rotation(다일 내구성 S-11): 상한 도달 시 .1~.N 로 밀어내고 재오픈.
+                file_handler: logging.Handler = RotatingFileHandler(
+                    log_path, maxBytes=SIEM_LOG_MAX_BYTES, backupCount=SIEM_LOG_BACKUP_COUNT
+                )
+            else:
+                file_handler = logging.FileHandler(log_path)  # rotation 비활성(하위호환)
             file_handler.setFormatter(logging.Formatter("%(message)s"))
             logger.addHandler(file_handler)
         except OSError:
