@@ -10,9 +10,22 @@ import {
   type StreamEvent,
 } from "./api";
 import { FACILITIES, PHASE_LABEL, SCOREBOARD } from "./data";
-import type { AttackStep, FacilityConfig, PhaseStep, RedPhase, RegisterRow, StrikeLogEntry } from "./types";
+import type { AttackStep, FacilityConfig, PhaseStep, RedPhase, RegisterRow, ScoreRow, SolveEntry, StrikeLogEntry } from "./types";
 
 type View = "arena" | "facility";
+type TeamTally = Record<string, { attack: number; defense: number }>;
+const OUR_TEAM = "default"; // 트윈 TEAM_ID 기본값 = 우리 팀(RED·TEAM-01)
+const TEAM_DISPLAY: Record<string, string> = { default: "RED · TEAM-01" };
+
+/** 라이브 점수 누적(team→{attack,defense})에서 스코어보드를 만든다. 비면 정적 폴백. */
+function buildScoreboard(tally: TeamTally): ScoreRow[] {
+  const ids = Object.keys(tally);
+  if (ids.length === 0) return SCOREBOARD;
+  return ids
+    .map((id) => ({ id, score: tally[id].attack + tally[id].defense }))
+    .sort((a, b) => b.score - a.score)
+    .map((r, i) => ({ rank: i + 1, team: TEAM_DISPLAY[r.id] ?? r.id, score: r.score, me: r.id === OUR_TEAM }));
+}
 
 /** 실행된 단계(done)로부터 킬체인 phase 상태를 계산 — recon 는 항상 완료, impact 는 전단계 완료 시 활성. */
 function computePhases(chain: AttackStep[], done: Set<string>): PhaseStep[] {
@@ -59,6 +72,8 @@ export default function App() {
   const [extraStrikes, setExtraStrikes] = useState<StrikeLogEntry[]>([]);
   const [done, setDone] = useState<Set<string>>(new Set());
   const [executingStep, setExecutingStep] = useState<string | null>(null);
+  const [liveScores, setLiveScores] = useState<TeamTally>({}); // event_collector scores 토픽 누적
+  const [liveSolve, setLiveSolve] = useState<SolveEntry[]>([]); // 라이브 Solve Log
   const everLive = useRef(false);
 
   // 시설 전환 시 작전 진행(실행 단계·라이브 로그) 초기화 — 각 시설은 독립 작전.
@@ -90,6 +105,21 @@ export default function App() {
   // event_collector SSE — 스트라이크/이벤트 피드.
   useEffect(() => {
     const onEvent = (e: StreamEvent) => {
+      // scores 토픽: 어워드 델타를 팀별로 누적 → 라이브 스코어보드/점수.
+      if (e.topic === "scores" && typeof e.points === "number" && e.points) {
+        const team = e.team_id || OUR_TEAM;
+        const isRed = e.actor === "red";
+        const pts = e.points;
+        setLiveScores((prev) => {
+          const cur = prev[team] ?? { attack: 0, defense: 0 };
+          return { ...prev, [team]: { attack: cur.attack + (isRed ? pts : 0), defense: cur.defense + (isRed ? 0 : pts) } };
+        });
+        const side: SolveEntry["side"] = isRed ? "attack" : "defense";
+        setLiveSolve((prev) => [
+          { id: `sc-${Date.now()}-${prev.length}`, side, team: TEAM_DISPLAY[team] ?? team, text: `${e.category ?? "award"} · +${pts}`, points: pts },
+          ...prev,
+        ].slice(0, 8));
+      }
       if (e.topic === "events" && e.event_type) {
         setExtraStrikes((prev) => [
           {
@@ -112,8 +142,10 @@ export default function App() {
 
   // 다음 실행 가능한 단계(순차 게이팅) — done 에 없는 첫 단계.
   const nextStepId = facility.attackChain.find((s) => !done.has(s.id))?.id ?? null;
-  // 실행으로 누적되는 공격 점수(라이브). ②에서 event_collector 집계로 대체 예정.
-  const atkScore = facility.attackChain.filter((s) => done.has(s.id)).reduce((a, s) => a + s.points, 0);
+  // 실행된 단계의 로컬 점수(백엔드 미연결 시 폴백). 라이브 연결 시 event_collector 집계로 대체.
+  const chainScore = facility.attackChain.filter((s) => done.has(s.id)).reduce((a, s) => a + s.points, 0);
+  const ourLive = liveScores[OUR_TEAM];
+  const liveScoreboard = buildScoreboard(liveScores);
 
   const consoleData: ConsoleData = useMemo(() => {
     const strikeLog = extraStrikes.length
@@ -121,18 +153,23 @@ export default function App() {
       : facility.strikeLog;
     return {
       phases: computePhases(facility.attackChain, done),
-      scoreboard: SCOREBOARD,
+      scoreboard: liveScoreboard,
       strikeLog,
       registers: isPower && liveRegisters ? liveRegisters : undefined,
       footLine: isPower && liveFootLine ? liveFootLine : facility.footLine,
-      atkScore,
-      defScore: 40,
+      atkScore: ourLive ? ourLive.attack : chainScore,
+      defScore: ourLive ? ourLive.defense : 40,
     };
-  }, [facility, isPower, liveRegisters, liveFootLine, extraStrikes, done, atkScore]);
+  }, [facility, isPower, liveRegisters, liveFootLine, extraStrikes, done, chainScore, ourLive, liveScoreboard]);
 
   const arenaData = useMemo(
-    () => ({ ...DEFAULT_ARENA, activeLine: liveFootLine ? `RED·TEAM-01 → 발전소 안전계통 · ${liveFootLine}` : DEFAULT_ARENA.activeLine }),
-    [liveFootLine],
+    () => ({
+      ...DEFAULT_ARENA,
+      scoreboard: liveScoreboard,
+      solveLog: liveSolve.length ? liveSolve : DEFAULT_ARENA.solveLog,
+      activeLine: liveFootLine ? `RED·TEAM-01 → 발전소 안전계통 · ${liveFootLine}` : DEFAULT_ARENA.activeLine,
+    }),
+    [liveFootLine, liveScoreboard, liveSolve],
   );
 
   const onSelectFacility = useCallback((s: FacilityConfig["id"]) => { setSector(s); setView("facility"); }, []);

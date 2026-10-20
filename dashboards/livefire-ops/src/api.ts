@@ -72,12 +72,17 @@ export async function executeStep(sector: string, step: AttackStep): Promise<{ o
 
 export interface StreamEvent {
   topic: string;
+  // events 토픽
   event_type?: string;
   target_asset?: string;
   phase?: string;
   vuln_id?: string;
-  actor?: string;
   metadata?: Record<string, unknown>;
+  // scores 토픽(어워드 델타): {team_id, actor, category, points, timestamp}
+  actor?: string;
+  team_id?: string;
+  category?: string;
+  points?: number;
 }
 
 /** event_collector /stream SSE 구독. 실패 시 onStatus('mock'). cleanup 반환. */
