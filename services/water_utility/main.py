@@ -24,6 +24,13 @@ def chlorine_dosing(patched, p, emit):
     ppm = p.get("ppm")
     if not patched:
         emit({"ppm": ppm, "note": "chlorine dosing setpoint changed without auth"})
+        # HTTP 공격 → 실제 물리: 염소 투입 설정을 Modbus 뱅크 HR0 에 반영(라이브파이어 게이지가 움직임).
+        # 안전상한 4ppm 초과 지속 → 급수 오염 손상 누적(asset_compromised, 공중보건).
+        if ppm is not None:
+            try:
+                _wu_bank.holding[0] = int(float(ppm))
+            except (TypeError, ValueError):
+                pass
     return {"chlorine_ppm": ppm, "status": "dosing setpoint applied"}
 
 
@@ -237,6 +244,29 @@ def _wu_blue_defense(kind: str, addr: int, vals: list) -> None:
                             "reservoir_ppm": int(_wu_proc.actual_rpm), "damage": int(_wu_proc.damage)})
     except Exception:
         pass
+
+
+@app.get("/api/telemetry")
+def _wu_telemetry():
+    """라이브파이어 콘솔 게이지용 텔레메트리(발전소·attach_modbus_ics 와 동일 규약).
+    HR0=CHLORINE_PPM(명령)·HR2=RESERVOIR_PPM(실측)·HR5=CONTAMINATION(손상)·coil0=SIS."""
+    return {
+        "asset": _ASSET,
+        "cmd": int(_wu_bank.holding[0]),
+        "cmd_name": "CHLORINE_PPM",
+        "actual": int(_wu_bank.holding[2]),
+        "actual_name": "RESERVOIR_PPM",
+        "damage": int(_wu_bank.holding[5]),
+        "interlock": bool(_wu_bank.coils[0]),
+        "failed": bool(_wu_failed),
+        "redline": _WU_PROC.redline_rpm,
+        "registers": [
+            {"addr": 0, "name": "CHLORINE_PPM", "value": int(_wu_bank.holding[0])},
+            {"addr": 1, "name": "INTAKE_PUMP_RATE", "value": int(_wu_bank.holding[1])},
+            {"addr": 2, "name": "RESERVOIR_PPM", "value": int(_wu_bank.holding[2])},
+            {"addr": 5, "name": "CONTAMINATION", "value": int(_wu_bank.holding[5])},
+        ],
+    }
 
 
 if __name__ == "__main__":

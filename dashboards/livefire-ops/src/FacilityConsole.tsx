@@ -20,6 +20,7 @@ export interface ConsoleData {
   footLine: string;
   atkScore: number;
   defScore: number;
+  elapsed?: string; // phase_clock 라이브 경과(T+ Engage); 없으면 정적
 }
 
 export function FacilityConsole({
@@ -48,7 +49,7 @@ export function FacilityConsole({
         </div>
         <div className="statrow">
           <div className="stat"><span className="k">Round</span><span className="v">03 / 06</span></div>
-          <div className="stat"><span className="k">T+ Engage</span><span className="v">00:41:17</span></div>
+          <div className="stat"><span className="k">T+ Engage</span><span className="v lf-mono">{data.elapsed ?? "00:41:17"}</span></div>
           <div className="stat"><span className="k">Attack</span><span className="v red">{data.atkScore}</span></div>
           <div className="stat"><span className="k">Defense</span><span className="v blue">{data.defScore}</span></div>
           <div className="stat"><span className="k">Kill-chain</span><span className="v amber">{data.phases.filter((p) => p.state === "done").length} / {data.phases.length}</span></div>

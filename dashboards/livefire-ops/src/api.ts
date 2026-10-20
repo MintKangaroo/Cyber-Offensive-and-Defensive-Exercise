@@ -51,6 +51,77 @@ export function powerRegistersFromTelemetry(t: PowerTelemetry): RegisterRow[] {
   ];
 }
 
+/** 섹터 무관 라이브 텔레메트리(twin_modbus·water_utility /api/telemetry 의 통일 규약).
+ *  병원·상수도·정유 등 연속 물리 트윈의 게이지를 발전소처럼 움직이게 한다. */
+export interface SectorTelemetry {
+  asset: string;
+  cmd: number;
+  cmd_name: string;
+  actual: number;
+  actual_name: string;
+  damage: number;
+  interlock: boolean;
+  failed: boolean;
+  redline: number;
+  registers: { addr: number; name: string; value: number }[];
+}
+
+/** 섹터 트윈 /api/telemetry 폴링(URL 미해석 섹터는 null → 폴백). 발전소는 전용 경로 사용. */
+export async function fetchSectorTelemetry(sector: string): Promise<SectorTelemetry | null> {
+  const base = resolveTwinUrl(sector);
+  if (!base) return null;
+  try {
+    const r = await fetch(`${base}/api/telemetry`, { signal: withTimeout(2000) });
+    if (!r.ok) return null;
+    const d = await r.json();
+    if (!Array.isArray(d.registers)) return null; // 발전소 전용 스키마는 여기서 거른다
+    return {
+      asset: String(d.asset ?? sector),
+      cmd: Number(d.cmd ?? 0),
+      cmd_name: String(d.cmd_name ?? "CMD"),
+      actual: Number(d.actual ?? 0),
+      actual_name: String(d.actual_name ?? "ACTUAL"),
+      damage: Number(d.damage ?? 0),
+      interlock: Boolean(d.interlock),
+      failed: Boolean(d.failed),
+      redline: Number(d.redline ?? 0),
+      registers: d.registers.map((x: Record<string, unknown>) => ({
+        addr: Number(x.addr ?? 0), name: String(x.name ?? ""), value: Number(x.value ?? 0),
+      })),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** 통일 텔레메트리 → 섹터별 레지스터 테이블 행(레지스터 이름을 그대로 노출). */
+export function registersFromSectorTelemetry(t: SectorTelemetry): RegisterRow[] {
+  const rows: RegisterRow[] = t.registers.map((r) => {
+    const over = t.redline > 0 && r.value > t.redline;
+    const isActual = r.name === t.actual_name;
+    const isCmd = r.name === t.cmd_name;
+    const isDamage = /DAMAGE|CONTAM/i.test(r.name);
+    let tone: RegisterRow["tone"] = "blue";
+    let state = "OK";
+    if (isDamage) { tone = r.value > 0 ? "red" : "neutral"; state = r.value > 0 ? "▲" : "—"; }
+    else if (isActual) { tone = over ? "red" : "blue"; state = over ? "O-LIMIT" : "OK"; }
+    else if (isCmd) { tone = over ? "red" : "neutral"; state = "SET"; }
+    return { name: r.name, addr: `HR${r.addr}`, value: `${r.value.toLocaleString()}${isActual && over ? " ▲" : ""}`, state, tone };
+  });
+  rows.push({
+    name: "SAFETY_INTERLOCK", addr: "coil0",
+    value: t.interlock ? "ON" : "OFF",
+    state: t.interlock ? "ARMED" : "BYPASS",
+    tone: t.interlock ? "blue" : "red",
+  });
+  return rows;
+}
+
+/** 통일 텔레메트리 → 하단 티커 활성 라인. */
+export function sectorFootLine(t: SectorTelemetry): string {
+  return `${t.actual_name} ${t.actual.toLocaleString()} · ${t.cmd_name} ${t.cmd.toLocaleString()} · SIS ${t.interlock ? "ARMED" : "BYPASS"} · DAMAGE ${t.damage}%${t.failed ? " · CATASTROPHIC_FAILURE" : ""}`;
+}
+
 /** 섹터별 트윈 베이스 URL. 환경변수 VITE_TWIN_<SECTOR>(예: VITE_TWIN_HOSPITAL) 로 주입.
  *  미설정이면 발전소만 기본값(POWER_TWIN_URL) — 다른 섹터는 그 트윈을 띄우고 URL 을 주면 라이브. */
 function resolveTwinUrl(sector: string): string | null {
@@ -103,6 +174,23 @@ export interface StreamEvent {
   team_id?: string;
   category?: string;
   points?: number;
+  // phase_clock 토픽(scenario_engine 투영 타임라인): 잔여/경과/다음 단계 잔여
+  scenario_id?: string;
+  remaining_sec?: number;
+  elapsed_sec?: number;
+  stage_remaining_sec?: number;
+  current_stage?: number | null;
+  overtime?: boolean;
+}
+
+/** 초 → "HH:MM:SS"(1시간 미만이면 "MM:SS"). 타이머 표시용. */
+export function fmtClock(totalSec: number): string {
+  const s = Math.max(0, Math.floor(totalSec));
+  const hh = Math.floor(s / 3600);
+  const mm = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  const p = (n: number) => String(n).padStart(2, "0");
+  return hh > 0 ? `${p(hh)}:${p(mm)}:${p(ss)}` : `${p(mm)}:${p(ss)}`;
 }
 
 /** event_collector /stream SSE 구독. 실패 시 onStatus('mock'). cleanup 반환. */

@@ -44,6 +44,14 @@ def infusion_rate(patched, p, emit):
     if not patched:
         emit({"device": p.get("device", "PUMP-07"), "rate_mlh": p.get("rate"),
               "note": "infusion pump rate changed without auth (patient safety)"})
+        # HTTP 공격 → 실제 물리: 투여율 명령을 Modbus 뱅크에 반영(라이브파이어 게이지가 움직임).
+        # 안전상한 200mL/h 초과 지속 → 약물 과다투여 손상 누적(asset_compromised).
+        rate = p.get("rate")
+        if _HSP_TWIN is not None and rate is not None:
+            try:
+                _HSP_TWIN.apply_command(float(rate))
+            except (TypeError, ValueError):
+                pass
     return {"device": p.get("device", "PUMP-07"), "rate_mlh": p.get("rate"), "status": "rate applied"}
 
 
@@ -84,7 +92,7 @@ from shared.ics.twin_modbus import attach_modbus_ics, ModbusIcsConfig  # noqa: E
 from shared.ics.safety import SafetyProfile  # noqa: E402
 from shared.ics.anomaly import IcsBaseline, RegBand  # noqa: E402
 from shared.ics.process_sim import ProcessParams  # noqa: E402
-attach_modbus_ics(app, ModbusIcsConfig(
+_HSP_TWIN = attach_modbus_ics(app, ModbusIcsConfig(
     asset="hospital_ot", vuln_id="HSP-003", reg_names={0: "INFUSION_RATE", 1: "DRUG_CONC"},
     holding_init=[100, 10], coils_init=[True], cmd_reg=0, actual_reg=2, damage_reg=4, interlock_coil=0,
     safety=SafetyProfile(name="hospital_ot", limits={0: {"name": "INFUSION_RATE", "max": 200}}, interlock_coil=0),

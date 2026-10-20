@@ -5,7 +5,11 @@ import {
   type ConnStatus,
   executeStep,
   fetchPowerTelemetry,
+  fetchSectorTelemetry,
+  fmtClock,
   powerRegistersFromTelemetry,
+  registersFromSectorTelemetry,
+  sectorFootLine,
   subscribeStream,
   type StreamEvent,
 } from "./api";
@@ -74,33 +78,47 @@ export default function App() {
   const [executingStep, setExecutingStep] = useState<string | null>(null);
   const [liveScores, setLiveScores] = useState<TeamTally>({}); // event_collector scores 토픽 누적
   const [liveSolve, setLiveSolve] = useState<SolveEntry[]>([]); // 라이브 Solve Log
+  const [liveClock, setLiveClock] = useState<{ remaining: number; elapsed: number; stageRemaining: number; overtime: boolean } | null>(null); // phase_clock 토픽
   const everLive = useRef(false);
 
-  // 시설 전환 시 작전 진행(실행 단계·라이브 로그) 초기화 — 각 시설은 독립 작전.
-  useEffect(() => { setDone(new Set()); setExtraStrikes([]); }, [sector]);
+  // 시설 전환 시 작전 진행(실행 단계·라이브 로그·라이브 게이지) 초기화 — 각 시설은 독립 작전.
+  useEffect(() => { setDone(new Set()); setExtraStrikes([]); setLiveRegisters(null); setLiveFootLine(null); }, [sector]);
 
-  // 발전소 라이브 텔레메트리 폴링 — 게이지/레지스터가 실제로 움직임.
+  // 선택 섹터의 라이브 텔레메트리 폴링 — 게이지/레지스터가 실제로 움직임.
+  //  · 발전소: 전용 스키마(냉각수/온도 포함) · 그 외: twin_modbus 통일 스키마.
+  //  URL 미해석 섹터(VITE_TWIN_* 미설정)는 폴백(정적) — 정직하게 라이브로 표시하지 않음.
   useEffect(() => {
     let timer: number | undefined;
     let cancelled = false;
     const tick = async () => {
-      const t = await fetchPowerTelemetry();
-      if (cancelled) return;
-      if (t) {
-        everLive.current = true;
-        setLiveRegisters(powerRegistersFromTelemetry(t));
-        setLiveFootLine(
-          `ACTUAL_RPM ${t.actual_rpm.toLocaleString()} · COOLANT ${t.coolant_flow}/${t.coolant_temp}°C · SIS ${t.interlock ? "ARMED" : "BYPASS"} · DAMAGE ${t.damage}%${t.failed ? " · CATASTROPHIC_FAILURE" : ""}`,
-        );
-        setStatus("live");
-      } else if (!everLive.current) {
-        setStatus((s) => (s === "live" ? s : "mock"));
+      if (sector === "power") {
+        const t = await fetchPowerTelemetry();
+        if (cancelled) return;
+        if (t) {
+          everLive.current = true;
+          setLiveRegisters(powerRegistersFromTelemetry(t));
+          setLiveFootLine(
+            `ACTUAL_RPM ${t.actual_rpm.toLocaleString()} · COOLANT ${t.coolant_flow}/${t.coolant_temp}°C · SIS ${t.interlock ? "ARMED" : "BYPASS"} · DAMAGE ${t.damage}%${t.failed ? " · CATASTROPHIC_FAILURE" : ""}`,
+          );
+          setStatus("live");
+        } else if (!everLive.current) {
+          setStatus((s) => (s === "live" ? s : "mock"));
+        }
+      } else {
+        const t = await fetchSectorTelemetry(sector);
+        if (cancelled) return;
+        if (t) {
+          everLive.current = true;
+          setLiveRegisters(registersFromSectorTelemetry(t));
+          setLiveFootLine(sectorFootLine(t));
+          setStatus("live");
+        }
       }
       timer = window.setTimeout(tick, 1500);
     };
     tick();
     return () => { cancelled = true; if (timer) clearTimeout(timer); };
-  }, []);
+  }, [sector]);
 
   // event_collector SSE — 스트라이크/이벤트 피드.
   useEffect(() => {
@@ -120,6 +138,16 @@ export default function App() {
           ...prev,
         ].slice(0, 8));
       }
+      // phase_clock 토픽: scenario_engine 투영 타임라인 → 타이머 3종 라이브.
+      if (e.topic === "phase_clock" && typeof e.remaining_sec === "number") {
+        everLive.current = true;
+        setLiveClock({
+          remaining: e.remaining_sec,
+          elapsed: e.elapsed_sec ?? 0,
+          stageRemaining: e.stage_remaining_sec ?? 0,
+          overtime: Boolean(e.overtime),
+        });
+      }
       if (e.topic === "events" && e.event_type) {
         setExtraStrikes((prev) => [
           {
@@ -138,7 +166,6 @@ export default function App() {
   }, []);
 
   const facility = FACILITIES[sector];
-  const isPower = sector === "power";
 
   // 다음 실행 가능한 단계(순차 게이팅) — done 에 없는 첫 단계.
   const nextStepId = facility.attackChain.find((s) => !done.has(s.id))?.id ?? null;
@@ -155,21 +182,24 @@ export default function App() {
       phases: computePhases(facility.attackChain, done),
       scoreboard: liveScoreboard,
       strikeLog,
-      registers: isPower && liveRegisters ? liveRegisters : undefined,
-      footLine: isPower && liveFootLine ? liveFootLine : facility.footLine,
+      registers: liveRegisters ?? undefined,
+      footLine: liveFootLine ?? facility.footLine,
       atkScore: ourLive ? ourLive.attack : chainScore,
       defScore: ourLive ? ourLive.defense : 40,
+      elapsed: liveClock ? fmtClock(liveClock.elapsed) : undefined,
     };
-  }, [facility, isPower, liveRegisters, liveFootLine, extraStrikes, done, chainScore, ourLive, liveScoreboard]);
+  }, [facility, liveRegisters, liveFootLine, extraStrikes, done, chainScore, ourLive, liveScoreboard, liveClock]);
 
   const arenaData = useMemo(
     () => ({
       ...DEFAULT_ARENA,
       scoreboard: liveScoreboard,
       solveLog: liveSolve.length ? liveSolve : DEFAULT_ARENA.solveLog,
+      timeRemaining: liveClock ? fmtClock(liveClock.remaining) : DEFAULT_ARENA.timeRemaining,
+      nextAttack: liveClock ? fmtClock(liveClock.stageRemaining) : DEFAULT_ARENA.nextAttack,
       activeLine: liveFootLine ? `RED·TEAM-01 → 발전소 안전계통 · ${liveFootLine}` : DEFAULT_ARENA.activeLine,
     }),
-    [liveFootLine, liveScoreboard, liveSolve],
+    [liveFootLine, liveScoreboard, liveSolve, liveClock],
   );
 
   const onSelectFacility = useCallback((s: FacilityConfig["id"]) => { setSector(s); setView("facility"); }, []);

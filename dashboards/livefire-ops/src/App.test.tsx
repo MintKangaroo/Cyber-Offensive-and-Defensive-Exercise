@@ -4,7 +4,11 @@ import { render, screen, act, fireEvent } from "@testing-library/react";
 // 네트워크(트윈 폴링/SSE)는 테스트에서 비활성 — 정적 데이터로 검증.
 vi.mock("./api", () => ({
   fetchPowerTelemetry: vi.fn().mockResolvedValue(null),
+  fetchSectorTelemetry: vi.fn().mockResolvedValue(null),
   powerRegistersFromTelemetry: vi.fn(),
+  registersFromSectorTelemetry: vi.fn(),
+  sectorFootLine: vi.fn(),
+  fmtClock: (s: number) => String(s),
   executeStep: vi.fn().mockResolvedValue({ ok: true, live: false }),
   subscribeStream: vi.fn().mockReturnValue(() => {}),
 }));
