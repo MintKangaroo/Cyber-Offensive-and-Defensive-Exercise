@@ -16,16 +16,65 @@ Exercise Overview — 전(全) 팀 동시 운영 현황 집계 (대회급 격차
   - 한 소스가 비어 있어도(down/empty) 나머지는 그대로 집계한다(graceful degradation,
     aar_report._get_json 패턴과 동일한 정신).
 
-주의(정직성): availability 는 "MONITORED" 지표일 뿐, 아직 가중 총점에 반영되지 않는다
-  (twin availability → weighted score 통합은 명시적 후속 과제). 통합 가중 총점은
-  검증 전까지 날조하지 않는다(CLAUDE.md 절대규칙 3).
+가중 총점(대회급 격차 #3 (b)): twin availability·red/blue 이벤트·인젝트·인시던트를 **단일 가중
+총점(weighted_total)** 으로 합산한다. availability 가 NOC 로 실제 모니터링될 때만 점수화하고
+(미모니터링이면 availability_scored=False, 기여 0), 가중치는 config(DEFAULT_WEIGHTS, 환경변수로 덮어씀)
+로 노출한다 — 날조된 총점이 아니라 각 구성요소의 투명한 선형결합이다(CLAUDE.md 절대규칙 3).
+Locked Shields 식: 가용성·보고(인젝트)·레드/블루 공방·인시던트 페널티를 하나의 랭킹으로.
 """
 from __future__ import annotations
 
+import os
 from typing import Any, Optional
 
 OPEN_INCIDENT_STATUSES = {"new", "triage", "contained", "eradicated", "recovered"}
 # incident.model.STATUSES 에서 'closed' 를 뺀 집합. closed 만 종결로 본다.
+
+# 단일 가중 총점의 기본 가중치(환경변수 EXERCISE_WEIGHT_* 로 덮어쓴다). 의미:
+#   red/blue  : 이벤트 점수에 곱하는 배수(점수는 상한 없음 → 배수로 반영).
+#   availability/inject : 0~100% 비율을 이 만점으로 환산(가용성 100%=300pt, 인젝트 100%=200pt).
+#   incident_penalty : open 인시던트 1건당 감점(incident_cap 까지만).
+DEFAULT_WEIGHTS: dict[str, float] = {
+    "red": 1.0,
+    "blue": 1.0,
+    "availability": 300.0,
+    "inject": 200.0,
+    "incident_penalty": 10.0,
+    "incident_cap": 20.0,
+}
+
+
+def weights_from_env(env: Optional[dict] = None) -> dict[str, float]:
+    """EXERCISE_WEIGHT_<KEY>(대문자) 환경변수로 기본 가중치를 덮어쓴다. 없으면 기본값."""
+    src = env if env is not None else os.environ
+    w = dict(DEFAULT_WEIGHTS)
+    for k in w:
+        v = src.get(f"EXERCISE_WEIGHT_{k.upper()}")
+        if v is not None:
+            try:
+                w[k] = float(v)
+            except (TypeError, ValueError):
+                pass
+    return w
+
+
+def compute_weighted_total(row: dict, weights: dict[str, float]) -> float:
+    """팀 행(aggregate_overview 가 만든 구조)의 단일 가중 총점.
+
+    availability_pct 가 숫자일 때만(= NOC 모니터링 중) 가용성 점수를 더한다(미모니터링이면 0).
+    """
+    avail = row.get("availability_pct")
+    avail_pts = (float(avail) / 100.0) * weights["availability"] if isinstance(avail, (int, float)) else 0.0
+    inject_pts = (float(row.get("inject_score_pct", 0) or 0) / 100.0) * weights["inject"]
+    penalty = min(int(row.get("open_incidents", 0) or 0), int(weights["incident_cap"])) * weights["incident_penalty"]
+    total = (
+        weights["red"] * float(row.get("red_score", 0) or 0)
+        + weights["blue"] * float(row.get("blue_score", 0) or 0)
+        + avail_pts
+        + inject_pts
+        - penalty
+    )
+    return round(total, 2)
 
 
 def _avg_availability(twin_set: list[str], noc_assets: dict[str, dict]) -> tuple[Optional[float], int]:
@@ -61,6 +110,7 @@ def aggregate_overview(
     incidents_by_scenario: dict[str, dict],
     noc_status: Optional[dict] = None,
     source_status: Optional[dict] = None,
+    weights: Optional[dict] = None,
 ) -> dict:
     """전 팀 운영 현황을 하나의 구조로 합친다.
 
@@ -84,6 +134,7 @@ def aggregate_overview(
         "source_status": {...},
       }
     """
+    w = weights if weights is not None else dict(DEFAULT_WEIGHTS)
     noc_assets = {}
     if isinstance(noc_status, dict):
         noc_assets = noc_status.get("assets") or {}
@@ -134,7 +185,7 @@ def aggregate_overview(
             side = (meta or {}).get("side", "")
             team_score = scores.get(team_id) or {}
             inj = _inject_row_for(team_id, board)
-            team_rows.append({
+            row = {
                 "match_id": match_id,
                 "range_id": range_id,
                 "scenario_id": scenario_id,
@@ -142,17 +193,29 @@ def aggregate_overview(
                 "side": side,
                 "availability_pct": availability_pct,
                 "twins_monitored": twins_monitored,
+                "availability_scored": isinstance(availability_pct, (int, float)),
                 "red_score": int(team_score.get("red", 0) or 0),
                 "blue_score": int(team_score.get("blue", 0) or 0),
                 "inject_delivered": int(inj.get("delivered", 0) or 0),
                 "inject_responded": int(inj.get("responded", 0) or 0),
                 "inject_score_pct": int(inj.get("score_pct", 0) or 0),
                 "open_incidents": int(open_counts.get(team_id, 0)),
-            })
+            }
+            row["weighted_total"] = compute_weighted_total(row, w)
+            team_rows.append(row)
+
+    # 전(全) 팀 단일 랭킹(weighted_total 내림차순, 동점은 team_id 로 안정 정렬).
+    ranking = [
+        {"rank": i + 1, "team_id": r["team_id"], "side": r["side"],
+         "match_id": r["match_id"], "weighted_total": r["weighted_total"]}
+        for i, r in enumerate(sorted(team_rows, key=lambda r: (-r["weighted_total"], r["team_id"])))
+    ]
 
     result: dict[str, Any] = {
         "matches": match_rows,
         "teams": team_rows,
+        "ranking": ranking,
+        "weights": w,
     }
     if source_status is not None:
         result["source_status"] = source_status

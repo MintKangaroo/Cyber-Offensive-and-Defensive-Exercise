@@ -118,9 +118,13 @@
     }).join("");
   }
 
-  function renderTeams(teams){
+  function renderTeams(teams, ranking){
     el("empty").style.display = teams.length ? "none" : "block";
-    el("grid").innerHTML = teams.map(function(t){
+    // 단일 가중 총점(weighted_total) 내림차순 랭킹. rank 맵은 match_id/team_id 로 키.
+    var rankBy = {};
+    (ranking || []).forEach(function(r){ rankBy[r.match_id+"/"+r.team_id] = r.rank; });
+    var sorted = teams.slice().sort(function(a,b){ return (b.weighted_total||0)-(a.weighted_total||0); });
+    el("grid").innerHTML = sorted.map(function(t){
       var side = (t.side === "red" || t.side === "blue") ? t.side : "";
       var scoreMain = side === "red"
         ? '<div class="stat"><div class="k">RED 점수</div><div class="v red">'+(t.red_score||0)+'</div></div>'
@@ -128,17 +132,19 @@
         ? '<div class="stat"><div class="k">BLUE 점수</div><div class="v blue">'+(t.blue_score||0)+'</div></div>'
         : '<div class="stat"><div class="k">점수 R/B</div><div class="v">'+(t.red_score||0)+'/'+(t.blue_score||0)+'</div></div>';
       var openCls = (t.open_incidents > 0) ? " crit" : "";
+      var rank = rankBy[t.match_id+"/"+t.team_id];
+      var availScored = (t.availability_scored === false) ? ' <span class="k">(미채점)</span>' : '';
       return ''
         + '<div class="team '+side+'">'
-        +   '<div class="hd"><span class="tid">'+esc(t.team_id)+'</span>'
+        +   '<div class="hd"><span class="tid">'+(rank?('#'+rank+' '):'')+esc(t.team_id)+'</span>'
         +     '<span class="badge '+side+'">'+(side||"team")+'</span></div>'
-        +   '<div class="availlab">트윈 가용성 (uptime 1h)</div>'
-        +   '<div class="avail '+availClass(t.availability_pct)+'">'+availText(t.availability_pct)+'</div>'
+        +   '<div class="availlab">종합 가중 총점</div>'
+        +   '<div class="avail">'+(typeof t.weighted_total==="number"?t.weighted_total:"—")+'</div>'
         +   '<div class="stats">'
         +     scoreMain
+        +     '<div class="stat"><div class="k">트윈 가용성 (1h)</div><div class="v '+availClass(t.availability_pct)+'">'+availText(t.availability_pct)+availScored+'</div></div>'
         +     '<div class="stat"><div class="k">인젝트 완료</div><div class="v">'+(t.inject_responded||0)+'/'+(t.inject_delivered||0)+' · '+(t.inject_score_pct||0)+'%</div></div>'
         +     '<div class="stat"><div class="k">미종결 인시던트</div><div class="v'+openCls+'">'+(t.open_incidents||0)+'</div></div>'
-        +     '<div class="stat"><div class="k">상대 점수</div><div class="v">'+(side==="red"?(t.blue_score||0):(t.red_score||0))+'</div></div>'
         +   '</div>'
         +   '<div class="scen">'+esc(t.match_id)+' · '+esc(t.scenario_id)+'</div>'
         + '</div>';
@@ -152,7 +158,7 @@
       el("err").textContent = "";
       renderBanner(data.source_status);
       renderMatches(data.matches || []);
-      renderTeams(data.teams || []);
+      renderTeams(data.teams || [], data.ranking || []);
       el("updated").textContent = new Date().toLocaleTimeString();
     }).catch(function(e){
       el("err").textContent = "조회 실패: " + e.message + " (range_control " + BASE + " 확인)";
