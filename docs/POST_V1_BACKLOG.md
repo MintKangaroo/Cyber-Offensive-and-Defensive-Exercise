@@ -11,7 +11,7 @@
 | ID | 잔여 | 위험 수용 사유 | 후속 |
 |---|---|---|---|
 | S-10 | 팀 롤백 시 prod k8s PVC 에 공격자 웹셸 데이터 잔존 가능 | sandbox(emptyDir) 경로는 롤아웃 시 소거되어 안전. prod PVC 경로만 해당하며, v1.0 표준 배포는 docker-compose/sandbox. 리셋 계통(RESET_TARGETS 8종)·다운타임 보정은 FIXED. | prod k8s 롤백 시 PVC purge 옵션(런타임 k8s 검증 필요) |
-| S-11 | 48~72h 다일 내구성 → **SIEM 저장소 rollover/retention 코드 완비(feat/multiday-durability)** + RSS 근본원인 범위 축소. 잔여: 48~72h 실소크 실측(환경 바운드, 아래 §3.1 UNVERIFIED) | mem_limit(70개)·하드닝 오버레이 3경로 로드·event_collector retention 은 코드상 완비. SIEM SQLite(events+FTS, alerts) age-retention + 트윈 access 로그 크기 rotation 신규(아래 §3.1). RSS +13.28 MiB/h 는 fail 임계 20 미만(파국 아님). | 48~72h 실소크(RSS 기울기/디스크 상한 실측) — 환경 바운드 |
+| S-11 | 48~72h 다일 내구성 → **SIEM 저장소 rollover/retention 코드 완비(feat/multiday-durability)** + RSS 기울기 **서빙계층 귀속 확정**(바운디드 소크, py_objects 평탄·§3.1(b)). 잔여: 48~72h 실소크 내구성 실측(환경 바운드, §3.1(c) UNVERIFIED) | mem_limit(70개)·하드닝 오버레이 3경로 로드·event_collector retention 은 코드상 완비. SIEM SQLite(events+FTS, alerts) age-retention + 트윈 access 로그 크기 rotation 신규(아래 §3.1). RSS +13.28 MiB/h 는 fail 임계 20 미만(파국 아님). | 48~72h 실소크(RSS 기울기/디스크 상한 실측) — 환경 바운드 |
 | S-3 (잔여) | (a) 담합 탐지가 `passed` 를 뒤집지 않음 (b) 비-스코프(dev) 제출이 body team_id 신뢰 | (a) 담합은 신호만 방출하고 교관이 판정 = 의도된 SOC 주체성 설계. (b) 실경쟁(`range_scope.is_team()`)에서는 identity 로 override 되어 무력화. dev 모드에서만 신뢰. | 담합 정책의 자동 무효화 옵션(교관 설정), 비-스코프 제출 하드닝 |
 | S-7 (잔여) | 막힌 stage 교관 강제 unlock/skip 엔드포인트 없음 | 크로스오버 정답 제출→해금 경로는 FIXED(완주 가능). 강제 override 는 운영 편의 기능. | 교관 force-advance API |
 | R-1 | ~~`/replay/events` 무한 fetchall 이 대용량 events.db 에서 event_collector OOM~~ → **v1.1.0 에서 FIXED(PR #115)** | Phase 3 리허설 발견(audit/102 §3). | **해소**: reconcile·AAR 을 커서 페이지네이션 `/replay/page` 배치 소비로 전환(`shared/replay_client.py`). 라이브 검증(2500 이벤트 2페이지·OOM 없음). |
@@ -111,6 +111,13 @@ v1.0 에서는 위험 수용하고 아래에 개선 후보로 이관한다(신�
     RSS 상승 시 **어느 카운터가 같이 오르는지**로 (a)파이썬 힙 누수 vs (b)on-disk 성장을 데이터로
     지목한다(py_objects 평탄 + db 성장 = 서빙계층/할당자; py_objects 선형 = 파이썬 누수).
   - 회귀: `tests/unit/test_event_collector_memory.py`(계측 키 존재·경계 구조 상한).
+  - **귀속 확정(2026-10-20, 바운디드 소크 실측)**: 위 `/metrics.memory` 계측으로 서빙 경로를
+    10분(rate 60·SSE 구독자 3) 소크하며 20s 간격 샘플. **정상상태(t=60~601s)에서 RSS +13.3 MiB/h**
+    (문서화된 +13.28 과 일치)인데 **py_objects 는 평탄**(~86.5k, 추세 없음), `sse_buffer_len` 은
+    2000 cap 에 고정, `forward_tasks_inflight` 0~1. 초기 t=0~60s 급증은 워밍업(SSE/워커풀 1회 할당).
+    → **판정: 파이썬 객체 누수 아님(py_objects 평탄). 서빙계층/glibc-allocator RSS 리텐션으로 귀속**
+    (gap4 가설 데이터로 확증). 남은 미확인은 "그 기울기가 48~72h 에 OOM 까지 가는가 / 고원에서
+    멈추는가"의 **내구성**뿐(아래 (c), 환경 바운드).
 
 **(c) 48~72h 내구성 증명 — UNVERIFIED(환경 바운드).** 실 48~72h 소크는 여기서 불가.
   정식 실행 명령:
