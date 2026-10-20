@@ -25,7 +25,7 @@ from typing import Any
 # Canonical contract constants. `services/injects/model.py` and
 # `services/injects/engine.py` re-export these so the runtime and the authoring
 # validator can never drift.
-CHANNELS = ("media", "exec", "regulator", "legal", "customer", "internal")
+CHANNELS = ("media", "exec", "regulator", "legal", "customer", "internal", "forensics")
 TRIGGER_EVENTS = ("answered", "deadline_missed")
 
 
