@@ -101,6 +101,7 @@ from shared.event_client import emit_event as _emit  # noqa: E402
 
 _wu_siem_log = _wu_get_siem_logger("water_utility")
 from shared.event_schema import Event, EventType, RedPhase  # noqa: E402
+from pydantic import BaseModel as _WuBaseModel  # noqa: E402
 
 _ASSET = "water_utility"
 _MB_HOLDING = {0: "CHLORINE_PPM", 1: "INTAKE_PUMP_RATE"}
@@ -267,6 +268,21 @@ def _wu_telemetry():
             {"addr": 5, "name": "CONTAMINATION", "value": int(_wu_bank.holding[5])},
         ],
     }
+
+
+class _WuSafetyOverrideReq(_WuBaseModel):
+    """SIS 무력화 바디(발전소·공용 트윈과 동일): override=True → 투약 인터록 해제."""
+    override: bool = True
+
+
+@app.post("/api/safety/override")
+def _wu_safety_override(req: _WuSafetyOverrideReq):
+    """WTR SIS 무력화 — override=True → coil0(투약 인터록) OFF → 염소 과투입 지속 시 급수 오염 파국.
+    실 Modbus 코일 쓰기와 동일 경로(_wu_on_write)로 처리해 미인가 쓰기 이벤트·SIEM·안전평가 발화."""
+    engaged = not bool(req.override)
+    _wu_bank.coils[0] = engaged
+    _wu_on_write("coil", 0, [engaged])
+    return {"asset": _ASSET, "safety_interlock": engaged, "sis_bypassed": not engaged}
 
 
 if __name__ == "__main__":

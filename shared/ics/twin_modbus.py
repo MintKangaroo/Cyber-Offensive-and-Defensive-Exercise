@@ -20,6 +20,8 @@ import os
 import time
 from dataclasses import dataclass, field
 
+from pydantic import BaseModel
+
 from shared.event_client import emit_event
 from shared.lifespan import on_startup
 from shared.event_schema import Event, EventType, RedPhase
@@ -197,6 +199,21 @@ class _ModbusIcsTwin:
         """HTTP 공격 핸들러가 안전 인터록(SIS)을 켜고 끈다 → 과속/과투입 보호 해제."""
         self.bank.coils[self.cfg.interlock_coil] = bool(engaged)
 
+    def safety_override(self, override: bool) -> dict:
+        """HTTP SIS 무력화 공격 — 발전소 `/api/safety/override` 와 동일 계약.
+        override=True → 인터록 코일 OFF(보호 해제). 실 Modbus 코일 쓰기와 동일 경로(`_on_write`)로
+        처리해 미인가 쓰기 이벤트·SIEM access 로그·즉시 안전평가가 발화하고, 이후 연속 물리 루프가
+        한계 초과 지속 시 손상을 누적해 catastrophic_failure 까지 간다(비발전소 트윈도 파국 도달)."""
+        engaged = not bool(override)
+        self.bank.coils[self.cfg.interlock_coil] = engaged
+        self._on_write("coil", self.cfg.interlock_coil, [engaged])
+        return {"asset": self.cfg.asset, "safety_interlock": engaged, "sis_bypassed": not engaged}
+
+
+class _SafetyOverrideReq(BaseModel):
+    """SIS 무력화 바디(발전소와 동일): override=True → 인터록 해제."""
+    override: bool = True
+
 
 def attach_modbus_ics(app, cfg: ModbusIcsConfig) -> _ModbusIcsTwin:
     """FastAPI 앱에 실 Modbus ICS 배선을 붙인다. 반환된 트윈 객체로 bank/state 접근 가능."""
@@ -209,5 +226,10 @@ def attach_modbus_ics(app, cfg: ModbusIcsConfig) -> _ModbusIcsTwin:
     @app.get("/api/telemetry")
     def _telemetry():
         return twin.telemetry()
+
+    @app.post("/api/safety/override")
+    def _safety_override(req: _SafetyOverrideReq):
+        # 발전소 /api/safety/override 와 동일: override=True → SIS 해제(인터록 OFF) → 파국 경로 개방.
+        return twin.safety_override(req.override)
 
     return twin
