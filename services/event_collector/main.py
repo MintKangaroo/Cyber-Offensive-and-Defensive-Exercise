@@ -391,9 +391,49 @@ async def shutdown():
         _scoring_client = None
 
 
+def _memory_stats() -> dict:
+    """다일 내구성(S-11): RSS 기울기(+13.28 MiB/h WARN) 근본원인 귀속을 위한 계측.
+
+    장시간 소크에서 이 지표들을 샘플링하면 RSS 증가가 (a) Python 힙(인메모리 구조 누수) 인지
+    (b) SQLite 워킹셋(무한 성장하는 on-disk events/stream_journal + WAL 의 mmap/page cache) 인지
+    구분할 수 있다. 추측 대신 다음 소크가 원인을 데이터로 지목하게 하는 게 목적.
+
+    - rss_bytes: 프로세스 RSS(/proc/self/statm · Linux).
+    - py_objects: gc 가 추적하는 파이썬 객체 수(인메모리 누수면 RSS 와 함께 선형 증가).
+    - sse_buffer_len / sse_subscribers: 경계가 있는 SSE 구조의 현재 크기(상한 확인용).
+    - checkpoint_counters: _events_since_checkpoint dict 키 수(시나리오 수로 bounded 임을 가시화).
+    - db_bytes / wal_bytes: events.db 및 WAL 파일 크기(on-disk 무한 성장 = SQLite 워킹셋 가설).
+    - gc_counts: 세대별 미수집 객체 수.
+    """
+    import gc
+    stats: dict = {}
+    try:
+        with open("/proc/self/statm") as f:
+            stats["rss_bytes"] = int(f.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")
+    except Exception:
+        stats["rss_bytes"] = None
+    try:
+        stats["py_objects"] = len(gc.get_objects())
+        stats["gc_counts"] = list(gc.get_count())
+    except Exception:
+        pass
+    stats["sse_buffer_len"] = len(bus._buffer)
+    stats["sse_subscribers"] = bus.subscribers
+    stats["checkpoint_counters"] = len(_events_since_checkpoint)
+    stats["forward_tasks_inflight"] = len(_forward_tasks)
+    stats["ws_clients"] = len(_ws_clients)
+    for label, suffix in (("db_bytes", ""), ("wal_bytes", "-wal"), ("shm_bytes", "-shm")):
+        try:
+            stats[label] = os.path.getsize(str(DB_PATH) + suffix)
+        except OSError:
+            stats[label] = 0
+    return stats
+
+
 @app.get("/metrics")
 def metrics():
-    """감사 3.5: 이벤트 전달 신뢰성 지표. 드롭/스풀/재전달 카운터 + DLQ 잔량."""
+    """감사 3.5: 이벤트 전달 신뢰성 지표. 드롭/스풀/재전달 카운터 + DLQ 잔량.
+    + 다일 내구성(S-11): RSS 기울기 귀속용 메모리 계측(memory 키)."""
     conn = get_db()
     try:
         pending = conn.execute("SELECT COUNT(*) FROM scoring_dlq").fetchone()[0]
@@ -402,7 +442,7 @@ def metrics():
     conn.close()
     # 감사 S-8: SSE 느린 구독자 드롭 카운터도 노출(조용한 유실 가시화).
     return {"service": "event_collector", **_METRICS, "dlq_pending": pending,
-            "sse_dropped": bus.dropped}
+            "sse_dropped": bus.dropped, "memory": _memory_stats()}
 
 
 @app.get("/health")

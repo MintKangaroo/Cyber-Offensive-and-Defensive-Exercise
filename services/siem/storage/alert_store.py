@@ -93,6 +93,16 @@ class AlertStore:
             result.append(d)
         return result
 
+    def prune_older_than(self, cutoff_ts: float) -> int:
+        """다일 내구성(S-11): cutoff_ts(epoch) 이전 알림을 삭제한다. 반환: 삭제된 알림 수."""
+        conn = self._conn()
+        try:
+            cur = conn.execute("DELETE FROM alerts WHERE timestamp < ?", (cutoff_ts,))
+            conn.commit()
+            return cur.rowcount or 0
+        finally:
+            conn.close()
+
     def update_status(self, alert_id: str, status: str) -> bool:
         conn = self._conn()
         cur = conn.execute("UPDATE alerts SET status=? WHERE id=?", (status, alert_id))

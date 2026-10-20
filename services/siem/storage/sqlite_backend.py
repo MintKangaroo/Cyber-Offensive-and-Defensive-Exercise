@@ -209,6 +209,24 @@ class SqliteBackend(StorageBackend):
         conn.close()
         return row["c"]
 
+    def prune_older_than(self, cutoff_ts: float) -> int:
+        """다일 내구성(S-11): cutoff_ts(epoch) 이전 이벤트를 삭제하고 FTS 인덱스를 재동기화한다.
+
+        events_fts 는 content='events' 외부콘텐츠 FTS5 라, events 에서 행을 지우면 FTS 쪽에
+        고아 항목이 남아 이후 MATCH 질의가 깨진다. 삭제가 1건이라도 있으면 'rebuild' 로
+        남은 content 테이블 기준 인덱스를 다시 쌓아 정합성을 보장한다(주기 호출이라 비용 OK).
+        반환: 삭제된 이벤트 수."""
+        conn = self._conn()
+        try:
+            cur = conn.execute("DELETE FROM events WHERE timestamp < ?", (cutoff_ts,))
+            deleted = cur.rowcount or 0
+            if deleted:
+                conn.execute("INSERT INTO events_fts(events_fts) VALUES('rebuild')")
+            conn.commit()
+            return deleted
+        finally:
+            conn.close()
+
     async def health(self) -> dict[str, Any]:
         conn = self._conn()
         total = conn.execute("SELECT COUNT(*) as c FROM events").fetchone()["c"]
