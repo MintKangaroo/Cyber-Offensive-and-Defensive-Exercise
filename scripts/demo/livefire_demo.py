@@ -74,6 +74,42 @@ SECTOR_PLANS: dict[str, SectorPlan] = {
                        {"override": True}, 100),
         ),
     ),
+    # 병원 = 라이브(PHI 탈취 → 주입펌프 과투여 → 투약 인터록 무력화 → 과투여 파국).
+    #   경로/바디는 dashboards/livefire-ops/src/data.ts 의 hospital 체인과 일치.
+    "hospital": SectorPlan(
+        sector="hospital",
+        scenario_id="HOSPITAL-PHI-EXFIL-01",
+        twin_env="HOSPITAL_TWIN_HOST_URL",
+        twin_default="http://localhost:8208",
+        steps=(
+            AttackStep("HIS 환자정보 SQLi", "initial_access", "GET", "/api/his/patient",
+                       {"id": "1 OR 1=1"}, 20),
+            AttackStep("PACS 영상 IDOR 열람", "lateral_movement", "GET", "/api/pacs/study",
+                       {"id": "ST-1001"}, 30),
+            AttackStep("주입펌프 과투여 설정 → RATE 900", "lateral_movement", "POST", "/api/device/infusion",
+                       {"device": "PUMP-07", "rate": 900}, 30),
+            AttackStep("투약 안전인터록(SIS) 무력화 → 과투여 파국", "objective", "POST", "/api/safety/override",
+                       {"override": True}, 100),
+        ),
+    ),
+    # 상수도 = 라이브(SCADA 탈취 → 펌프 제어 → 염소 과투입 → 안전인터록 무력화 → 급수 오염 파국).
+    #   경로/바디는 dashboards/livefire-ops/src/data.ts 의 water 체인과 일치.
+    "water": SectorPlan(
+        sector="water",
+        scenario_id="WATER-POISON-01",
+        twin_env="WATER_TWIN_HOST_URL",
+        twin_default="http://localhost:8203",
+        steps=(
+            AttackStep("SCADA HMI 기본계정", "initial_access", "POST", "/api/hmi/login",
+                       {"username": "operator", "password": "operator"}, 20),
+            AttackStep("배수지 펌프 제어 탈취", "lateral_movement", "POST", "/api/pump/control",
+                       {"pump": "INTAKE-1", "action": "stop"}, 30),
+            AttackStep("염소 과투입 주입", "lateral_movement", "POST", "/api/dosing/chlorine",
+                       {"ppm": 12}, 30),
+            AttackStep("투약 안전인터록(SIS) 무력화 → 급수 오염 파국", "objective", "POST", "/api/safety/override",
+                       {"override": True}, 100),
+        ),
+    ),
 }
 
 
@@ -110,6 +146,43 @@ class DemoResult:
 
 def _log(on_log: Optional[Callable[[str], None]], msg: str) -> None:
     (on_log or print)(msg)
+
+
+def drive_killchain(
+    steps: tuple[AttackStep, ...],
+    http: Any,
+    base: str,
+    *,
+    step_pause: float = 2.0,
+    sleep: Callable[[float], None] = time.sleep,
+    on_log: Optional[Callable[[str], None]] = None,
+) -> tuple[list[str], list[int], list[str]]:
+    """킬체인을 순서대로 구동 — 트윈 공격 엔드포인트를 단계별 호출.
+
+    트윈 미도달은 정직하게 note 로 기록하고 status 0 으로 계속 진행한다(허위 라이브 금지).
+    반환: (구동한 step 라벨, 각 step HTTP status, 이상 note).
+    """
+    labels: list[str] = []
+    statuses: list[int] = []
+    notes: list[str] = []
+    n = len(steps)
+    for i, step in enumerate(steps, 1):
+        _log(on_log, f"▶ [{i}/{n}] {step.phase} · {step.label} (+{step.points})")
+        try:
+            if step.method == "POST":
+                sr = http.post(f"{base}{step.path}", json=step.body, headers={}, timeout=5)
+            else:
+                sr = http.get(f"{base}{step.path}", headers={}, timeout=5)
+            sc = getattr(sr, "status_code", 0)
+        except Exception as e:  # 트윈 미도달 — 정직하게 기록하고 계속
+            sc = 0
+            notes.append(f"step '{step.label}' twin unreachable: {e}")
+        labels.append(step.label)
+        statuses.append(sc)
+        _log(on_log, f"  → twin HTTP {sc}")
+        if i < n:
+            sleep(step_pause)
+    return labels, statuses, notes
 
 
 def run_demo(
@@ -150,23 +223,12 @@ def run_demo(
 
     # 2) 킬체인 구동 — 트윈 물리 게이지 + 이벤트/점수 라이브.
     if drive_attack:
-        base = plan.twin_base()
-        for i, step in enumerate(plan.steps, 1):
-            _log(on_log, f"▶ [{i}/{len(plan.steps)}] {step.phase} · {step.label} (+{step.points})")
-            try:
-                if step.method == "POST":
-                    sr = http.post(f"{base}{step.path}", json=step.body, headers={}, timeout=5)
-                else:
-                    sr = http.get(f"{base}{step.path}", headers={}, timeout=5)
-                sc = getattr(sr, "status_code", 0)
-            except Exception as e:  # 트윈 미도달 — 정직하게 기록하고 계속
-                sc = 0
-                res.notes.append(f"step '{step.label}' twin unreachable: {e}")
-            res.steps_driven.append(step.label)
-            res.step_status.append(sc)
-            _log(on_log, f"  → twin HTTP {sc}")
-            if i < len(plan.steps):
-                sleep(step_pause)
+        labels, statuses, notes = drive_killchain(
+            plan.steps, http, plan.twin_base(),
+            step_pause=step_pause, sleep=sleep, on_log=on_log)
+        res.steps_driven.extend(labels)
+        res.step_status.extend(statuses)
+        res.notes.extend(notes)
 
     # 3) 데모 창 유지(phase_clock 이 계속 흐름).
     if hold_sec > 0:
