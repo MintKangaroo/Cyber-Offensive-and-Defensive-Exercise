@@ -128,6 +128,8 @@ export interface ScoreRow {
   rank: number;
   team: string;
   score: number;
+  atk?: number; // 라이브 공격 점수(있으면 콘솔 리더보드가 실제값 표시)
+  def?: number; // 라이브 방어 점수
   me?: boolean;
 }
 
