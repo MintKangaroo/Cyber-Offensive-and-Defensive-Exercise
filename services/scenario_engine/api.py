@@ -38,7 +38,9 @@ range_scope.install(app, "scenario")
 
 _all_scenarios: dict[str, LoadedScenario] = {}
 _active_trackers: dict[str, object] = {}  # scenario_id -> Single/CrossoverScenarioTracker
+_active_started: dict[str, float] = {}    # scenario_id -> 활성화(활동개시) 시각 → phase_clock 경과 계산
 _ws_task: Optional[asyncio.Task] = None
+_clock_task: Optional[asyncio.Task] = None  # phase_clock 상황판 푸시 루프
 
 
 class ConfigClientAsync:
@@ -118,13 +120,40 @@ async def _event_stream_loop() -> None:
             backoff = min(backoff * 2, 15.0)
 
 
+async def _phase_clock_loop():
+    """활성 시나리오의 투영 타임라인 기반 페이즈 클록을 1초 간격으로 event_collector 상황판에
+    푸시한다(topic=phase_clock). 라이브파이어 콘솔의 타이머 3종(잔여/다음 단계/경과)이 실제로 돈다.
+    활성 시나리오가 없으면 발행하지 않는다(유휴). S2S 는 _emit_event_async 와 동일 규약."""
+    from .authoring import phase_clock as _compute_clock
+    while True:
+        try:
+            now = time.time()
+            for sid, started in list(_active_started.items()):
+                sc = _raw_scenarios().get(sid)
+                if not sc:
+                    continue
+                data = _compute_clock(sc, now - started)
+                data["scenario_id"] = sid
+                try:
+                    async with httpx.AsyncClient(timeout=3.0) as client:
+                        await client.post(f"{EVENT_COLLECTOR_URL}/internal/publish",
+                                          json={"topic": "phase_clock", "data": data},
+                                          headers=service_headers())
+                except httpx.HTTPError:
+                    pass  # 상황판 다운이어도 시나리오 진행 자체는 계속
+        except Exception:
+            pass
+        await asyncio.sleep(1.0)
+
+
 @on_startup(app)
 async def startup():
-    global _ws_task
+    global _ws_task, _clock_task
     _all_scenarios.update(load_all_scenarios(SCENARIOS_DIR))
     from .studio import load_authored
     load_authored()
     _ws_task = asyncio.create_task(_event_stream_loop())
+    _clock_task = asyncio.create_task(_phase_clock_loop())
 
 
 @app.get("/health")
@@ -148,6 +177,7 @@ async def activate_scenario(req: ActivateRequest, authorization: str = Header(de
 
     tracker = make_tracker(loaded, emit_event_fn=_emit_event_async)
     _active_trackers[req.scenario_id] = tracker
+    _active_started[req.scenario_id] = time.time()
 
     await inject_initial_state(loaded, _config_client)
 
@@ -168,6 +198,7 @@ class DeactivateRequest(BaseModel):
 async def deactivate_scenario(req: DeactivateRequest, authorization: str = Header(default="")):
     require_role(authorization, {"instructor"})
     tracker = _active_trackers.pop(req.scenario_id, None)
+    _active_started.pop(req.scenario_id, None)
     if tracker is None:
         raise HTTPException(404, f"scenario '{req.scenario_id}' is not active")
     loaded = _all_scenarios.get(req.scenario_id)

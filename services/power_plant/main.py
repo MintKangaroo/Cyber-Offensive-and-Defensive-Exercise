@@ -81,6 +81,18 @@ async def quarantine_and_killswitch_guard(request: Request, call_next):
 
 app.middleware("http")(make_siem_access_middleware(ASSET_NAME, PP_ROUTE_VULN_MAP))
 
+# 훈련 콘솔(dashboards/livefire-ops)이 라이브 텔레메트리/공격을 브라우저에서 구동할 수 있도록 CORS 허용.
+# event_collector 와 동일 규약: localhost/사설망/tailscale 오리진만(와일드카드 아님).
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|(\d{1,3}\.){3}\d{1,3}|[\w-]+\.ts\.net)(:\d+)?",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 def patched(flag_key: str) -> bool:
     vuln_id = _flag_key_to_vuln_id(flag_key)
@@ -397,6 +409,24 @@ def plc_read():
 
 
 # ---------------------------------------------------------------------------
+# 읽기 전용 라이브 물리 텔레메트리 — 훈련 콘솔(livefire-ops) 게이지용.
+# 실 Modbus 뱅크/연속 프로세스 시뮬 상태를 그대로 노출한다(관측만, 제어 불가).
+# 공격으로 HR0/coil0 가 바뀌면 이 값들이 동역학적으로 움직여 콘솔 게이지에 반영된다.
+# ---------------------------------------------------------------------------
+@app.get("/api/telemetry")
+def telemetry():
+    return {
+        "cmd_rpm": int(_modbus_bank.holding[0]),       # HR0 TURBINE_RPM 명령
+        "coolant_flow": int(_modbus_bank.holding[1]),  # HR1 COOLANT_FLOW
+        "actual_rpm": int(_proc_state.actual_rpm),     # HR2 동역학 응답
+        "coolant_temp": int(_proc_state.coolant_temp), # HR3
+        "damage": int(_proc_state.damage),             # HR4 누적 손상%
+        "interlock": bool(_modbus_bank.coils[0]),      # coil0 SAFETY_INTERLOCK(SIS)
+        "failed": bool(_proc_failed),                  # 파국(지속 과속+SIS 무력화)
+    }
+
+
+# ---------------------------------------------------------------------------
 # PP-002: Default HMI Credentials
 # ---------------------------------------------------------------------------
 @app.post("/api/hmi/login")
@@ -503,6 +533,9 @@ def safety_override(req: SafetyOverride):
     safety_override_state["override"] = req.override
     safety_override_state["approved_by"] = req.approver_token
     plc_registers["SAFETY_INTERLOCK"] = not req.override
+    # HTTP 경로 공격도 물리(Modbus 뱅크 coil0)에 반영 — plc_write/modbus_write 와 동일 일관성.
+    # 이게 있어야 SIS 무력화가 프로세스 시뮬(과속 억제 해제)에 실제로 작용한다.
+    _sync_bank_from_registers()
     return {"patched": patched("PATCH_PP_005"), "state": safety_override_state}
 
 

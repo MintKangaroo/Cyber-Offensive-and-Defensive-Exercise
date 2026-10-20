@@ -1,0 +1,29 @@
+{
+  "name": "livefire-ops",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@cyber-range/command-system": "file:../shared"
+  },
+  "devDependencies": {
+    "axe-core": "^4.10.2",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.5.2",
+    "vite": "^7.3.6",
+    "vitest": "^3.2.7"
+  }
+}

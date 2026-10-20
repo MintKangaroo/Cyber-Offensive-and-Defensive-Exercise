@@ -166,6 +166,37 @@ class _ModbusIcsTwin:
             pass
         asyncio.create_task(self._sim_loop())
 
+    def telemetry(self) -> dict:
+        """라이브파이어 콘솔 게이지용 섹터 무관 텔레메트리(발전소 /api/telemetry 와 동일 규약).
+        연속 물리 루프가 ACTUAL/DAMAGE 를 갱신하므로 폴링하면 게이지가 실제로 움직인다."""
+        c = self.cfg
+        cmd_name = c.reg_names.get(c.cmd_reg, f"HR{c.cmd_reg}")
+        actual_name = c.reg_names.get(c.actual_reg, f"HR{c.actual_reg}")
+        # 명명된 홀딩 레지스터 + 안전 인터록 코일을 그대로 노출(프런트가 섹터별 테이블을 렌더).
+        regs = [{"addr": a, "name": n, "value": int(self.bank.holding[a])}
+                for a, n in sorted(c.reg_names.items())]
+        return {
+            "asset": c.asset,
+            "cmd": int(self.bank.holding[c.cmd_reg]),
+            "cmd_name": cmd_name,
+            "actual": int(self.bank.holding[c.actual_reg]),
+            "actual_name": actual_name,
+            "damage": int(self.bank.holding[c.damage_reg]),
+            "interlock": bool(self.bank.coils[c.interlock_coil]),
+            "failed": bool(self.failed),
+            "redline": c.proc.redline_rpm,
+            "registers": regs,
+        }
+
+    def apply_command(self, value: float) -> None:
+        """HTTP 공격 핸들러가 물리 명령 레지스터(cmd_reg)에 값을 반영 → 연속 물리로 게이지가 움직인다.
+        발전소의 _sync_bank_from_registers 와 같은 역할: HTTP 공격이 실제 물리에 도달하게 한다."""
+        self.bank.holding[self.cfg.cmd_reg] = int(value)
+
+    def set_interlock(self, engaged: bool) -> None:
+        """HTTP 공격 핸들러가 안전 인터록(SIS)을 켜고 끈다 → 과속/과투입 보호 해제."""
+        self.bank.coils[self.cfg.interlock_coil] = bool(engaged)
+
 
 def attach_modbus_ics(app, cfg: ModbusIcsConfig) -> _ModbusIcsTwin:
     """FastAPI 앱에 실 Modbus ICS 배선을 붙인다. 반환된 트윈 객체로 bank/state 접근 가능."""
@@ -174,5 +205,9 @@ def attach_modbus_ics(app, cfg: ModbusIcsConfig) -> _ModbusIcsTwin:
     @on_startup(app)
     async def _startup():
         await twin._start()
+
+    @app.get("/api/telemetry")
+    def _telemetry():
+        return twin.telemetry()
 
     return twin

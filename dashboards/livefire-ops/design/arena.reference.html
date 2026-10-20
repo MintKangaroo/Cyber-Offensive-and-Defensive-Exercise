@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LIVE-FIRE 현황</title>
+<style>@import url('./fonts/fonts.css');
+:root{
+  --space:#050a15;--space2:#081020;--panel:#0b1626cc;--line:#1e3busy;--line:#20395a;
+  --txt:#eaf1fb;--mut:#90a7c6;--sub:#5f7b9e;
+  --cyan:#54b8ec;--blue:#3f7fd6;--purple:#9a7ae6;
+  --orange:#ff7a44;--red:#ff5560;--green:#4fd49a;--amber:#f2c052;
+  --sans:"NanumSquare","Saira Condensed",system-ui,sans-serif;
+  --mono:"JetBrains Mono","Nanum Gothic Coding",ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--space);color:var(--txt);font-family:var(--sans);font-size:13px;-webkit-font-smoothing:antialiased;overflow:hidden}
+.mono{font-family:var(--mono)}
+.app{height:100vh;position:relative;overflow:hidden;
+  background:radial-gradient(1400px 900px at 50% 118%,#0d1b33 0%,#081222 42%,#040810 100%)}
+/* starfield */
+.stars{position:absolute;inset:0;pointer-events:none;
+  background-image:
+   radial-gradient(1.2px 1.2px at 12% 18%,#ffffffaa,transparent),radial-gradient(1px 1px at 22% 44%,#cfe3ff88,transparent),
+   radial-gradient(1.4px 1.4px at 34% 12%,#ffffff99,transparent),radial-gradient(1px 1px at 48% 30%,#bcd6ff77,transparent),
+   radial-gradient(1px 1px at 61% 16%,#ffffff88,transparent),radial-gradient(1.3px 1.3px at 73% 36%,#dcecff99,transparent),
+   radial-gradient(1px 1px at 84% 20%,#ffffff77,transparent),radial-gradient(1.2px 1.2px at 92% 48%,#cfe3ffaa,transparent),
+   radial-gradient(1px 1px at 8% 60%,#ffffff66,transparent),radial-gradient(1px 1px at 40% 62%,#bcd6ff66,transparent),
+   radial-gradient(1.3px 1.3px at 67% 58%,#ffffff88,transparent),radial-gradient(1px 1px at 88% 66%,#cfe3ff77,transparent),
+   radial-gradient(1px 1px at 18% 78%,#ffffff55,transparent),radial-gradient(1px 1px at 55% 82%,#bcd6ff66,transparent),
+   radial-gradient(1.2px 1.2px at 78% 84%,#ffffff77,transparent),radial-gradient(1px 1px at 30% 90%,#cfe3ff55,transparent)}
+/* top title bar */
+.topbar{position:absolute;top:0;left:0;right:0;height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;z-index:9;border-bottom:1px solid #16263c88;background:linear-gradient(180deg,#0a1526dd,transparent)}
+.brand{display:flex;align-items:center;gap:12px}
+.cce{width:30px;height:30px;border-radius:5px;background:linear-gradient(135deg,var(--red) 0 50%,var(--blue) 50% 100%);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#fff;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%)}
+.brand .t1{font-family:var(--mono);font-size:9px;letter-spacing:.24em;color:var(--cyan)}
+.brand .t2{font-weight:800;font-size:16px;letter-spacing:.02em}
+.topright{display:flex;align-items:center;gap:22px;font-family:var(--mono);font-size:10px;color:var(--mut)}
+.topright .live{color:var(--red);display:flex;align-items:center;gap:7px}.topright .live .d{width:7px;height:7px;background:var(--red);border-radius:1px}
+/* radial arena */
+.arena{position:absolute;inset:52px 0 42px 0}
+svg.dome{position:absolute;inset:0;width:100%;height:100%}
+.node{position:absolute;transform:translate(-50%,-50%);text-align:center;z-index:5;width:92px}
+.node .sq{width:11px;height:11px;margin:0 auto;background:var(--orange);box-shadow:0 0 10px #ff7a4488}
+.node .lb{font-family:var(--mono);font-size:8.5px;color:#cdd... ;color:#c7d6ea;margin-top:4px;line-height:1.25;letter-spacing:.01em}
+.node .lb .id{color:var(--sub);font-size:7.5px}
+.node.held .sq{background:var(--cyan);box-shadow:0 0 10px #54b8ec88}
+.node.patched .sq{background:var(--green);box-shadow:0 0 8px #4fd49a77}
+.node.active{width:116px;z-index:7}
+.node.active .sq{width:15px;height:15px;background:var(--red);box-shadow:0 0 16px var(--red),0 0 0 6px #ff556022}
+.node.active .lb{color:#ffd7da;font-size:9.5px;font-weight:700}
+.node.active .ring{position:absolute;left:50%;top:7px;width:46px;height:46px;border:1.5px solid #ff5560aa;border-radius:50%;transform:translate(-50%,-50%)}
+.node.active .ring2{position:absolute;left:50%;top:7px;width:78px;height:78px;border:1px solid #ff556055;border-radius:50%;transform:translate(-50%,-50%)}
+/* overlays */
+.ov{position:absolute;z-index:8;background:linear-gradient(180deg,#0a1526e8,#070f1de8);border:1px solid var(--line);backdrop-filter:blur(2px)}
+.ovh{font-family:var(--mono);font-size:9px;letter-spacing:.16em;color:var(--sub);text-transform:uppercase;padding:7px 11px;border-bottom:1px solid var(--line)}
+/* timers */
+.timers{left:22px;top:70px;width:210px}
+.tmr{padding:9px 12px;border-bottom:1px solid #132339}
+.tmr .k{font-family:var(--mono);font-size:8px;letter-spacing:.18em;color:var(--sub);text-transform:uppercase}
+.tmr .v{font-family:var(--mono);font-size:24px;font-weight:700;letter-spacing:.06em;margin-top:3px;line-height:1}
+.tmr .v.rem{color:var(--cyan)}.tmr .v.nxt{color:var(--red)}
+.tmr.pc{display:flex;align-items:center;justify-content:space-between;border-bottom:none}
+.tmr.pc .leg{display:flex;flex-direction:column;gap:4px;font-family:var(--mono);font-size:9px}
+.tmr.pc .leg span{display:flex;align-items:center;gap:6px;color:var(--mut)}
+.tmr.pc .leg .d{width:7px;height:7px}
+.pcnum{font-family:var(--mono);font-size:24px;font-weight:700;color:var(--amber)}
+/* leaderboard */
+.lb2{left:22px;bottom:54px;width:230px}
+.lbr{display:grid;grid-template-columns:18px 1fr auto;gap:8px;align-items:center;padding:6px 11px;border-bottom:1px solid #132339;font-family:var(--mono);font-size:10.5px}
+.lbr .rk{color:var(--sub)}.lbr .nm{font-family:var(--sans);font-weight:700;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lbr .sc{color:var(--cyan);font-weight:700}
+.lbr.me{background:#1a1016}.lbr.me .nm{color:#ffd7da}.lbr.me .rk{color:var(--red)}.lbr.me .sc{color:var(--red)}
+/* solve log */
+.log{right:22px;top:70px;width:300px;bottom:54px;display:flex;flex-direction:column}
+.logbody{flex:1;overflow:hidden}
+.lge{padding:7px 11px;border-bottom:1px solid #132339;font-family:var(--mono);font-size:10px;display:flex;gap:8px;align-items:baseline}
+.lge .tg{font-size:8px;font-weight:700;padding:1px 5px;flex:none}
+.tg.atk{background:#2a1013;color:#ff9a9e}.tg.def{background:#0c2636;color:#86cef0}
+.lge .tx{color:var(--mut);line-height:1.35}
+.lge .tx b{color:var(--txt)}
+/* bottom ticker */
+.foot{position:absolute;left:0;right:0;bottom:0;height:42px;display:flex;align-items:center;gap:14px;padding:0 22px;z-index:9;border-top:1px solid #16263c88;background:#0a1526cc;font-family:var(--mono);font-size:10.5px;color:var(--mut)}
+.foot .seg{display:flex;align-items:center;gap:8px}.foot .d{width:6px;height:6px;background:var(--red);border-radius:1px}
+.foot b.r{color:var(--red)}.foot .sub{color:var(--sub);letter-spacing:.12em}
+</style></head>
+<body><div class="app">
+  <div class="stars"></div>
+
+  <div class="topbar">
+    <div class="brand"><div class="cce">CC</div><div><div class="t1">CYBER LIVE-FIRE EXERCISE · 2026</div><div class="t2">국가 기반시설 공방 현황 <span style="color:var(--sub);font-weight:400;font-size:12px">· LIVE FIRE STATUS</span></div></div></div>
+    <div class="topright"><span>ROUND 03 / 06</span><span>SECTORS 11 · TARGETS 18</span><span class="live"><span class="d"></span>LIVE</span></div>
+  </div>
+
+  <div class="arena">
+    <svg class="dome" viewBox="0 0 1000 560" preserveAspectRatio="xMidYMax slice">
+      <defs>
+        <radialGradient id="fanW" cx="50%" cy="100%" r="90%"><stop offset="0" stop-color="#ffffff" stop-opacity=".10"/><stop offset="70%" stop-color="#ffffff" stop-opacity=".02"/><stop offset="100%" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+        <radialGradient id="fanB" cx="50%" cy="100%" r="90%"><stop offset="0" stop-color="#3f7fd6" stop-opacity=".16"/><stop offset="100%" stop-color="#3f7fd6" stop-opacity="0"/></radialGradient>
+        <radialGradient id="fanP" cx="50%" cy="100%" r="90%"><stop offset="0" stop-color="#9a7ae6" stop-opacity=".14"/><stop offset="100%" stop-color="#9a7ae6" stop-opacity="0"/></radialGradient>
+      </defs>
+      <!-- fan wedges from apex (500,640) -->
+      <polygon points="500,640 120,40 360,-20" fill="url(#fanW)"/>
+      <polygon points="500,640 430,-30 690,-20" fill="url(#fanB)"/>
+      <polygon points="500,640 720,-20 950,70" fill="url(#fanP)"/>
+      <!-- radial grid lines -->
+      <g stroke="#16304e" stroke-width="1" opacity=".55">
+        <line x1="500" y1="640" x2="90" y2="60"/><line x1="500" y1="640" x2="260" y2="10"/>
+        <line x1="500" y1="640" x2="500" y2="-30"/><line x1="500" y1="640" x2="740" y2="10"/>
+        <line x1="500" y1="640" x2="910" y2="60"/>
+      </g>
+      <!-- concentric arcs -->
+      <g fill="none" stroke="#1d3a5c" stroke-width="1" opacity=".7">
+        <path d="M70 300 A560 560 0 0 1 930 300"/>
+        <path d="M150 400 A430 430 0 0 1 850 400"/>
+        <path d="M230 470 A300 300 0 0 1 770 470"/>
+      </g>
+      <!-- dome rim dashed ticks -->
+      <path d="M40 270 A620 620 0 0 1 960 270" fill="none" stroke="#54b8ec" stroke-width="3" stroke-dasharray="2 9" opacity=".7"/>
+      <path d="M30 255 A650 650 0 0 1 970 255" fill="none" stroke="#2a4straight" stroke="#294c74" stroke-width="1" stroke-dasharray="1 7" opacity=".6"/>
+      <!-- sweep -->
+      <path d="M500 640 L250 70" stroke="#54b8ec" stroke-width="2" opacity=".5"/>
+      <path d="M230 470 A300 300 0 0 1 500 350" fill="none" stroke="#7fd0f5" stroke-width="2" opacity=".6"/>
+    </svg>
+
+    <!-- facility node constellation -->
+    <div class="node active" style="left:63%;top:46%"><span class="ring"></span><span class="ring2"></span><div class="sq"></div><div class="lb">발전소 SIS<br><span class="id">PP-005 ·OBJECTIVE</span></div></div>
+    <div class="node" style="left:53%;top:33%"><div class="sq"></div><div class="lb">발전소 PLC<br><span class="id">PP-001/006</span></div></div>
+    <div class="node held" style="left:40%;top:30%"><div class="sq"></div><div class="lb">원자력 RX-GW<br><span class="id">PATCHED</span></div></div>
+    <div class="node" style="left:70%;top:33%"><div class="sq"></div><div class="lb">전력거래소<br><span class="id">KPX·WEB-015</span></div></div>
+    <div class="node" style="left:30%;top:40%"><div class="sq"></div><div class="lb">상수도 배수<br><span class="id">WTR-002</span></div></div>
+    <div class="node" style="left:47%;top:44%"><div class="sq"></div><div class="lb">LNG ESD<br><span class="id">LNG-001</span></div></div>
+    <div class="node patched" style="left:71%;top:62%"><div class="sq"></div><div class="lb">철도 신호<br><span class="id">RWY-001</span></div></div>
+    <div class="node" style="left:22%;top:52%"><div class="sq"></div><div class="lb">공항 활주로<br><span class="id">AIR-001</span></div></div>
+    <div class="node" style="left:36%;top:55%"><div class="sq"></div><div class="lb">병원 주입펌프<br><span class="id">HSP-003</span></div></div>
+    <div class="node held" style="left:52%;top:58%"><div class="sq"></div><div class="lb">병원 PACS<br><span class="id">HSP-001</span></div></div>
+    <div class="node" style="left:68%;top:57%"><div class="sq"></div><div class="lb">정유 SIS<br><span class="id">REF-002</span></div></div>
+    <div class="node" style="left:83%;top:55%"><div class="sq"></div><div class="lb">데이터센터<br><span class="id">DCX-001</span></div></div>
+    <div class="node" style="left:28%;top:66%"><div class="sq"></div><div class="lb">위성 지상국<br><span class="id">GS-002</span></div></div>
+    <div class="node patched" style="left:44%;top:69%"><div class="sq"></div><div class="lb">제조 PLC<br><span class="id">FAC-001</span></div></div>
+    <div class="node" style="left:60%;top:70%"><div class="sq"></div><div class="lb">변전소 GOOSE<br><span class="id">SUBSTATION</span></div></div>
+    <div class="node held" style="left:75%;top:68%"><div class="sq"></div><div class="lb">금융 코어<br><span class="id">FIN</span></div></div>
+    <div class="node" style="left:50%;top:80%"><div class="sq"></div><div class="lb">송전망 SCADA<br><span class="id">GRID-OPS</span></div></div>
+    <div class="node" style="left:33%;top:80%"><div class="sq"></div><div class="lb">통신 5G 코어<br><span class="id">TELCO</span></div></div>
+
+    <!-- timers overlay -->
+    <div class="ov timers">
+      <div class="ovh">⟡ LIVE FIRE CLOCK</div>
+      <div class="tmr"><div class="k">Time Remaining</div><div class="v rem mono">00:51:32</div></div>
+      <div class="tmr"><div class="k">Next Attack</div><div class="v nxt mono">00:01:27</div></div>
+      <div class="tmr pc"><div><div class="k">Patch Count</div><div class="pcnum mono">07</div></div>
+        <div class="leg"><span><span class="d" style="background:var(--red)"></span>공격 12</span><span><span class="d" style="background:var(--cyan)"></span>방어 07</span></div></div>
+    </div>
+
+    <!-- leaderboard overlay -->
+    <div class="ov lb2">
+      <div class="ovh">⟡ SCOREBOARD · TOP 5</div>
+      <div class="lbr me"><span class="rk">01</span><span class="nm">RED · TEAM-01</span><span class="sc">1,500</span></div>
+      <div class="lbr"><span class="rk">02</span><span class="nm">TriStar Navigator</span><span class="sc">1,370</span></div>
+      <div class="lbr"><span class="rk">03</span><span class="nm">codex-0001</span><span class="sc">1,251</span></div>
+      <div class="lbr"><span class="rk">04</span><span class="nm">EQST</span><span class="sc">1,143</span></div>
+      <div class="lbr"><span class="rk">05</span><span class="nm">로웬</span><span class="sc">1,330</span></div>
+    </div>
+
+    <!-- solve/strike log overlay -->
+    <div class="ov log">
+      <div class="ovh">⟡ SOLVE LOG · 실시간</div>
+      <div class="logbody">
+        <div class="lge"><span class="tg atk">공격</span><span class="tx"><b>RED·TEAM-01</b> 발전소 안전계통(PP-005) 무력화 성공 · +100</span></div>
+        <div class="lge"><span class="tg def">방어</span><span class="tx"><b>원자력</b> RX-GW 취약점 패치 · 감점 방어</span></div>
+        <div class="lge"><span class="tg atk">공격</span><span class="tx"><b>TEAM-04</b> 상수도 배수지(WTR-002) 펌프 제어 탈취</span></div>
+        <div class="lge"><span class="tg atk">공격</span><span class="tx"><b>RED·TEAM-01</b> 발전소 PLC Modbus coil0 측면이동 · +30</span></div>
+        <div class="lge"><span class="tg def">방어</span><span class="tx"><b>철도 신호</b> RWY-001 인터락 우회 차단</span></div>
+        <div class="lge"><span class="tg atk">공격</span><span class="tx"><b>TEAM-02</b> 병원 PACS(HSP-001) 영상 IDOR 열람</span></div>
+        <div class="lge"><span class="tg atk">공격</span><span class="tx"><b>RED·TEAM-01</b> HMI 기본계정(PP-002) 초기 침투 · +20</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="seg"><span class="d"></span><span class="sub">ACTIVE</span> <b class="r">RED·TEAM-01 → 발전소 안전계통</b> coil0 latch OFF · 터빈 과속 5,240 RPM</div>
+    <div class="seg" style="margin-left:auto;color:var(--sub)">event_collector :8010 · SSE /stream · topics events,scores,safety,phase_clock</div>
+  </div>
+</div></body></html>
