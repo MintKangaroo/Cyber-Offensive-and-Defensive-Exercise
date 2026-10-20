@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>전팀 운영 월보드 — Exercise Wallboard</title>
+<style>
+  /* Aligned to the CYBER RANGE COMMAND SYSTEM palette (dashboards/shared/src/tokens.css).
+     Static page: values inlined (no build step) but track the shared tokens exactly.
+     목적: "한 번에 한 팀만" 보던 기존 스코어보드와 달리, 전(全) 매치·전 팀을
+     side-by-side 그리드로 동시에 본다(availability% + red/blue 점수 + 인젝트 + open 인시던트). */
+  :root{
+    --bg:#0a101b; --panel:#101a28; --panel2:#162234; --line:#2b3b50;
+    --fg:#e9eff7; --muted:#a4b4c9; --accent:#6cdaef; --accent2:#75d8ad;
+    --warn:#f3bd63; --crit:#ff858b; --red:#ff858b; --blue:#6cdaef;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:14px/1.5 Pretendard,Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif}
+  header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
+    padding:14px 18px;border-bottom:1px solid var(--line);background:var(--panel2)}
+  header h1{font-size:16px;margin:0;letter-spacing:.5px}
+  header .sub{color:var(--muted);font-size:11px;font-family:ui-monospace,monospace}
+  main{max-width:1280px;margin:0 auto;padding:16px}
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+  input,button{background:var(--panel2);color:var(--fg);border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;font-size:13px}
+  button{cursor:pointer} button:hover{border-color:var(--accent)}
+  .err{color:var(--crit);font-size:13px;min-height:18px;margin-bottom:8px}
+  .banner{font-size:12px;color:var(--warn);margin-bottom:10px;min-height:16px}
+  .matchbar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+  .matchchip{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    padding:8px 12px;font-size:12px}
+  .matchchip b{color:var(--fg)} .matchchip .m{color:var(--muted)}
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+  .team{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;
+    border-top:3px solid var(--line)}
+  .team.red{border-top-color:var(--red)} .team.blue{border-top-color:var(--blue)}
+  .team .hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .team .hd .tid{font-size:15px;font-weight:700}
+  .badge{font-size:11px;letter-spacing:1px;text-transform:uppercase;padding:2px 7px;border-radius:5px;
+    border:1px solid var(--line);color:var(--muted)}
+  .badge.red{color:var(--red);border-color:var(--red)} .badge.blue{color:var(--blue);border-color:var(--blue)}
+  .avail{font-family:ui-monospace,monospace;font-size:30px;font-weight:700;letter-spacing:1px}
+  .avail.ok{color:var(--accent2)} .avail.warn{color:var(--warn)} .avail.crit{color:var(--crit)}
+  .avail.na{color:var(--muted);font-size:18px}
+  .availlab{font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-top:12px}
+  .stat .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .stat .v{font-size:16px;font-weight:600}
+  .stat .v.crit{color:var(--crit)} .stat .v.red{color:var(--red)} .stat .v.blue{color:var(--blue)}
+  .scen{font-size:11px;color:var(--muted);font-family:ui-monospace,monospace;margin-top:10px}
+  .empty{color:var(--muted);padding:30px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>전팀 운영 월보드 · EXERCISE WALLBOARD</h1>
+    <div class="sub">ALL TEAMS · ALL MATCHES — availability · score · injects · incidents</div>
+  </div>
+  <div class="sub">source: <span id="apibase"></span> · updated <span id="updated">--</span></div>
+</header>
+<main>
+  <div class="controls">
+    <input id="range" placeholder="range_id 필터(선택)" />
+    <button id="refresh">새로고침</button>
+    <label class="sub"><input type="checkbox" id="auto" checked /> 5초 자동</label>
+  </div>
+  <div class="err" id="err"></div>
+  <div class="banner" id="banner"></div>
+  <div class="matchbar" id="matchbar"></div>
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="empty" style="display:none">활성 매치/팀이 없습니다. (range_control 에 매치 등록 후 표시)</div>
+</main>
+<script>
+(function(){
+  "use strict";
+  var HOST = location.hostname || "localhost";
+  var RC_PORT = 8055; // range_control published 포트 (docker-compose.yml)
+  var BASE = "http://" + HOST + ":" + RC_PORT;
+  document.getElementById("apibase").textContent = BASE;
+
+  var el = function(id){ return document.getElementById(id); };
+  var pollTimer = null;
+
+  function getJSON(url){
+    return fetch(url, {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      return r.json();
+    });
+  }
+
+  function availClass(v){
+    if(v === null || v === undefined) return "na";
+    if(v >= 99) return "ok";
+    if(v >= 90) return "warn";
+    return "crit";
+  }
+  function availText(v){ return (v === null || v === undefined) ? "N/A" : (v.toFixed(1) + "%"); }
+
+  function esc(s){ return String(s === null || s === undefined ? "" : s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  function renderBanner(ss){
+    if(!ss){ el("banner").textContent=""; return; }
+    var down = Object.keys(ss).filter(function(k){ return ss[k] !== "ready"; });
+    el("banner").textContent = down.length
+      ? ("⚠ 소스 저하(부분 렌더): " + down.join(", "))
+      : "";
+  }
+
+  function renderMatches(matches){
+    el("matchbar").innerHTML = matches.map(function(m){
+      return '<div class="matchchip"><b>'+esc(m.match_id)+'</b> '
+        + '<span class="m">· '+esc(m.range_id)+' · twins '+(m.twins_monitored||0)+'</span> '
+        + '<b class="'+availClass(m.availability_pct)+'">'+availText(m.availability_pct)+'</b></div>';
+    }).join("");
+  }
+
+  function renderTeams(teams){
+    el("empty").style.display = teams.length ? "none" : "block";
+    el("grid").innerHTML = teams.map(function(t){
+      var side = (t.side === "red" || t.side === "blue") ? t.side : "";
+      var scoreMain = side === "red"
+        ? '<div class="stat"><div class="k">RED 점수</div><div class="v red">'+(t.red_score||0)+'</div></div>'
+        : side === "blue"
+        ? '<div class="stat"><div class="k">BLUE 점수</div><div class="v blue">'+(t.blue_score||0)+'</div></div>'
+        : '<div class="stat"><div class="k">점수 R/B</div><div class="v">'+(t.red_score||0)+'/'+(t.blue_score||0)+'</div></div>';
+      var openCls = (t.open_incidents > 0) ? " crit" : "";
+      return ''
+        + '<div class="team '+side+'">'
+        +   '<div class="hd"><span class="tid">'+esc(t.team_id)+'</span>'
+        +     '<span class="badge '+side+'">'+(side||"team")+'</span></div>'
+        +   '<div class="availlab">트윈 가용성 (uptime 1h)</div>'
+        +   '<div class="avail '+availClass(t.availability_pct)+'">'+availText(t.availability_pct)+'</div>'
+        +   '<div class="stats">'
+        +     scoreMain
+        +     '<div class="stat"><div class="k">인젝트 완료</div><div class="v">'+(t.inject_responded||0)+'/'+(t.inject_delivered||0)+' · '+(t.inject_score_pct||0)+'%</div></div>'
+        +     '<div class="stat"><div class="k">미종결 인시던트</div><div class="v'+openCls+'">'+(t.open_incidents||0)+'</div></div>'
+        +     '<div class="stat"><div class="k">상대 점수</div><div class="v">'+(side==="red"?(t.blue_score||0):(t.red_score||0))+'</div></div>'
+        +   '</div>'
+        +   '<div class="scen">'+esc(t.match_id)+' · '+esc(t.scenario_id)+'</div>'
+        + '</div>';
+    }).join("");
+  }
+
+  function load(){
+    var rng = el("range").value.trim();
+    var url = BASE + "/exercise/overview" + (rng ? ("?range_id="+encodeURIComponent(rng)) : "");
+    getJSON(url).then(function(data){
+      el("err").textContent = "";
+      renderBanner(data.source_status);
+      renderMatches(data.matches || []);
+      renderTeams(data.teams || []);
+      el("updated").textContent = new Date().toLocaleTimeString();
+    }).catch(function(e){
+      el("err").textContent = "조회 실패: " + e.message + " (range_control " + BASE + " 확인)";
+    });
+  }
+
+  function restartPoll(){
+    if(pollTimer){ clearInterval(pollTimer); pollTimer = null; }
+    if(el("auto").checked){ pollTimer = setInterval(load, 5000); }
+  }
+
+  el("refresh").addEventListener("click", load);
+  el("range").addEventListener("keydown", function(e){ if(e.key === "Enter") load(); });
+  el("auto").addEventListener("change", restartPoll);
+  load();
+  restartPoll();
+})();
+</script>
+</body>
+</html>

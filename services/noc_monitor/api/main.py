@@ -23,10 +23,23 @@ from shared.service_auth import service_headers
 from shared import scope as range_scope
 from shared.lifespan import on_startup  # noqa: E402
 
+# T-19(백로그): 트윈 health 커버리지 갭 해소. 이전엔 3개 섹터만 모니터링돼
+# 나머지 8개 ICS 트윈(정유·공장·상수도·LNG·철도·공항·데이터센터·병원)의 가용성이
+# 아예 관측되지 않았다 → 전 트윈 편입. (서비스명=내부 DNS, 포트=각 twin main.py 의 uvicorn 포트)
+#   core 트윈: ground_station 8001 / power_plant 8002 / defense_network 8003
+#   ICS 트윈 : 8201~8208 (make_ics_twin, /health 제공)
 TWIN_HEALTH_URLS = {
     "ground_station": "http://ground_station:8001/health",
     "power_plant": "http://power_plant:8002/health",
     "defense_network": "http://defense_network:8003/health",
+    "refinery_plant": "http://refinery_plant:8201/health",
+    "smart_factory": "http://smart_factory:8202/health",
+    "water_utility": "http://water_utility:8203/health",
+    "lng_terminal": "http://lng_terminal:8204/health",
+    "railway_signaling": "http://railway_signaling:8205/health",
+    "airport_ot": "http://airport_ot:8206/health",
+    "datacenter_bms": "http://datacenter_bms:8207/health",
+    "hospital_ot": "http://hospital_ot:8208/health",
 }
 
 app = FastAPI(title="NOC Monitoring API")
