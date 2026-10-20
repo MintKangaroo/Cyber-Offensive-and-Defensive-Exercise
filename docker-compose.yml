@@ -809,7 +809,10 @@ services:
       - EVENT_COLLECTOR_WS_URL=ws://event_collector:8010/ws
       - DATA_DIR=/data
     depends_on: [event_collector, config_service, ground_station, power_plant, defense_network]
-    networks: [range_control, twin_ground_station, twin_power_plant, twin_defense_network]
+    # T-19: 전 트윈 health 모니터링을 위해 모든 twin_* 내부망에 합류(DNS 해석용).
+    # 트윈이 기동돼 있지 않으면 poller 가 graceful 하게 down 으로 기록한다(강제 기동 아님 →
+    # depends_on 에는 추가하지 않아 서브셋 기동을 방해하지 않음).
+    networks: [range_control, twin_ground_station, twin_power_plant, twin_defense_network, twin_refinery_plant, twin_smart_factory, twin_water_utility, twin_lng_terminal, twin_railway_signaling, twin_airport_ot, twin_datacenter_bms, twin_hospital_ot]
 
   # EDR 콘솔 / Live Fire 대시보드는 Node 개발서버로 별도 기동 권장(21번 M4/M6).
 

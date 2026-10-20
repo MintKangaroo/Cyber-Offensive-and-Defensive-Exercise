@@ -40,6 +40,9 @@ PORTAL = os.environ.get("CHALLENGE_PORTAL_URL", "http://localhost:8060")
 EDR = os.environ.get("EDR_BACKEND_URL", "http://localhost:18090")
 INCIDENT = os.environ.get("INCIDENT_URL", "http://localhost:8095")
 INJECTS = os.environ.get("INJECTS_URL", "http://localhost:8096")
+NOC = os.environ.get("NOC_MONITOR_URL", "http://localhost:8070")
+
+from services.range_control.exercise_overview import aggregate_overview  # noqa: E402
 
 # 리셋 대상: (라벨, admin reset URL). 감사 4.6: 이전엔 4개뿐이라 라운드 리셋 후 SIEM 알림·EDR
 # 격리·인시던트·인젝트가 남아 다음 라운드를 오염시켰다 → SOC/블루 계통까지 전면 편입.
@@ -197,6 +200,53 @@ def match_scoreboard(match_id: str):
     except requests.RequestException:
         scores = {}
     return {"match_id": match_id, "scenario_id": m["scenario_id"], "scores": scores}
+
+
+def _best_effort_json(url: str, params: dict | None, source: str, source_status: dict) -> dict:
+    """소스 서비스에서 JSON 을 가져오되, 실패하면 빈 dict + source_status 표기(월보드 부분 렌더).
+    aar_report._get_json 과 동일한 graceful degradation 정신."""
+    try:
+        r = requests.get(url, params=params or {}, timeout=4)
+        r.raise_for_status()
+        return r.json()
+    except (requests.RequestException, ValueError):
+        source_status[source] = "unavailable"
+        return {}
+
+
+@app.get("/exercise/overview")
+def exercise_overview(range_id: Optional[str] = None):
+    """전(全) 팀 동시 운영 현황 — availability% + red/blue 점수 + 인젝트 완료 + open 인시던트를
+    모든 매치/팀에 대해 한 번에 합친 read-only 집계(월보드 데이터 소스).
+
+    각 소스(scoring/injects/incident/noc)는 best-effort 로 조회하며, down 이면 해당 지표만
+    0/None 으로 degrade 하고 source_status 에 'unavailable' 로 표기한다."""
+    matches = [m for m in _load_matches().values() if not range_id or m.get("range_id") == range_id]
+
+    source_status = {"scores": "ready", "injects": "ready", "incidents": "ready", "noc": "ready"}
+
+    # 매치별 scenario_id 를 모아 소스별로 1회씩만 조회(중복 scenario 는 캐시).
+    scores_by_scenario: dict[str, dict] = {}
+    injects_by_scenario: dict[str, dict] = {}
+    incidents_by_scenario: dict[str, dict] = {}
+    for m in matches:
+        scen = m.get("scenario_id") or m.get("match_id")
+        if scen in scores_by_scenario:
+            continue
+        scores_by_scenario[scen] = _best_effort_json(
+            f"{SCORING}/scores", {"scenario_id": scen}, "scores", source_status)
+        injects_by_scenario[scen] = _best_effort_json(
+            f"{INJECTS}/injects/scoreboard", {"scenario_id": scen}, "injects", source_status)
+        incidents_by_scenario[scen] = _best_effort_json(
+            f"{INCIDENT}/incidents", {"scenario_id": scen}, "incidents", source_status)
+
+    noc_status = _best_effort_json(f"{NOC}/noc/status", None, "noc", source_status)
+
+    result = aggregate_overview(
+        matches, scores_by_scenario, injects_by_scenario, incidents_by_scenario,
+        noc_status, source_status)
+    result["generated_at"] = time.time()
+    return result
 
 
 @app.delete("/matches/{match_id}")
