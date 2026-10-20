@@ -21,14 +21,15 @@ type TeamTally = Record<string, { attack: number; defense: number }>;
 const OUR_TEAM = "default"; // 트윈 TEAM_ID 기본값 = 우리 팀(RED·TEAM-01)
 const TEAM_DISPLAY: Record<string, string> = { default: "RED · TEAM-01" };
 
-/** 라이브 점수 누적(team→{attack,defense})에서 스코어보드를 만든다. 비면 정적 폴백. */
-function buildScoreboard(tally: TeamTally): ScoreRow[] {
+/** 라이브 점수 누적(team→{attack,defense})에서 스코어보드를 만든다. 비면 정적 폴백.
+ *  라이브 행은 실제 atk/def 를 담는다(콘솔 리더보드가 score/10 같은 가짜 분할을 쓰지 않도록). */
+export function buildScoreboard(tally: TeamTally): ScoreRow[] {
   const ids = Object.keys(tally);
   if (ids.length === 0) return SCOREBOARD;
   return ids
-    .map((id) => ({ id, score: tally[id].attack + tally[id].defense }))
+    .map((id) => ({ id, score: tally[id].attack + tally[id].defense, atk: tally[id].attack, def: tally[id].defense }))
     .sort((a, b) => b.score - a.score)
-    .map((r, i) => ({ rank: i + 1, team: TEAM_DISPLAY[r.id] ?? r.id, score: r.score, me: r.id === OUR_TEAM }));
+    .map((r, i) => ({ rank: i + 1, team: TEAM_DISPLAY[r.id] ?? r.id, score: r.score, atk: r.atk, def: r.def, me: r.id === OUR_TEAM }));
 }
 
 /** 실행된 단계(done)로부터 킬체인 phase 상태를 계산 — recon 는 항상 완료, impact 는 전단계 완료 시 활성. */

@@ -81,8 +81,8 @@ export function FacilityConsole({
               <div key={r.rank} className={`lbrow ${r.me ? "me" : ""}`}>
                 <span className="rk">{String(r.rank).padStart(2, "0")}</span>
                 <span className="tm">{r.team}</span>
-                <span className="atk">{Math.round(r.score / 10)}</span>
-                <span className="def">{Math.round(r.score / 25)}</span>
+                <span className="atk">{r.atk ?? Math.round(r.score / 10)}</span>
+                <span className="def">{r.def ?? Math.round(r.score / 25)}</span>
               </div>
             ))}
           </div>
