@@ -66,8 +66,47 @@ LIBRARY = [
      "deadline_min": 30,
      "rubric": [{"criterion": "보전 대상 식별", "max": 10},
                 {"criterion": "무결성 절차(해시/체인오브커스터디)", "max": 10}]},
+    # ── 포렌식 채점 트랙(대회급 격차 #3 나머지) — 포렌식 보고서 제출을 루브릭으로 채점 ──
+    {"id": "forensics-triage", "channel": "forensics", "from": "포렌식 리드",
+     "subject": "[포렌식] 1차 분류 보고 요청",
+     "body": "침해 의심 자산의 1차 포렌식 분류가 필요합니다. 초기 IOC·영향 범위·보전 우선순위를 회신하십시오.",
+     "deadline_min": 30,
+     "rubric": [{"criterion": "초기 침해지표(IOC) 식별", "max": 10},
+                {"criterion": "영향 범위 추정", "max": 10},
+                {"criterion": "보전 우선순위", "max": 5}]},
+    {"id": "forensics-evidence", "channel": "forensics", "from": "포렌식 리드",
+     "subject": "[포렌식] 디스크/메모리 증거 수집 보고",
+     "body": "소송·사후분석 대비 증거 수집 보고가 필요합니다. 수집 절차와 무결성 근거를 회신하십시오.",
+     "deadline_min": 45,
+     "rubric": [{"criterion": "수집 절차(해시/무결성)", "max": 10},
+                {"criterion": "체인오브커스터디 기록", "max": 10},
+                {"criterion": "휘발성 순서 준수", "max": 5}]},
+    {"id": "forensics-timeline", "channel": "forensics", "from": "IR 지휘",
+     "subject": "[포렌식] 공격 타임라인 재구성",
+     "body": "최초 침투부터 임팩트까지 공격 타임라인 재구성을 제출하십시오. 근거 로그를 인용하십시오.",
+     "deadline_min": 60,
+     "rubric": [{"criterion": "최초 침투 지점/시각", "max": 10},
+                {"criterion": "측면이동 경로", "max": 10},
+                {"criterion": "근거 로그 인용", "max": 5}]},
 ]
 _LIB_BY_ID = {t["id"]: t for t in LIBRARY}
+
+# 채점 트랙(Locked Shields 식 다(多)카테고리) — 인젝트 channel 을 트랙으로 묶는다.
+# forensics/legal/media 는 대회급 비기술 채점 트랙. exec 는 지휘보고, 그 외는 other.
+CHANNEL_TO_TRACK = {
+    "forensics": "forensics",
+    "legal": "legal",
+    "regulator": "legal",    # 규제 신고 = 법무 트랙
+    "media": "media",
+    "press": "media",
+    "exec": "exec",
+}
+TRACKS = ("forensics", "legal", "media", "exec", "other")
+
+
+def track_for(channel: str) -> str:
+    """인젝트 channel → 채점 트랙. 미매핑 채널은 'other'."""
+    return CHANNEL_TO_TRACK.get((channel or "").lower(), "other")
 
 # 내장 예시 캠페인 — 랜섬웨어 위기: 언론 문의(즉시) → 경영 브리핑(1분) → 규제 통보(경영 응답 후).
 # 경영 브리핑 마감을 놓치면 이사회 긴급 재촉이 자동 에스컬레이션된다.
@@ -334,7 +373,7 @@ def scoreboard(authorization: str = Header(default=""), scenario_id: str = ""):
     for r in rows:
         a = agg.setdefault(r["team_id"], {"team_id": r["team_id"], "delivered": 0, "responded": 0,
                                           "on_time": 0, "late": 0, "expired": 0,
-                                          "score_sum": 0, "max_sum": 0})
+                                          "score_sum": 0, "max_sum": 0, "by_track": {}})
         a["delivered"] += 1
         st = _state(r, now)
         if r["response_at"] is not None:
@@ -342,14 +381,33 @@ def scoreboard(authorization: str = Header(default=""), scenario_id: str = ""):
             a["on_time" if st == "on_time" else "late"] += 1
         elif st == "expired":
             a["expired"] += 1
+        # 트랙별 집계(포렌식/법무/미디어/지휘/기타) — channel 에서 유도.
+        tr = track_for(r.get("channel"))
+        t = a["by_track"].setdefault(tr, {"delivered": 0, "responded": 0, "score_sum": 0, "max_sum": 0})
+        t["delivered"] += 1
+        if r["response_at"] is not None:
+            t["responded"] += 1
         if r["score"] is not None:
             a["score_sum"] += r["score"]; a["max_sum"] += (r["max_score"] or 0)
+            t["score_sum"] += r["score"]; t["max_sum"] += (r["max_score"] or 0)
     for a in agg.values():
         a["response_rate"] = round(100 * a["responded"] / a["delivered"]) if a["delivered"] else 0
         a["on_time_rate"] = round(100 * a["on_time"] / a["responded"]) if a["responded"] else 0
         a["score_pct"] = round(100 * a["score_sum"] / a["max_sum"]) if a["max_sum"] else 0
+        for t in a["by_track"].values():
+            t["score_pct"] = round(100 * t["score_sum"] / t["max_sum"]) if t["max_sum"] else 0
     board = sorted(agg.values(), key=lambda x: (-x["score_pct"], -x["response_rate"]))
-    return {"scoreboard": board}
+    # 트랙 요약(전 팀 합산) — 대회 운영자가 트랙별 진척을 한눈에.
+    track_totals: dict[str, dict] = {}
+    for a in agg.values():
+        for tr, t in a["by_track"].items():
+            s = track_totals.setdefault(tr, {"track": tr, "delivered": 0, "responded": 0, "score_sum": 0, "max_sum": 0})
+            for k in ("delivered", "responded", "score_sum", "max_sum"):
+                s[k] += t[k]
+    for s in track_totals.values():
+        s["score_pct"] = round(100 * s["score_sum"] / s["max_sum"]) if s["max_sum"] else 0
+    tracks = [track_totals[t] for t in TRACKS if t in track_totals]
+    return {"scoreboard": board, "tracks": tracks}
 
 
 def _camp_dict(r: sqlite3.Row) -> dict:
