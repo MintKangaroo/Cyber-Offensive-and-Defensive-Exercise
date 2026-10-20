@@ -3,24 +3,46 @@
 형식: [Keep a Changelog](https://keepachangelog.com/), 버전: [SemVer](https://semver.org/).
 
 ## [Unreleased]
-### Fixed
-- **소크 R-1 종료 게이트 거짓 FAIL(하네스 결함)**: 부하(`soak_load.py`)는
-  `scenario_id='soak-exercise'` 로 이벤트를 발행하는데 종료 게이트(`run_soak.sh`)는 `'soak'` 로
-  reconcile/AAR 을 조회해 **빈 시나리오**를 판정(→ reconcile checked=false·AAR PDF HTTPError →
-  FAIL). 실제 event_collector 는 성장한 events.db replay 후에도 health 200(= R-1 OOM 회귀 아님).
-  `run_soak.sh` 가 `SOAK_SCENARIO_ID` 를 단일 소스로 export 해 부하·게이트가 같은 값을 쓰도록 정렬.
-  정렬된 scenario_id 로 게이트 로직 재실측 → PASS(health 200·reconcile checked=true/5·AAR 200
-  %PDF·health 200). 회귀 테스트 `tests/unit/test_soak_gate_scenario_id.py`.
+
+## [1.2.0] - 2026-10-20
+v1.1.0 이후 — 몰입형 Red 라이브파이어 작전 콘솔 + 라이브 ICS 파국 확장 + 소크/리허설 하네스 보강.
+
 ### Added
-- **Live Fire 데모 오케스트레이터**(`scripts/demo/livefire_demo.py`): scenario_engine 활성화
-  (→ phase_clock 1Hz 타이머) + 섹터 트윈 킬체인 구동(→ 물리 게이지·이벤트·점수)을 원샷으로
-  수행하는 무인 진행기. 회귀 테스트 `tests/unit/test_livefire_demo.py`(8케이스).
+- **몰입형 Red 라이브파이어 작전 콘솔**(`dashboards/livefire-ops`, #122): CCE 방송 톤의 2단 구성
+  (방사형 현황 아레나 + 시설별 작전 콘솔). 발전소 트윈 `/api/telemetry` 폴링·킬체인 EXECUTE STRIKE
+  라이브 연결(이벤트/점수/게이지 실시간), event_collector SSE(events/scores/safety/phase_clock) 구독.
+- **Live Fire 데모 오케스트레이터**(`scripts/demo/livefire_demo.py`, #124): scenario_engine 활성화
+  (→ phase_clock 1Hz 타이머 3종) + 섹터 트윈 킬체인 구동(→ 물리 게이지·이벤트·점수)을 원샷으로
+  수행하는 무인 진행기. 회귀 `tests/unit/test_livefire_demo.py`(8케이스).
+- **비발전소 ICS 트윈 SIS 무력화 → 물리 파국**(#126): 공용 `attach_modbus_ics` 에
+  `POST /api/safety/override`(발전소와 동일 계약) 추가 → hospital/refinery/lng/smart_factory/airport/
+  railway/datacenter 7종 + water_utility 가 인터록 해제 후 `catastrophic_failure` 에 도달. livefire-ops
+  병원·상수도 킬체인을 과투여/과투입 명령 + SIS 무력화로 재구성. 회귀 `test_twin_safety_override.py`(9).
+- **8h 소크 R-1 종료 게이트**(#117): `run_soak.sh` 에 aar_report 포함 + 종료 시 성장한 events.db 에서
+  reconcile·AAR PDF 가 OOM 없이 생성되는지 판정(무한 replay 회귀 방지).
+
+### Fixed
+- **초대형 events.db reconcile/AAR 실용화(R-2/R-3)**(#120): `/replay/page` 복합인덱스
+  `idx_events_scn_ts` + 스냅샷 상한 EXISTS 상관서브쿼리로 페이지당 6.5s→0.28s(~650배, 결과 동일
+  907263=907263). `AAR_MAX_EVENTS` 상한(907k 전량 로드 OOM 방지)·`events_truncated` 정직 표기.
+- **콘솔 리더보드 라이브 점수 표시**(#123): 총점을 `score/10`·`score/25` 로 가짜 분할하던 것을 제거,
+  event_collector `scores` 집계의 실제 공격/방어 점수를 표시. 회귀 `scoreboard.test.tsx`.
+- **소크 R-1 게이트 거짓 FAIL(하네스 scenario_id 불일치)**(#125): 부하 `'soak-exercise'` vs 게이트
+  `'soak'` 가 어긋나 빈 시나리오를 판정(→ reconcile checked=false·AAR HTTPError). `run_soak.sh` 가
+  `SOAK_SCENARIO_ID` 를 단일 소스로 export 해 정렬. 재실측 PASS(reconcile checked=true/5·AAR 200
+  %PDF). event_collector 는 replay 후에도 health 200(= R-1 OOM 회귀 아님). 회귀 `test_soak_gate_scenario_id.py`.
+- **`make rehearsal` host 8080 점유 환경 기동**(#119): edr 호스트 포트 발행만 제거하는
+  `loadtest/rehearsal-override.yml`(내부 8080 유지) → 8080 점유 호스트에서도 무인 리허설 완주.
+
 ### Notes
-- **Phase 4 8h 정식 소크 실측(2026-10-02~03)**: 부하 CLEAN(1,120,816 전송 / 2xx 1,120,814,
-  fail_rate 1.8e-6, 38.9/40 req/s, 재시작·OOM 0). RSS 기울기 — config_service·scoring_engine·
-  siem_api PASS, **event_collector WARN**(+13.28 MiB/h, fail 임계 20 미만) → 관찰 지속(S-11).
-  아래 [1.1.0] 의 "2시간 가속 소크 PASS(누수 없음)" 기록은 2h 가속 런 한정이며, 8h 정식 런의
-  event_collector RSS WARN 가 더 정확한 최신 실측이다(상세 `docs/POST_V1_BACKLOG.md §3`).
+- **8h 정식 소크 실측(2026-10-02~03)**: 부하 CLEAN(1,120,816 전송 / 2xx 1,120,814, fail_rate 1.8e-6,
+  38.9/40 req/s, 재시작·OOM 0). RSS 기울기 — config_service·scoring_engine·siem_api PASS,
+  **event_collector WARN**(+13.28 MiB/h, fail 임계 20 미만; 재시작 시 회수 = 워킹셋) → 관찰 지속(S-11).
+  [1.1.0] 의 "2시간 가속 소크 PASS(누수 없음)" 는 2h 가속 런 한정이며, 8h 정식 런의 WARN 가 더 정확한
+  최신 실측이다(상세 `docs/POST_V1_BACKLOG.md §3`).
+- **UNVERIFIED(정식 재소크 필요)**: 8h 성장 DB 에서의 종료 게이트 AAR HTTPError 의 정확한 원인은
+  클린 DB 미니 재현에서 재현되지 않음(#125 는 게이트가 데이터 있는 시나리오를 조회하도록 정렬).
+- `v1.0.0` 태그는 stale(이력 보존 — [1.1.0] 참고), 이 릴리스가 현재 `main` 기준 최신이다.
 
 ## [1.1.0] - 2026-09-30
 운영 준비 마감 라운드(v1.0 감사 → v1.1). 상세 근거는 `audit/100~103`.
