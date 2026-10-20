@@ -43,6 +43,21 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "incident_cap": 20.0,
 }
 
+# 인젝트 트랙별 상대 중요도(가중총점 격차 #3 (b) 후속 — "트랙별 점수를 세분 반영").
+# injects.main.TRACKS 와 같은 트랙 키(포렌식/법무/미디어/지휘/기타). 이 가중치는
+# weights["inject"] 봉투(기본 200pt)를 트랙 **사이에** 어떻게 배분할지를 정한다:
+# 팀이 실제로 채점받은 트랙들의 score_pct 를 이 가중치로 **가중평균**해 봉투에 곱한다.
+#   - 기본은 모두 1.0(균등) → 어느 한 트랙이 점수 물량으로 총점을 지배하지 못한다.
+#   - 운영자는 EXERCISE_INJECT_WEIGHT_<TRACK> 로 트랙별 중요도를 조정한다(예: 법무 2배).
+# 팀이 안 받은 트랙은 분모에서 빠지므로, 보내지 않은 트랙 때문에 감점되지 않는다.
+DEFAULT_INJECT_TRACK_WEIGHTS: dict[str, float] = {
+    "forensics": 1.0,
+    "legal": 1.0,
+    "media": 1.0,
+    "exec": 1.0,
+    "other": 1.0,
+}
+
 
 def weights_from_env(env: Optional[dict] = None) -> dict[str, float]:
     """EXERCISE_WEIGHT_<KEY>(대문자) 환경변수로 기본 가중치를 덮어쓴다. 없으면 기본값."""
@@ -58,14 +73,53 @@ def weights_from_env(env: Optional[dict] = None) -> dict[str, float]:
     return w
 
 
-def compute_weighted_total(row: dict, weights: dict[str, float]) -> float:
+def inject_track_weights_from_env(env: Optional[dict] = None) -> dict[str, float]:
+    """EXERCISE_INJECT_WEIGHT_<TRACK>(대문자) 환경변수로 트랙 가중치를 덮어쓴다."""
+    src = env if env is not None else os.environ
+    w = dict(DEFAULT_INJECT_TRACK_WEIGHTS)
+    for k in w:
+        v = src.get(f"EXERCISE_INJECT_WEIGHT_{k.upper()}")
+        if v is not None:
+            try:
+                w[k] = float(v)
+            except (TypeError, ValueError):
+                pass
+    return w
+
+
+def _inject_points(row: dict, weights: dict[str, float], track_weights: dict[str, float]) -> float:
+    """인젝트 기여 점수.
+
+    팀이 채점받은 트랙별 score_pct(row["inject_track_pct"]) 가 있으면 트랙 가중치로
+    **가중평균**해 weights["inject"] 봉투에 곱한다(트랙별 세분 반영). 트랙 데이터가
+    없거나 채점된 트랙이 하나도 없으면 전체 inject_score_pct 로 **폴백**한다(하위호환).
+    """
+    track_pct = row.get("inject_track_pct") or {}
+    num = 0.0
+    den = 0.0
+    for tr, pct in track_pct.items():
+        tw = track_weights.get(tr, track_weights.get("other", 1.0))
+        num += tw * float(pct or 0)
+        den += tw
+    if den > 0:
+        return (num / den) / 100.0 * weights["inject"]
+    return (float(row.get("inject_score_pct", 0) or 0) / 100.0) * weights["inject"]
+
+
+def compute_weighted_total(
+    row: dict,
+    weights: dict[str, float],
+    track_weights: Optional[dict[str, float]] = None,
+) -> float:
     """팀 행(aggregate_overview 가 만든 구조)의 단일 가중 총점.
 
     availability_pct 가 숫자일 때만(= NOC 모니터링 중) 가용성 점수를 더한다(미모니터링이면 0).
+    인젝트는 트랙별 score_pct(있으면)를 track_weights 로 가중평균해 반영한다.
     """
+    tw = track_weights if track_weights is not None else dict(DEFAULT_INJECT_TRACK_WEIGHTS)
     avail = row.get("availability_pct")
     avail_pts = (float(avail) / 100.0) * weights["availability"] if isinstance(avail, (int, float)) else 0.0
-    inject_pts = (float(row.get("inject_score_pct", 0) or 0) / 100.0) * weights["inject"]
+    inject_pts = _inject_points(row, weights, tw)
     penalty = min(int(row.get("open_incidents", 0) or 0), int(weights["incident_cap"])) * weights["incident_penalty"]
     total = (
         weights["red"] * float(row.get("red_score", 0) or 0)
@@ -111,6 +165,7 @@ def aggregate_overview(
     noc_status: Optional[dict] = None,
     source_status: Optional[dict] = None,
     weights: Optional[dict] = None,
+    inject_track_weights: Optional[dict] = None,
 ) -> dict:
     """전 팀 운영 현황을 하나의 구조로 합친다.
 
@@ -135,6 +190,7 @@ def aggregate_overview(
       }
     """
     w = weights if weights is not None else dict(DEFAULT_WEIGHTS)
+    tw = inject_track_weights if inject_track_weights is not None else dict(DEFAULT_INJECT_TRACK_WEIGHTS)
     noc_assets = {}
     if isinstance(noc_status, dict):
         noc_assets = noc_status.get("assets") or {}
@@ -185,6 +241,13 @@ def aggregate_overview(
             side = (meta or {}).get("side", "")
             team_score = scores.get(team_id) or {}
             inj = _inject_row_for(team_id, board)
+            # 채점된(max_sum>0) 트랙의 score_pct 만 가중평균 대상에 담는다. 배달만 되고
+            # 루브릭 없는 트랙(max_sum=0)은 전체 score_pct 와 동일하게 총점에서 제외된다.
+            inject_track_pct = {
+                str(trk): int(d.get("score_pct", 0) or 0)
+                for trk, d in (inj.get("by_track") or {}).items()
+                if isinstance(d, dict) and (d.get("max_sum") or 0) > 0
+            }
             row = {
                 "match_id": match_id,
                 "range_id": range_id,
@@ -199,9 +262,10 @@ def aggregate_overview(
                 "inject_delivered": int(inj.get("delivered", 0) or 0),
                 "inject_responded": int(inj.get("responded", 0) or 0),
                 "inject_score_pct": int(inj.get("score_pct", 0) or 0),
+                "inject_track_pct": inject_track_pct,
                 "open_incidents": int(open_counts.get(team_id, 0)),
             }
-            row["weighted_total"] = compute_weighted_total(row, w)
+            row["weighted_total"] = compute_weighted_total(row, w, tw)
             team_rows.append(row)
 
     # 전(全) 팀 단일 랭킹(weighted_total 내림차순, 동점은 team_id 로 안정 정렬).
@@ -216,6 +280,7 @@ def aggregate_overview(
         "teams": team_rows,
         "ranking": ranking,
         "weights": w,
+        "inject_track_weights": tw,
     }
     if source_status is not None:
         result["source_status"] = source_status

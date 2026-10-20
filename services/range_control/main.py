@@ -42,7 +42,9 @@ INCIDENT = os.environ.get("INCIDENT_URL", "http://localhost:8095")
 INJECTS = os.environ.get("INJECTS_URL", "http://localhost:8096")
 NOC = os.environ.get("NOC_MONITOR_URL", "http://localhost:8070")
 
-from services.range_control.exercise_overview import aggregate_overview, weights_from_env  # noqa: E402
+from services.range_control.exercise_overview import (  # noqa: E402
+    aggregate_overview, weights_from_env, inject_track_weights_from_env,
+)
 
 # 리셋 대상: (라벨, admin reset URL). 감사 4.6: 이전엔 4개뿐이라 라운드 리셋 후 SIEM 알림·EDR
 # 격리·인시던트·인젝트가 남아 다음 라운드를 오염시켰다 → SOC/블루 계통까지 전면 편입.
@@ -244,7 +246,8 @@ def exercise_overview(range_id: Optional[str] = None):
 
     result = aggregate_overview(
         matches, scores_by_scenario, injects_by_scenario, incidents_by_scenario,
-        noc_status, source_status, weights=weights_from_env())
+        noc_status, source_status, weights=weights_from_env(),
+        inject_track_weights=inject_track_weights_from_env())
     result["generated_at"] = time.time()
     return result
 

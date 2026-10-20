@@ -11,6 +11,7 @@ mock 된 소스 응답으로 월보드 데이터 소스를 검증한다:
 """
 from services.range_control.exercise_overview import (
     aggregate_overview, compute_weighted_total, weights_from_env, DEFAULT_WEIGHTS,
+    inject_track_weights_from_env, DEFAULT_INJECT_TRACK_WEIGHTS,
 )
 
 
@@ -192,3 +193,64 @@ def test_compute_weighted_total_incident_cap():
            "red_score": 0, "blue_score": 100}
     # 50건이지만 cap 3 → -30
     assert compute_weighted_total(row, w) == 70.0
+
+
+# ── 인젝트 트랙별 세분 반영 (격차 #3 (b) 후속) ────────────────────────────────
+
+def _row_with_tracks(track_pct, inject_score_pct=0):
+    return {"availability_pct": None, "red_score": 0, "blue_score": 0, "open_incidents": 0,
+            "inject_score_pct": inject_score_pct, "inject_track_pct": track_pct}
+
+
+def test_inject_track_equal_weights_averages_tracks():
+    """채점된 트랙 score_pct 의 균등 가중평균 × inject 봉투(200)."""
+    row = _row_with_tracks({"forensics": 90, "legal": 30}, inject_score_pct=75)
+    # (90+30)/2 = 60% → 60%*200 = 120 (전체 75% 폴백(150)과 다름 = 세분 반영이 실제 적용됨)
+    assert compute_weighted_total(row, DEFAULT_WEIGHTS) == 120.0
+
+
+def test_inject_track_custom_weight_shifts_blend():
+    """트랙 가중치(법무 3배)가 혼합을 바꾼다."""
+    row = _row_with_tracks({"forensics": 90, "legal": 30})
+    tw = dict(DEFAULT_INJECT_TRACK_WEIGHTS, legal=3.0)
+    # (1*90 + 3*30)/(1+3) = 45% → 45%*200 = 90
+    assert compute_weighted_total(row, DEFAULT_WEIGHTS, tw) == 90.0
+
+
+def test_inject_track_fallback_without_track_data():
+    """트랙 데이터가 없으면 전체 inject_score_pct 로 폴백(하위호환)."""
+    row = {"availability_pct": None, "red_score": 0, "blue_score": 0, "open_incidents": 0,
+           "inject_score_pct": 75}
+    assert compute_weighted_total(row, DEFAULT_WEIGHTS) == 150.0  # 75%*200
+
+
+def test_inject_track_not_penalized_for_untouched_tracks():
+    """팀이 받지 않은 트랙은 분모에서 빠진다 — 보내지 않은 트랙으로 감점되지 않음."""
+    row = _row_with_tracks({"forensics": 100})  # 포렌식만 받음
+    assert compute_weighted_total(row, DEFAULT_WEIGHTS) == 200.0  # 100%*200, 만점
+
+
+def test_aggregate_extracts_graded_tracks_and_excludes_ungraded():
+    """aggregate 가 by_track 에서 채점된(max_sum>0) 트랙만 뽑아 세분 반영한다."""
+    scores = {"s1": {"teams": {"blue-a": {"red": 0, "blue": 80}}}}
+    injects = {"s1": {"scoreboard": [{
+        "team_id": "blue-a", "delivered": 4, "responded": 3, "score_pct": 75,
+        "by_track": {
+            "forensics": {"delivered": 2, "responded": 2, "score_sum": 90, "max_sum": 100, "score_pct": 90},
+            "legal": {"delivered": 1, "responded": 1, "score_sum": 30, "max_sum": 100, "score_pct": 30},
+            "media": {"delivered": 1, "responded": 0, "score_sum": 0, "max_sum": 0, "score_pct": 0},  # 미채점
+        },
+    }]}}
+    out = aggregate_overview([_match(red=(), blue=("blue-a",))], scores, injects, {}, {}, None)
+    blue = {t["team_id"]: t for t in out["teams"]}["blue-a"]
+    assert blue["inject_track_pct"] == {"forensics": 90, "legal": 30}  # media(미채점) 제외
+    # blue 80 + inject (90+30)/2=60%*200=120, avail 없음 → 200
+    assert blue["weighted_total"] == 200.0
+    assert out["inject_track_weights"] == DEFAULT_INJECT_TRACK_WEIGHTS
+
+
+def test_inject_track_weights_from_env_override_and_bad_value_ignored():
+    w = inject_track_weights_from_env({"EXERCISE_INJECT_WEIGHT_LEGAL": "2.5",
+                                       "EXERCISE_INJECT_WEIGHT_MEDIA": "nope"})
+    assert w["legal"] == 2.5                                  # 덮어씀
+    assert w["media"] == DEFAULT_INJECT_TRACK_WEIGHTS["media"]  # 잘못된 값 무시
