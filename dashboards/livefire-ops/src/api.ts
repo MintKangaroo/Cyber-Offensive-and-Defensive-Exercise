@@ -51,23 +51,43 @@ export function powerRegistersFromTelemetry(t: PowerTelemetry): RegisterRow[] {
   ];
 }
 
-/** 킬체인 단계 실행 — step.action 이 있고 발전소면 실제 트윈 엔드포인트를 호출(라이브).
- *  라이브 미연결 시설은 서사 진행({live:false})만 하고 물리는 움직이지 않는다(정직). */
+/** 섹터별 트윈 베이스 URL. 환경변수 VITE_TWIN_<SECTOR>(예: VITE_TWIN_HOSPITAL) 로 주입.
+ *  미설정이면 발전소만 기본값(POWER_TWIN_URL) — 다른 섹터는 그 트윈을 띄우고 URL 을 주면 라이브. */
+function resolveTwinUrl(sector: string): string | null {
+  const env = import.meta.env as unknown as Record<string, string | undefined>;
+  const fromEnv = env[`VITE_TWIN_${sector.toUpperCase()}`];
+  if (fromEnv) return fromEnv;
+  if (sector === "power") return POWER_TWIN_URL;
+  return null;
+}
+
+function toQuery(body: Record<string, unknown>): string {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(body)) q.set(k, String(v));
+  const s = q.toString();
+  return s ? `?${s}` : "";
+}
+
+/** 킬체인 단계 실행 — step.action 과 섹터 트윈 URL 이 있으면 실제 트윈 엔드포인트를 호출(라이브).
+ *  트윈 미도달 시설은 서사 진행({live:false})만 한다(정직). GET/POST 모두 지원. */
 export async function executeStep(sector: string, step: AttackStep): Promise<{ ok: boolean; live: boolean }> {
-  if (sector === "power" && step.action) {
+  const base = resolveTwinUrl(sector);
+  if (base && step.action) {
+    const { method, path, body } = step.action;
     try {
-      const r = await fetch(`${POWER_TWIN_URL}${step.action.path}`, {
-        method: step.action.method,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(step.action.body),
-        signal: withTimeout(2500),
-      });
-      return { ok: r.ok, live: true };
+      const url = method === "GET" ? `${base}${path}${toQuery(body)}` : `${base}${path}`;
+      const init: RequestInit = { method, signal: withTimeout(2500) };
+      if (method === "POST") {
+        init.headers = { "content-type": "application/json" };
+        init.body = JSON.stringify(body);
+      }
+      await fetch(url, init); // 응답코드와 무관하게 트윈에 도달하면 공격 시도는 라이브
+      return { ok: true, live: true };
     } catch {
-      return { ok: false, live: false };
+      return { ok: true, live: false }; // 트윈 미도달 → 서사 진행
     }
   }
-  return { ok: true, live: false }; // 서사 진행(③에서 실제 엔드포인트 연결 예정)
+  return { ok: true, live: false };
 }
 
 export interface StreamEvent {

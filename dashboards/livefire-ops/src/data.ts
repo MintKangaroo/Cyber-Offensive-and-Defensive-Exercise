@@ -196,11 +196,12 @@ const HOSPITAL: FacilityConfig = {
     { id: "hs4", time: "17:05", phase: "initial_access", text: "병원 IT 진입 · 기본계정", tag: "+20" },
   ],
   footLine: "22:40 · lateral_movement · hospital_ot · medical_device_vlan_pivot · HIGH · phase=lateral_movement",
+  // 실 엔드포인트(VITE_TWIN_HOSPITAL 로 트윈 URL 주입 시 라이브).
   attackChain: [
-    { id: "hs-ia", phase: "initial_access", label: "병원 IT 진입 · 기본계정", vuln: "HSP-000", points: 20 },
-    { id: "hs-pe", phase: "privilege_escalation", label: "HIS 환자정보 SQLi", vuln: "HSP-002", points: 30 },
-    { id: "hs-lm", phase: "lateral_movement", label: "PACS 영상 IDOR · 의료기기 VLAN 피벗", vuln: "HSP-001", points: 30 },
-    { id: "hs-obj", phase: "objective", label: "주입펌프 과투여 → 환자 위해", vuln: "HSP-003", points: 100 },
+    { id: "hs-ia", phase: "initial_access", label: "HIS 환자정보 SQLi", vuln: "HSP-002", points: 20, action: { method: "GET", path: "/api/his/patient", body: { id: "1 OR 1=1" } } },
+    { id: "hs-lm1", phase: "lateral_movement", label: "PACS 영상 IDOR 열람", vuln: "HSP-001", points: 30, action: { method: "GET", path: "/api/pacs/study", body: { id: "ST-1001" } } },
+    { id: "hs-lm2", phase: "lateral_movement", label: "널스콜 알람 무력화", vuln: "HSP-005", points: 30, action: { method: "POST", path: "/api/nursecall/override", body: { override: true } } },
+    { id: "hs-obj", phase: "objective", label: "주입펌프 과투여 → 환자 위해", vuln: "HSP-003", points: 100, action: { method: "POST", path: "/api/device/infusion", body: { device: "PUMP-07", rate: 900 } } },
   ],
 };
 
@@ -248,11 +249,12 @@ const WATER: FacilityConfig = {
     { id: "wt4", time: "27:30", phase: "recon", text: "정수장 자산 매핑", tag: "—" },
   ],
   footLine: "33:02 · lateral_movement · water_utility · chlorine_overdose_reservoir_overflow · HIGH · phase=lateral_movement",
+  // 실 엔드포인트(VITE_TWIN_WATER 로 트윈 URL 주입 시 라이브).
   attackChain: [
-    { id: "wt-ia", phase: "initial_access", label: "SCADA HMI 기본계정", vuln: "WTR-003", points: 20 },
-    { id: "wt-lm1", phase: "lateral_movement", label: "배수지 펌프 제어 탈취", vuln: "WTR-002", points: 30 },
-    { id: "wt-lm2", phase: "lateral_movement", label: "염소 주입 조작", vuln: "WTR-001", points: 30 },
-    { id: "wt-obj", phase: "objective", label: "배수지 범람 → 급수 중단", vuln: "WTR-004", points: 100 },
+    { id: "wt-ia", phase: "initial_access", label: "SCADA HMI 기본계정", vuln: "WTR-003", points: 20, action: { method: "POST", path: "/api/hmi/login", body: { username: "operator", password: "operator" } } },
+    { id: "wt-lm1", phase: "lateral_movement", label: "배수지 펌프 제어 탈취", vuln: "WTR-002", points: 30, action: { method: "POST", path: "/api/pump/control", body: { pump: "INTAKE-1", action: "stop" } } },
+    { id: "wt-lm2", phase: "lateral_movement", label: "염소 과투입 주입", vuln: "WTR-001", points: 30, action: { method: "POST", path: "/api/dosing/chlorine", body: { ppm: 12 } } },
+    { id: "wt-obj", phase: "objective", label: "배수지 범람 → 급수 중단", vuln: "WTR-004", points: 100, action: { method: "POST", path: "/api/tank/setpoint", body: { level: 110 } } },
   ],
 };
 

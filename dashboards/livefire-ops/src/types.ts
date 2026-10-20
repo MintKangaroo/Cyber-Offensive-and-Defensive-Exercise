@@ -100,7 +100,7 @@ export interface AttackStep {
   label: string;
   vuln: string;
   points: number;
-  action?: { method: "POST"; path: string; body: Record<string, unknown> };
+  action?: { method: "GET" | "POST"; path: string; body: Record<string, unknown> };
 }
 
 export type IconKind =

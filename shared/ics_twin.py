@@ -73,6 +73,17 @@ def make_ics_twin(asset_name: str, title: str, vulns: list[Vuln]) -> FastAPI:
 
     app.middleware("http")(make_siem_access_middleware(asset_name, route_map))
 
+    # 훈련 콘솔(dashboards/livefire-ops)이 브라우저에서 라이브 공격/관측을 구동할 수 있도록 CORS 허용.
+    # event_collector·power_plant 와 동일 규약: localhost/사설망/tailscale 오리진만(와일드카드 아님).
+    from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|(\d{1,3}\.){3}\d{1,3}|[\w-]+\.ts\.net)(:\d+)?",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     @app.get("/health")
     def health():
         return {"status": "ok", "service": asset_name}
