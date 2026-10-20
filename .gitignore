@@ -28,5 +28,8 @@ challenges/*/*/deploy/*.csv
 challenges/*/*/deploy/*.zip
 .coverage
 
+# N팀 A/D 프로비저닝 제너레이터 산출물(생성기 .py 만 커밋, 렌더 결과는 온디맨드)
+infra/match/generated/
+
 # Claude Code local state (worktrees, session)
 .claude/
