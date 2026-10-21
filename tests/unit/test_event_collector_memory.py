@@ -5,8 +5,12 @@
 소크가 (a) 파이썬 힙 누수 인지 (b) SQLite on-disk 성장 인지 데이터로 지목할 수 있게 한다.
 """
 import importlib
+import re
+from pathlib import Path
 
 import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture
@@ -52,3 +56,17 @@ def test_sse_buffer_is_bounded(ec):
         ec.bus.publish("events", {"i": i})
     assert len(ec.bus._buffer) == cap
     assert ec._memory_stats()["sse_buffer_len"] == cap
+
+
+def test_dockerfile_caps_malloc_arenas():
+    """S-11 하드닝 회귀 가드: 이미지가 glibc malloc arena 상한(MALLOC_ARENA_MAX)을 둔다.
+
+    멀티스레드 서빙(uvicorn+배치라이터+httpx)에서 스레드당 arena 단편화로 RSS 가 부푸는 것을
+    막는다. A/B 소크 실측(정상상태 slope baseline +4.0 → arena2 ~0 MiB/h)으로 정당화됨.
+    libc 초기화 시점에 읽히므로 반드시 프로세스 시작 전 ENV 로 고정돼 있어야 한다.
+    """
+    dockerfile = (REPO_ROOT / "services" / "event_collector" / "Dockerfile").read_text()
+    m = re.search(r"^ENV\s+MALLOC_ARENA_MAX=(\d+)\s*$", dockerfile, re.MULTILINE)
+    assert m, "event_collector Dockerfile must set ENV MALLOC_ARENA_MAX"
+    value = int(m.group(1))
+    assert 1 <= value <= 4, f"MALLOC_ARENA_MAX should be a small cap (got {value})"
