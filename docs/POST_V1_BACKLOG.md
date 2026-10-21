@@ -11,7 +11,7 @@
 | ID | 잔여 | 위험 수용 사유 | 후속 |
 |---|---|---|---|
 | S-10 | 팀 롤백 시 prod k8s PVC 에 공격자 웹셸 데이터 잔존 가능 | sandbox(emptyDir) 경로는 롤아웃 시 소거되어 안전. prod PVC 경로만 해당하며, v1.0 표준 배포는 docker-compose/sandbox. 리셋 계통(RESET_TARGETS 8종)·다운타임 보정은 FIXED. | prod k8s 롤백 시 PVC purge 옵션(런타임 k8s 검증 필요) |
-| S-11 | 48~72h 다일 내구성 → **SIEM 저장소 rollover/retention 코드 완비(feat/multiday-durability)** + RSS 기울기 **서빙계층 귀속 확정**(바운디드 소크, py_objects 평탄·§3.1(b)). 잔여: 48~72h 실소크 내구성 실측(환경 바운드, §3.1(c) UNVERIFIED) | mem_limit(70개)·하드닝 오버레이 3경로 로드·event_collector retention 은 코드상 완비. SIEM SQLite(events+FTS, alerts) age-retention + 트윈 access 로그 크기 rotation 신규(아래 §3.1). RSS +13.28 MiB/h 는 fail 임계 20 미만(파국 아님). | 48~72h 실소크(RSS 기울기/디스크 상한 실측) — 환경 바운드 |
+| S-11 | 48~72h 다일 내구성 → **SIEM 저장소 rollover/retention 코드 완비(feat/multiday-durability)** + RSS 기울기 **서빙계층 귀속 확정**(바운디드 소크, py_objects 평탄·§3.1(b)). 잔여: 48~72h 실소크 내구성 실측(환경 바운드, §3.1(c) UNVERIFIED) | mem_limit(70개)·하드닝 오버레이 3경로 로드·event_collector retention 은 코드상 완비. SIEM SQLite(events+FTS, alerts) age-retention + 트윈 access 로그 크기 rotation 신규(아래 §3.1). RSS +13.28 MiB/h 는 fail 임계 20 미만(파국 아님). **A/B 소크(§3.1(d)): happy-path 서빙은 고원(plateau)·+13 은 워밍업 산물·`MALLOC_ARENA_MAX=2` 하드닝 적용.** | 48~72h 실소크(DLQ/재시도 경로 포함) — 환경 바운드 |
 | S-3 (잔여) | (a) 담합 탐지가 `passed` 를 뒤집지 않음 (b) 비-스코프(dev) 제출이 body team_id 신뢰 | (a) 담합은 신호만 방출하고 교관이 판정 = 의도된 SOC 주체성 설계. (b) 실경쟁(`range_scope.is_team()`)에서는 identity 로 override 되어 무력화. dev 모드에서만 신뢰. | 담합 정책의 자동 무효화 옵션(교관 설정), 비-스코프 제출 하드닝 |
 | S-7 (잔여) | 막힌 stage 교관 강제 unlock/skip 엔드포인트 없음 | 크로스오버 정답 제출→해금 경로는 FIXED(완주 가능). 강제 override 는 운영 편의 기능. | 교관 force-advance API |
 | R-1 | ~~`/replay/events` 무한 fetchall 이 대용량 events.db 에서 event_collector OOM~~ → **v1.1.0 에서 FIXED(PR #115)** | Phase 3 리허설 발견(audit/102 §3). | **해소**: reconcile·AAR 을 커서 페이지네이션 `/replay/page` 배치 소비로 전환(`shared/replay_client.py`). 라이브 검증(2500 이벤트 2페이지·OOM 없음). |
@@ -130,6 +130,23 @@ v1.0 에서는 위험 수용하고 아래에 개선 후보로 이관한다(신�
   (fail 임계 20 MiB/h, warn 5) — 이번에 추가한 `/metrics` `memory` 를 병행 샘플링해 귀속;
   (2) OOM/재시작 0; (3) events.db/siem.db/access 로그가 retention·rotation 상한 아래로 묶이는지
   디스크 실측; (4) R-1 종료 게이트 PASS.
+
+**(d) A/B 소크(2026-10-21) — happy-path 서빙은 고원(plateau) 실증, +13 은 워밍업 산물, arena cap 적용.**
+  event_collector 를 격리 구동(dummy scoring sink=항상 200)하고 **증폭 부하(~320–360 EPS, 소크
+  기본 40 의 ~8배)**로 15분×2 arm, 워밍업 4분 폐기 후 정상상태 기울기를 선형적합:
+  - **baseline**: 정상상태 RSS **+4.0 MiB/h**(76.3→77.2, 12분간 <1 MiB·사실상 노이즈), py_objects 평탄
+    (~90k), **events.db 27→263 MiB 성장 동안 RSS 평탄** → on-disk 성장이 RSS 를 끌어올리지 않음 재확인.
+  - **`MALLOC_ARENA_MAX=2`**: 정상상태 **−0.04 MiB/h**(완전 평탄)·절대 RSS ~1 MiB 낮음·회귀 없음.
+  - **해석(정직)**: (b)의 바운디드 10분 소크 "+13.3 MiB/h"는 **워밍업 cutoff(t=60s)가 짧아** 램프
+    꼬리가 '정상상태' 창에 샜던 산물이다(RSS 는 ~90s 까지 66→76 상승 후 고원). 적정 워밍업(4분)+
+    장창(12분)+8배 부하에서도 happy-path 서빙 루프는 **고원**이며 **무한 누수 증거 없음**.
+  - **조치(시프트됨)**: glibc arena 상한 `ENV MALLOC_ARENA_MAX=2` 를 event_collector Dockerfile 에
+    고정(A/B 로 평탄화·무회귀 확인·이미지 baked 검증). 회귀가드
+    `test_event_collector_memory.py::test_dockerfile_caps_malloc_arenas`.
+  - **남은 의심(정직)**: 이 A/B 는 sink 가 항상 200 이라 **포워드 실패→DLQ→재시도 경로는 미자극**.
+    8h 소크의 76→157 MiB 는 그 경로(scoring 간헐 실패 시 scoring_dlq 누적·재시도 할당)에서 왔을
+    가능성이 남는다 → **다음 프로브**: sink 가 일부(예 5–10%) 5xx/타임아웃 반환하도록 해 DLQ/재시도
+    arm 을 A/B. 48~72h 전체(실 스택·DLQ 동역학)는 여전히 (c) 환경 바운드.
 
 ---
 
