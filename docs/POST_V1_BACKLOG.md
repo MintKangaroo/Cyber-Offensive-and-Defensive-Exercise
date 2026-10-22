@@ -11,7 +11,7 @@
 | ID | 잔여 | 위험 수용 사유 | 후속 |
 |---|---|---|---|
 | S-10 | 팀 롤백 시 prod k8s PVC 에 공격자 웹셸 데이터 잔존 가능 | sandbox(emptyDir) 경로는 롤아웃 시 소거되어 안전. prod PVC 경로만 해당하며, v1.0 표준 배포는 docker-compose/sandbox. 리셋 계통(RESET_TARGETS 8종)·다운타임 보정은 FIXED. | prod k8s 롤백 시 PVC purge 옵션(런타임 k8s 검증 필요) |
-| S-11 | 48~72h 다일 내구성 → **SIEM 저장소 rollover/retention 코드 완비(feat/multiday-durability)** + RSS 기울기 **서빙계층 귀속 확정**(바운디드 소크, py_objects 평탄·§3.1(b)). 잔여: 48~72h 실소크 내구성 실측(환경 바운드, §3.1(c) UNVERIFIED) | mem_limit(70개)·하드닝 오버레이 3경로 로드·event_collector retention 은 코드상 완비. SIEM SQLite(events+FTS, alerts) age-retention + 트윈 access 로그 크기 rotation 신규(아래 §3.1). RSS +13.28 MiB/h 는 fail 임계 20 미만(파국 아님). **A/B 소크(§3.1(d)): happy-path 서빙은 고원(plateau)·+13 은 워밍업 산물·`MALLOC_ARENA_MAX=2` 하드닝 적용.** | 48~72h 실소크(DLQ/재시도 경로 포함) — 환경 바운드 |
+| S-11 | 48~72h 다일 내구성 → **SIEM 저장소 rollover/retention 코드 완비(feat/multiday-durability)** + RSS 기울기 **서빙계층 귀속 확정**(바운디드 소크, py_objects 평탄·§3.1(b)). 잔여: 48~72h 실소크 내구성 실측(환경 바운드, §3.1(c) UNVERIFIED) | mem_limit(70개)·하드닝 오버레이 3경로 로드·event_collector retention 은 코드상 완비. SIEM SQLite(events+FTS, alerts) age-retention + 트윈 access 로그 크기 rotation 신규(아래 §3.1). RSS +13.28 MiB/h 는 fail 임계 20 미만(파국 아님). **A/B 소크(§3.1(d)): happy-path 서빙은 고원(plateau)·+13 은 워밍업 산물·`MALLOC_ARENA_MAX=2` 하드닝 적용. fault-주입 A/B(§3.1(e)): 8h RSS 성장의 근본원인=인플라이트 포워딩 태스크 무한 누적 규명 → `_dispatch_forward` 인플라이트 상한(초과분 DLQ shed)으로 수정, faulty +324→+3.9 MiB/h·inflight 17.6k→509 실증.** | 48~72h 실소크 — 환경 바운드 |
 | S-3 (잔여) | (a) 담합 탐지가 `passed` 를 뒤집지 않음 (b) 비-스코프(dev) 제출이 body team_id 신뢰 | (a) 담합은 신호만 방출하고 교관이 판정 = 의도된 SOC 주체성 설계. (b) 실경쟁(`range_scope.is_team()`)에서는 identity 로 override 되어 무력화. dev 모드에서만 신뢰. | 담합 정책의 자동 무효화 옵션(교관 설정), 비-스코프 제출 하드닝 |
 | S-7 (잔여) | 막힌 stage 교관 강제 unlock/skip 엔드포인트 없음 | 크로스오버 정답 제출→해금 경로는 FIXED(완주 가능). 강제 override 는 운영 편의 기능. | 교관 force-advance API |
 | R-1 | ~~`/replay/events` 무한 fetchall 이 대용량 events.db 에서 event_collector OOM~~ → **v1.1.0 에서 FIXED(PR #115)** | Phase 3 리허설 발견(audit/102 §3). | **해소**: reconcile·AAR 을 커서 페이지네이션 `/replay/page` 배치 소비로 전환(`shared/replay_client.py`). 라이브 검증(2500 이벤트 2페이지·OOM 없음). |
@@ -143,10 +143,33 @@ v1.0 에서는 위험 수용하고 아래에 개선 후보로 이관한다(신�
   - **조치(시프트됨)**: glibc arena 상한 `ENV MALLOC_ARENA_MAX=2` 를 event_collector Dockerfile 에
     고정(A/B 로 평탄화·무회귀 확인·이미지 baked 검증). 회귀가드
     `test_event_collector_memory.py::test_dockerfile_caps_malloc_arenas`.
-  - **남은 의심(정직)**: 이 A/B 는 sink 가 항상 200 이라 **포워드 실패→DLQ→재시도 경로는 미자극**.
-    8h 소크의 76→157 MiB 는 그 경로(scoring 간헐 실패 시 scoring_dlq 누적·재시도 할당)에서 왔을
-    가능성이 남는다 → **다음 프로브**: sink 가 일부(예 5–10%) 5xx/타임아웃 반환하도록 해 DLQ/재시도
-    arm 을 A/B. 48~72h 전체(실 스택·DLQ 동역학)는 여전히 (c) 환경 바운드.
+  - **남은 의심(정직) → (e)에서 규명·수정됨**: 이 A/B 는 sink 가 항상 200 이라 **포워드 실패→DLQ→
+    재시도 경로는 미자극**이었다. 8h 소크의 76→157 MiB 는 그 경로에서 왔을 가능성이 남아 있었고,
+    (e)의 fault-주입 A/B 로 **근본원인(인플라이트 포워딩 태스크 무한 누적)을 지목·수정**했다.
+
+**(e) DLQ/재시도 경로 fault-주입 A/B(2026-10-22) — 근본원인 규명 + 수정 실증(백프레셔).**
+  (d)의 "남은 의심"을 따라 scoring sink 가 **10% HTTP 500 + 5% 타임아웃**을 반환하도록 해 포워드
+  실패→재시도(백오프)→DLQ 스풀→드레인 재전달 경로를 가동하고, control(항상 200) 대비 600s×2 arm,
+  워밍업 3분 폐기 후 정상상태 기울기를 선형적합(prod 기본 `SCORING_FORWARD_ATTEMPTS=3`·drain 10s,
+  `MALLOC_ARENA_MAX=2` 기준선 위에서). `services.event_collector.main` 실모듈 격리 구동.
+  - **근본원인(수정 전 실측)**: faulty arm 정상상태 **+323.6 MiB/h**(control +0.76). `_forward_tasks`
+    inflight **0→17,626**·py_objects 84k→**432k**·RSS 66→**178.6 MiB** 단조 상승(미평탄). 반면
+    **`dlq_pending` 은 28 로 bounded** → 누수원은 DLQ 테이블이 아니라 **인메모리 fire-and-forget
+    포워딩 태스크 백로그**. `/events` 핸들러가 신규 이벤트마다 `_forward_to_scoring_engine` 태스크를
+    **무조건 생성**했고, `_forward_sem`(64)은 '동시 HTTP 수'만 제한할 뿐 태스크 '생성'은 막지 못해
+    (유입 EPS > 세마포어 처리율)이 지속되면 무한 누적. (이것이 8h 소크 76→157 MiB 의 유력 메커니즘.)
+  - **수정**: `_dispatch_forward()` 신설 — 인플라이트 태스크가 상한(`FORWARD_MAX_INFLIGHT`, 기본 512)에
+    도달하면 태스크를 더 만들지 않고 **내구 DLQ 로 직접 스풀**(shed). DLQ 는 on-disk·bounded 이며
+    드레인 루프가 scoring 복구 시 재전달 → **무손실 유지하면서 RSS 를 bounded 로**. 오해를 부르던
+    기존 주석(세마포어가 누적을 막는다)도 정정.
+  - **수정 후 실측(동일 부하)**: faulty arm 정상상태 **+3.92 MiB/h**(control +5.4 와 구별 불가, ~82×
+    감소)·inflight **509 에 고정**(cap 512)·RSS 66→**81.0 MiB 평탄**·py_objects 84k→**96k 평탄**.
+    초과분 6,672 건은 메모리가 아닌 `scoring_dlq`(on-disk, 드레인 1,851 재전달)로 흘러 0 유실.
+  - **회귀가드**: `test_event_loss_visibility.py::test_forward_dispatch_bounds_inflight_and_sheds_to_dlq`
+    (상한 초과분이 태스크 대신 DLQ 로 shed·무손실)·`..._creates_tasks_under_cap`(거짓 shed 방지).
+  - **남은 의심(정직)**: 수정은 RSS(=S-11 관심사)를 bounded 로 만든다. 단 scoring 이 **장기 완전 중단**
+    되면 `scoring_dlq` 가 복구 전까지 **on-disk** 로 성장한다(RAM 아님·디스크 바운드·무손실 의도된 거동;
+    DLQ 자체의 age/크기 retention 은 향후 과제). 48~72h 전체(실 스택·DLQ 동역학)는 여전히 (c) 환경 바운드.
 
 ---
 

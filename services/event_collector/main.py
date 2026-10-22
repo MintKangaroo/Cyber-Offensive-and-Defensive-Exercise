@@ -318,6 +318,7 @@ _METRICS = {
     "dlq_spooled": 0,        # 즉시 전달 최종 실패 → DLQ 적재
     "dlq_redelivered": 0,    # DLQ에서 재전달 성공
     "dlq_drop": 0,           # (예약) 영구 실패로 폐기
+    "forward_shed_to_dlq": 0,  # 인플라이트 상한 초과로 태스크 대신 DLQ 직접 스풀(백프레셔)
     "ingest_batches": 0,          # 그룹 커밋 배치 수(=커밋 횟수)
     "ingest_committed": 0,        # 배치로 신규 저장된 이벤트 수
     "ingest_batch_max_observed": 0,  # 관측된 최대 배치 크기(그룹 커밋 효과 지표)
@@ -481,9 +482,7 @@ async def ingest_event(event: Event, authorization: str = Header(default="")):
 
     # Scoring Engine에 전달 (신규 이벤트일 때만; 실패해도 이벤트 저장은 이미 완료됨)
     if not is_duplicate:
-        task = asyncio.create_task(_forward_to_scoring_engine(event))
-        _forward_tasks.add(task)               # 종료 시 취소할 수 있게 추적
-        task.add_done_callback(_forward_tasks.discard)
+        _dispatch_forward(event)
 
     return {"stored": not is_duplicate, "duplicate": is_duplicate, "event_id": event.event_id}
 
@@ -507,10 +506,19 @@ def _lookup_matched_timestamp(matched_event_id: str) -> Optional[float]:
 
 
 # scoring 포워딩 최적화(U-3 100 EPS 절벽 해소): ① 호출마다 httpx.AsyncClient를 새로 만들면
-# 연결 처닝·fd 고갈이 난다 → 연결 풀을 갖춘 공유 클라이언트를 재사용. ② fire-and-forget
-# 포워딩이 scoring 지연 시 무제한 누적되지 않도록 세마포어로 동시성을 제한(초과분은 대기).
+# 연결 처닝·fd 고갈이 난다 → 연결 풀을 갖춘 공유 클라이언트를 재사용. ② 동시 HTTP 전송은
+# 세마포어로 제한한다.
+#
+# S-11 백프레셔(다일 내구성): 세마포어는 '동시 HTTP 수'만 제한할 뿐, fire-and-forget 태스크의
+# '생성'은 막지 못한다 — 초과 태스크는 `async with _forward_sem` 에서 대기하며 메모리에 그대로
+# 살아남는다. scoring 이 느리거나 실패해 (유입 EPS > 세마포어 처리율)이 지속되면 `_forward_tasks`
+# 와 그 페이로드가 무한 누적돼 RSS 가 선형으로 부푼다(A/B 소크 실측: 10%5xx+5%timeout 하에서
+# inflight 0→17.6k·RSS 66→179MiB·+324MiB/h, 정상계층은 +0.8MiB/h 평탄). 따라서 인플라이트
+# 태스크 수에 상한을 두고, 초과분은 메모리에 쌓는 대신 내구 DLQ(on-disk·bounded, 드레인 루프가
+# scoring 복구 시 재전달)로 직접 스풀한다 → 무손실을 지키면서 RSS 를 bounded 로 만든다.
 _scoring_client: Optional[httpx.AsyncClient] = None
 _forward_sem = asyncio.Semaphore(int(os.environ.get("FORWARD_MAX_CONCURRENCY", "64")))
+_FORWARD_MAX_INFLIGHT = int(os.environ.get("FORWARD_MAX_INFLIGHT", "512"))
 # fire-and-forget 포워딩 태스크를 추적해 종료 시 취소한다(미취소·미닫힌 httpx 클라이언트가
 # lifespan 종료를 지연시켜 컨테이너 stop 이 매달리는 것을 막는다).
 _forward_tasks: "set[asyncio.Task]" = set()
@@ -526,9 +534,10 @@ def _get_scoring_client() -> httpx.AsyncClient:
     return _scoring_client
 
 
-async def _forward_to_scoring_engine(event: Event):
+def _build_forward_payload(event: Event) -> dict:
+    """event → scoring 전송 페이로드. dwell time 계산용으로 원 공격 이벤트 timestamp 를
+    enrichment(04번 3절). 정상 포워딩과 백프레셔 shed(DLQ 직접 스풀) 양쪽이 공유한다."""
     payload = event.model_dump(mode="json")
-    # dwell time 계산을 위해 원 공격 이벤트의 timestamp를 enrichment(04번 3절)
     if event.matched_event_id:
         matched_ts = _lookup_matched_timestamp(event.matched_event_id)
         if matched_ts is not None:
@@ -536,8 +545,30 @@ async def _forward_to_scoring_engine(event: Event):
         else:
             # 대응하는 공격 이벤트를 찾지 못함 -> 오탐/치팅 의심 신호(04번 1절 unmatched_detection)
             payload.setdefault("metadata", {})["_unmatched"] = True
+    return payload
+
+
+def _dispatch_forward(event: Event) -> None:
+    """신규 이벤트를 scoring 으로 포워딩한다.
+
+    S-11 백프레셔: 인메모리 인플라이트 포워딩 태스크가 상한(_FORWARD_MAX_INFLIGHT)에 도달하면
+    태스크를 더 만들지 않고 내구 DLQ 로 직접 스풀한다. scoring 열화 시 fire-and-forget 태스크가
+    무한 누적돼 RSS 가 부푸는 것을 막는다(DLQ 는 on-disk·bounded, 드레인 루프가 복구 시 재전달 →
+    무손실 유지). 정상 상태에서는 태스크가 ms 단위로 완료돼 인플라이트가 수십 수준이라 shed 되지
+    않는다(A/B 실측: 정상계층 inflight_max 29 « 상한 512)."""
+    if len(_forward_tasks) >= _FORWARD_MAX_INFLIGHT:
+        _spool_to_dlq(event.event_id, _build_forward_payload(event), "inflight_cap")
+        _METRICS["forward_shed_to_dlq"] += 1
+        return
+    task = asyncio.create_task(_forward_to_scoring_engine(event))
+    _forward_tasks.add(task)               # 종료 시 취소할 수 있게 추적
+    task.add_done_callback(_forward_tasks.discard)
+
+
+async def _forward_to_scoring_engine(event: Event):
+    payload = _build_forward_payload(event)
     # 감사 3.5: 재시도 후에도 실패하면 예외를 삼키지 않고 DLQ에 스풀한다(무손실).
-    async with _forward_sem:   # 동시 포워딩 상한(scoring 지연 시 무제한 태스크 누적 방지)
+    async with _forward_sem:   # 동시 HTTP 전송 상한(초과분은 대기; 생성 상한은 _dispatch_forward)
         ok, err = await _try_forward_once_with_retries(payload, event)
     if not ok:
         _spool_to_dlq(event.event_id, payload, err)

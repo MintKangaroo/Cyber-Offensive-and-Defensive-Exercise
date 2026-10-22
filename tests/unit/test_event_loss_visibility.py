@@ -131,3 +131,67 @@ def test_dlq_drain_keeps_rows_when_scoring_still_down(tmp_path, monkeypatch):
     pending = conn.execute("SELECT COUNT(*) FROM scoring_dlq").fetchone()[0]
     conn.close()
     assert pending == 1, "재전달 실패 시 DLQ 에 남아 다음 주기에 재시도돼야 한다"
+
+
+# ---------------------------------------------------------------------------
+# (4) S-11 백프레셔: scoring 열화 시 fire-and-forget 포워딩 태스크가 무한 누적되지 않는다.
+# ---------------------------------------------------------------------------
+# 원 결함: /events 핸들러가 신규 이벤트마다 _forward_to_scoring_engine 태스크를 무조건 생성했다.
+# _forward_sem(동시성 64)은 '동시 HTTP 수'만 제한할 뿐 태스크 '생성'은 막지 못해, scoring 이
+# 느리거나 실패해 (유입 EPS > 세마포어 처리율)이 지속되면 _forward_tasks 가 무한 누적 → RSS 선형
+# 증가. A/B 소크 실측(10%5xx+5%timeout): inflight 0→17.6k·RSS 66→179MiB·+324MiB/h vs
+# 정상계층 +0.8MiB/h 평탄. 수정: 인플라이트 상한 초과분을 내구 DLQ 로 shed(무손실·bounded).
+def _mk_event(m, i):
+    return m.Event(event_id=f"c{i}", event_type="red_attack_started", actor="red",
+                   target_asset="power_plant", phase="initial_access",
+                   team_id="team-01", scenario_id="s")
+
+
+def test_forward_dispatch_bounds_inflight_and_sheds_to_dlq(tmp_path, monkeypatch):
+    m = _load_collector(tmp_path, monkeypatch)
+    monkeypatch.setattr(m, "_FORWARD_MAX_INFLIGHT", 5)
+
+    async def _hang(_event):
+        await asyncio.Event().wait()   # scoring 영구 지연 모사: 태스크가 끝나지 않는다.
+    monkeypatch.setattr(m, "_forward_to_scoring_engine", _hang)
+
+    async def _run():
+        shed0 = m._METRICS["forward_shed_to_dlq"]
+        for i in range(12):
+            m._dispatch_forward(_mk_event(m, i))
+        # 인플라이트는 상한을 넘지 않는다(태스크 생성이 bounded).
+        assert len(m._forward_tasks) == 5, f"인플라이트 {len(m._forward_tasks)} != 상한 5"
+        # 초과분(12-5=7)은 메모리에 쌓이는 대신 DLQ 로 흘렀다.
+        assert m._METRICS["forward_shed_to_dlq"] == shed0 + 7
+        for t in list(m._forward_tasks):   # 매달린 태스크 정리
+            t.cancel()
+        await asyncio.gather(*m._forward_tasks, return_exceptions=True)
+
+    asyncio.run(_run())
+
+    conn = m.get_db()
+    pending = conn.execute("SELECT COUNT(*) FROM scoring_dlq").fetchone()[0]
+    conn.close()
+    assert pending == 7, "상한 초과 이벤트는 내구 DLQ 로 스풀돼 무손실이어야 한다"
+
+
+def test_forward_dispatch_creates_tasks_under_cap(tmp_path, monkeypatch):
+    """정상 범위(상한 미만)에서는 shed 없이 평소대로 포워딩 태스크를 만든다(거짓 shed 방지)."""
+    m = _load_collector(tmp_path, monkeypatch)
+    monkeypatch.setattr(m, "_FORWARD_MAX_INFLIGHT", 512)
+
+    async def _hang(_event):
+        await asyncio.Event().wait()
+    monkeypatch.setattr(m, "_forward_to_scoring_engine", _hang)
+
+    async def _run():
+        shed0 = m._METRICS["forward_shed_to_dlq"]
+        for i in range(10):
+            m._dispatch_forward(_mk_event(m, i))
+        assert len(m._forward_tasks) == 10
+        assert m._METRICS["forward_shed_to_dlq"] == shed0, "상한 미만인데 shed 가 발생했다"
+        for t in list(m._forward_tasks):
+            t.cancel()
+        await asyncio.gather(*m._forward_tasks, return_exceptions=True)
+
+    asyncio.run(_run())
