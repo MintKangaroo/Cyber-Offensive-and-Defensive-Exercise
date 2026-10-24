@@ -317,7 +317,7 @@ _METRICS = {
     "forward_retries": 0,    # 즉시 전달 재시도 횟수
     "dlq_spooled": 0,        # 즉시 전달 최종 실패 → DLQ 적재
     "dlq_redelivered": 0,    # DLQ에서 재전달 성공
-    "dlq_drop": 0,           # (예약) 영구 실패로 폐기
+    "dlq_drop": 0,           # DLQ 보존 상한 초과로 폐기(미전달 이벤트 유실·opt-in·조용한 유실 아님)
     "forward_shed_to_dlq": 0,  # 인플라이트 상한 초과로 태스크 대신 DLQ 직접 스풀(백프레셔)
     "ingest_batches": 0,          # 그룹 커밋 배치 수(=커밋 횟수)
     "ingest_committed": 0,        # 배치로 신규 저장된 이벤트 수
@@ -327,6 +327,14 @@ _FORWARD_ATTEMPTS = int(os.environ.get("SCORING_FORWARD_ATTEMPTS", "3"))
 _DLQ_DRAIN_INTERVAL = float(os.environ.get("SCORING_DLQ_DRAIN_SEC", "10"))
 # 감사 4.8: events.db 보존 정책 — 오래된 이벤트를 주기적으로 정리(무한 증가 방지). 0이면 비활성.
 _EVENTS_RETENTION_DAYS = float(os.environ.get("EVENTS_RETENTION_DAYS", "0"))
+
+# S-11: scoring_dlq 보존 상한. scoring 이 '장기 완전 중단'되면 재전달이 안 돼 scoring_dlq 가 on-disk 로
+# 무한 성장(디스크 고갈 → 수집기 다운)할 수 있다. 단 DLQ 행을 지우는 것은 '미전달 이벤트 폐기'이므로
+# 기본 무손실 계약(#138 의 DLQ shed 도 '여전히 무손실')을 깨뜨린다 → 기본 OFF(0=무한, 현행 0-유실 유지).
+# 운영자가 '보장 전달'보다 '디스크 상한'을 택하면 opt-in. 폐기는 절대 조용히 하지 않고 dlq_drop 카운터
+# +/metrics 로 가시화한다(감사 S-8: 조용한 유실 금지). 가장 오래된 것부터(ORDER BY created_at ASC) 폐기.
+_DLQ_MAX_ROWS = int(os.environ.get("SCORING_DLQ_MAX_ROWS", "0"))       # 최신 N건만 유지(0=무한)
+_DLQ_MAX_AGE_SEC = float(os.environ.get("SCORING_DLQ_MAX_AGE_SEC", "0"))  # 이보다 오래된 행 폐기(0=off)
 
 
 def _prune_old_events() -> int:
@@ -341,6 +349,36 @@ def _prune_old_events() -> int:
         if deleted:journal.invalidate_history(conn)
         conn.commit()
         return deleted
+    finally:
+        conn.close()
+
+
+def _prune_dlq() -> int:
+    """S-11: scoring_dlq on-disk 무한 성장 상한(기본 OFF). age cap 과 row cap 을 적용하고 폐기 건수를
+    반환한다. 폐기는 '미전달 이벤트 폐기'이므로 dlq_drop 으로 계측(조용한 유실 금지, 감사 S-8).
+    가장 오래된 행부터 폐기해 최신 데이터를 우선 보존한다."""
+    if _DLQ_MAX_ROWS <= 0 and _DLQ_MAX_AGE_SEC <= 0:
+        return 0  # 둘 다 비활성 = 현행 무한(0-유실) 유지.
+    conn = get_db()
+    try:
+        dropped = 0
+        if _DLQ_MAX_AGE_SEC > 0:
+            cutoff = time.time() - _DLQ_MAX_AGE_SEC
+            cur = conn.execute("DELETE FROM scoring_dlq WHERE created_at < ?", (cutoff,))
+            dropped += cur.rowcount or 0
+        if _DLQ_MAX_ROWS > 0:
+            # 최신 N건만 유지: 오래된 순(created_at ASC)으로 N 건을 건너뛴 나머지를 폐기.
+            cur = conn.execute(
+                "DELETE FROM scoring_dlq WHERE event_id IN ("
+                "  SELECT event_id FROM scoring_dlq ORDER BY created_at DESC, event_id DESC "
+                "  LIMIT -1 OFFSET ?)",
+                (_DLQ_MAX_ROWS,),
+            )
+            dropped += cur.rowcount or 0
+        if dropped:
+            conn.commit()
+            _METRICS["dlq_drop"] += dropped
+        return dropped
     finally:
         conn.close()
 
@@ -646,6 +684,7 @@ async def _dlq_drain_loop():
         await asyncio.sleep(_DLQ_DRAIN_INTERVAL)
         try:
             _prune_old_events()  # 감사 4.8: events.db 보존 정책 적용
+            _prune_dlq()         # S-11: scoring_dlq on-disk 상한(기본 OFF, 폐기 시 dlq_drop 계측)
             await _drain_dlq_once()
         except Exception:
             # 드레인 루프는 절대 죽지 않는다(다음 주기에 재시도).
