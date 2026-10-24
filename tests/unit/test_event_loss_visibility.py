@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import json
+import time
 
 import pytest
 
@@ -195,3 +197,78 @@ def test_forward_dispatch_creates_tasks_under_cap(tmp_path, monkeypatch):
         await asyncio.gather(*m._forward_tasks, return_exceptions=True)
 
     asyncio.run(_run())
+
+
+# ---------------------------------------------------------------------------
+# (5) S-11: scoring 장기 완전 중단 시 scoring_dlq on-disk 무한 성장 상한(기본 OFF·폐기 가시화).
+# ---------------------------------------------------------------------------
+# #138 의 DLQ shed 는 RSS 를 bounded 로 만들지만, scoring 이 장기 완전 중단되면 재전달이 안 돼
+# scoring_dlq 가 on-disk 로 무한 성장(디스크 고갈)할 수 있다. _prune_dlq 가 age/row 상한으로 이를 막되,
+# 행 폐기 = 미전달 이벤트 유실이므로 기본 OFF(0-유실 유지)·opt-in·폐기는 dlq_drop 으로 계측(조용한 유실 금지).
+def _dlq_count(m):
+    conn = m.get_db()
+    try:
+        return conn.execute("SELECT COUNT(*) FROM scoring_dlq").fetchone()[0]
+    finally:
+        conn.close()
+
+
+def test_dlq_prune_disabled_by_default_keeps_all(tmp_path, monkeypatch):
+    """기본값(둘 다 0)에서는 아무것도 폐기하지 않는다 — 현행 무손실 계약 유지."""
+    m = _load_collector(tmp_path, monkeypatch)
+    for i in range(50):
+        m._spool_to_dlq(f"k{i}", {"event_id": f"k{i}"}, "HTTP 503")
+    drop0 = m._METRICS["dlq_drop"]
+    assert m._prune_dlq() == 0
+    assert _dlq_count(m) == 50, "기본 OFF 인데 DLQ 가 폐기됐다"
+    assert m._METRICS["dlq_drop"] == drop0
+
+
+def test_dlq_prune_by_row_cap_drops_oldest_and_counts(tmp_path, monkeypatch):
+    """row 상한: 최신 N 건만 남기고 가장 오래된 것부터 폐기, 폐기 건수는 dlq_drop 에 계측."""
+    m = _load_collector(tmp_path, monkeypatch)
+    monkeypatch.setattr(m, "_DLQ_MAX_ROWS", 10)
+    # created_at 을 명시적으로 증가시켜 '오래된→최신' 순서를 결정론적으로 만든다.
+    conn = m.get_db()
+    for i in range(30):
+        conn.execute(
+            "INSERT INTO scoring_dlq (event_id, payload, attempts, last_error, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (f"r{i:02d}", json.dumps({"event_id": f"r{i:02d}"}), 3, "HTTP 503", 1000.0 + i),
+        )
+    conn.commit(); conn.close()
+    drop0 = m._METRICS["dlq_drop"]
+
+    dropped = m._prune_dlq()
+    assert dropped == 20, f"20 건 폐기 예상, 실제 {dropped}"
+    assert _dlq_count(m) == 10
+    assert m._METRICS["dlq_drop"] == drop0 + 20, "폐기가 dlq_drop 으로 계측돼야 한다(조용한 유실 금지)"
+    # 남은 것은 '최신' 10 건(r20~r29)이어야 한다.
+    conn = m.get_db()
+    kept = {row["event_id"] for row in conn.execute("SELECT event_id FROM scoring_dlq").fetchall()}
+    conn.close()
+    assert kept == {f"r{i:02d}" for i in range(20, 30)}, f"최신 10건이 아니라 {sorted(kept)}"
+
+
+def test_dlq_prune_by_age_drops_old_rows(tmp_path, monkeypatch):
+    """age 상한: cutoff 보다 오래된 행만 폐기, 최신 행은 보존."""
+    m = _load_collector(tmp_path, monkeypatch)
+    monkeypatch.setattr(m, "_DLQ_MAX_AGE_SEC", 3600)  # 1시간
+    now = time.time()
+    conn = m.get_db()
+    conn.execute(
+        "INSERT INTO scoring_dlq (event_id, payload, attempts, last_error, created_at) VALUES (?,?,?,?,?)",
+        ("old", json.dumps({"event_id": "old"}), 3, "HTTP 503", now - 7200),  # 2시간 전(폐기)
+    )
+    conn.execute(
+        "INSERT INTO scoring_dlq (event_id, payload, attempts, last_error, created_at) VALUES (?,?,?,?,?)",
+        ("fresh", json.dumps({"event_id": "fresh"}), 3, "HTTP 503", now - 60),  # 1분 전(보존)
+    )
+    conn.commit(); conn.close()
+
+    dropped = m._prune_dlq()
+    assert dropped == 1
+    conn = m.get_db()
+    kept = {row["event_id"] for row in conn.execute("SELECT event_id FROM scoring_dlq").fetchall()}
+    conn.close()
+    assert kept == {"fresh"}, f"오래된 행만 폐기돼야 하는데 {sorted(kept)}"

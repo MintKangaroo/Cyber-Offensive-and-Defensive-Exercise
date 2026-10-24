@@ -11,7 +11,7 @@
 | ID | 잔여 | 위험 수용 사유 | 후속 |
 |---|---|---|---|
 | S-10 | 팀 롤백 시 prod k8s PVC 에 공격자 웹셸 데이터 잔존 가능 | sandbox(emptyDir) 경로는 롤아웃 시 소거되어 안전. prod PVC 경로만 해당하며, v1.0 표준 배포는 docker-compose/sandbox. 리셋 계통(RESET_TARGETS 8종)·다운타임 보정은 FIXED. | prod k8s 롤백 시 PVC purge 옵션(런타임 k8s 검증 필요) |
-| S-11 | 48~72h 다일 내구성 → **SIEM 저장소 rollover/retention 코드 완비(feat/multiday-durability)** + RSS 기울기 **서빙계층 귀속 확정**(바운디드 소크, py_objects 평탄·§3.1(b)). 잔여: 48~72h 실소크 내구성 실측(환경 바운드, §3.1(c) UNVERIFIED) | mem_limit(70개)·하드닝 오버레이 3경로 로드·event_collector retention 은 코드상 완비. SIEM SQLite(events+FTS, alerts) age-retention + 트윈 access 로그 크기 rotation 신규(아래 §3.1). RSS +13.28 MiB/h 는 fail 임계 20 미만(파국 아님). **A/B 소크(§3.1(d)): happy-path 서빙은 고원(plateau)·+13 은 워밍업 산물·`MALLOC_ARENA_MAX=2` 하드닝 적용. fault-주입 A/B(§3.1(e)): 8h RSS 성장의 근본원인=인플라이트 포워딩 태스크 무한 누적 규명 → `_dispatch_forward` 인플라이트 상한(초과분 DLQ shed)으로 수정, faulty +324→+3.9 MiB/h·inflight 17.6k→509 실증.** | 48~72h 실소크 — 환경 바운드 |
+| S-11 | 48~72h 다일 내구성 → **SIEM 저장소 rollover/retention 코드 완비(feat/multiday-durability)** + RSS 기울기 **서빙계층 귀속 확정**(바운디드 소크, py_objects 평탄·§3.1(b)). 잔여: 48~72h 실소크 내구성 실측(환경 바운드, §3.1(c) UNVERIFIED) | mem_limit(70개)·하드닝 오버레이 3경로 로드·event_collector retention 은 코드상 완비. SIEM SQLite(events+FTS, alerts) age-retention + 트윈 access 로그 크기 rotation 신규(아래 §3.1). RSS +13.28 MiB/h 는 fail 임계 20 미만(파국 아님). **A/B 소크(§3.1(d)): happy-path 서빙은 고원(plateau)·+13 은 워밍업 산물·`MALLOC_ARENA_MAX=2` 하드닝 적용. fault-주입 A/B(§3.1(e)): 8h RSS 성장의 근본원인=인플라이트 포워딩 태스크 무한 누적 규명 → `_dispatch_forward` 인플라이트 상한(초과분 DLQ shed)으로 수정, faulty +324→+3.9 MiB/h·inflight 17.6k→509 실증. DLQ 보존 상한(§3.1(f)): scoring 장기 완전중단 시 `scoring_dlq` on-disk 무한성장 상한을 opt-in 으로 제공(`SCORING_DLQ_MAX_ROWS/AGE_SEC`, 기본 OFF=0유실, 폐기는 `dlq_drop` 가시화·라이브 실측).** | 48~72h 실소크 — 환경 바운드 |
 | S-3 (잔여) | (a) 담합 탐지가 `passed` 를 뒤집지 않음 (b) 비-스코프(dev) 제출이 body team_id 신뢰 | (a) 담합은 신호만 방출하고 교관이 판정 = 의도된 SOC 주체성 설계. (b) 실경쟁(`range_scope.is_team()`)에서는 identity 로 override 되어 무력화. dev 모드에서만 신뢰. | 담합 정책의 자동 무효화 옵션(교관 설정), 비-스코프 제출 하드닝 |
 | S-7 (잔여) | 막힌 stage 교관 강제 unlock/skip 엔드포인트 없음 | 크로스오버 정답 제출→해금 경로는 FIXED(완주 가능). 강제 override 는 운영 편의 기능. | 교관 force-advance API |
 | R-1 | ~~`/replay/events` 무한 fetchall 이 대용량 events.db 에서 event_collector OOM~~ → **v1.1.0 에서 FIXED(PR #115)** | Phase 3 리허설 발견(audit/102 §3). | **해소**: reconcile·AAR 을 커서 페이지네이션 `/replay/page` 배치 소비로 전환(`shared/replay_client.py`). 라이브 검증(2500 이벤트 2페이지·OOM 없음). |
@@ -167,9 +167,22 @@ v1.0 에서는 위험 수용하고 아래에 개선 후보로 이관한다(신�
     초과분 6,672 건은 메모리가 아닌 `scoring_dlq`(on-disk, 드레인 1,851 재전달)로 흘러 0 유실.
   - **회귀가드**: `test_event_loss_visibility.py::test_forward_dispatch_bounds_inflight_and_sheds_to_dlq`
     (상한 초과분이 태스크 대신 DLQ 로 shed·무손실)·`..._creates_tasks_under_cap`(거짓 shed 방지).
-  - **남은 의심(정직)**: 수정은 RSS(=S-11 관심사)를 bounded 로 만든다. 단 scoring 이 **장기 완전 중단**
-    되면 `scoring_dlq` 가 복구 전까지 **on-disk** 로 성장한다(RAM 아님·디스크 바운드·무손실 의도된 거동;
-    DLQ 자체의 age/크기 retention 은 향후 과제). 48~72h 전체(실 스택·DLQ 동역학)는 여전히 (c) 환경 바운드.
+  - **남은 의심(정직) → (f)에서 상한 제공**: 수정은 RSS(=S-11 관심사)를 bounded 로 만든다. 단 scoring 이
+    **장기 완전 중단**되면 `scoring_dlq` 가 복구 전까지 **on-disk** 로 성장한다(RAM 아님·무손실 의도된 거동).
+    이 on-disk 무한 성장 상한을 (f)에서 opt-in 으로 제공. 48~72h 전체(실 스택)는 여전히 (c) 환경 바운드.
+
+**(f) scoring_dlq on-disk 보존 상한(2026-10-24) — 디스크 고갈 방어(opt-in·폐기 가시화).**
+  (e)의 "남은 의심"(장기 완전 중단 시 `scoring_dlq` on-disk 무한 성장 → 디스크 고갈로 수집기 다운) 상한.
+  - **설계 원칙**: DLQ 행 폐기 = **미전달 이벤트 유실**이므로 기본 무손실 계약(#138 DLQ shed 도 '여전히 무손실')을
+    깬다 → **기본 OFF**(`SCORING_DLQ_MAX_ROWS=0`·`SCORING_DLQ_MAX_AGE_SEC=0` = 현행 0-유실 유지). 운영자가
+    '보장 전달'보다 '디스크 상한'을 택하면 opt-in. 폐기는 **절대 조용히 하지 않고** `dlq_drop` 카운터+`/metrics`
+    로 가시화(감사 S-8: 조용한 유실 금지). 가장 **오래된 것부터**(created_at ASC) 폐기해 최신 데이터 우선 보존.
+  - **구현**: `_prune_dlq()`(age cap + row cap, 폐기 건수 `dlq_drop` 적산) 를 drain 루프에 `_prune_old_events`
+    옆에 연결. `dlq_drop` 메트릭 '예약' → '보존 상한 초과 폐기'로 전환.
+  - **실측(라이브)**: 전량 실패 sink 로 120 건 스풀 → `SCORING_DLQ_MAX_ROWS=20`·drain 2s 에서
+    **dlq_pending 20(상한)·dlq_drop 100**, **무손실 회계 불변식 성립**(spooled 120 = redelivered 0 + drop 100
+    + pending 20 → 유실 0건 미회계 없음). 회귀 3건(기본 OFF 전량 보존 / row cap 최신 N 보존+계측 / age cap).
+  - **남은 것**: 48~72h 실스택 소크는 여전히 (c) 환경 바운드.
 
 ---
 
