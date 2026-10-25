@@ -44,21 +44,23 @@ export const ARENA_NODES: ArenaNode[] = [
   { id: "hsp-pump", label: "병원 주입펌프", code: "HSP-003", sector: "hospital", xPct: 36, yPct: 55, status: "engaged" },
   { id: "hsp-pacs", label: "병원 PACS", code: "HSP-001", sector: "hospital", xPct: 52, yPct: 58, status: "defended" },
   { id: "ref", label: "정유 SIS", code: "REF-002", sector: "lng", xPct: 68, yPct: 57, status: "engaged" },
-  { id: "dcx", label: "데이터센터", code: "DCX-001", sector: "finance", xPct: 83, yPct: 55, status: "engaged" },
+  { id: "dcx", label: "데이터센터", code: "DCX-001", sector: "finance", xPct: 73, yPct: 50, status: "engaged" },
   { id: "gs", label: "위성 지상국", code: "GS-002", sector: "satellite", xPct: 28, yPct: 66, status: "engaged" },
   { id: "fac", label: "제조 PLC", code: "FAC-001", sector: "factory", xPct: 44, yPct: 69, status: "patched" },
   { id: "goose", label: "변전소 GOOSE", code: "SUBSTATION", sector: "power", xPct: 60, yPct: 70, status: "engaged" },
-  { id: "fin", label: "금융 코어", code: "FIN", sector: "finance", xPct: 80, yPct: 68, status: "defended" },
+  { id: "fin", label: "금융 코어", code: "FIN", sector: "finance", xPct: 72, yPct: 74, status: "defended" },
   { id: "grid", label: "송전망 SCADA", code: "GRID-OPS", sector: "power", xPct: 50, yPct: 80, status: "engaged" },
   { id: "telco", label: "통신 5G 코어", code: "TELCO", sector: "telecom", xPct: 33, yPct: 80, status: "engaged" },
 ];
 
+// 정적 데모 스코어보드. atk/def 를 명시해 상단 stat·콘솔 리더보드가 한 값을 읽는다
+// (라이브 미연결 시 render 타임 score/10 합성 금지 — #123 가짜 분할 금지 원칙).
 export const SCOREBOARD: ScoreRow[] = [
-  { rank: 1, team: "RED · TEAM-01", score: 1500, me: true },
-  { rank: 2, team: "TriStar Navigator", score: 1370 },
-  { rank: 3, team: "codex-0001", score: 1251 },
-  { rank: 4, team: "EQST", score: 1143 },
-  { rank: 5, team: "로웬", score: 1086 },
+  { rank: 1, team: "RED · TEAM-01", score: 1500, atk: 150, def: 60, me: true },
+  { rank: 2, team: "TriStar Navigator", score: 1370, atk: 137, def: 55 },
+  { rank: 3, team: "codex-0001", score: 1251, atk: 125, def: 50 },
+  { rank: 4, team: "EQST", score: 1143, atk: 114, def: 46 },
+  { rank: 5, team: "로웬", score: 1086, atk: 109, def: 43 },
 ];
 
 export const SOLVE_LOG: SolveEntry[] = [
