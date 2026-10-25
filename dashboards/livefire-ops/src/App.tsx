@@ -174,6 +174,8 @@ export default function App() {
   const chainScore = facility.attackChain.filter((s) => done.has(s.id)).reduce((a, s) => a + s.points, 0);
   const ourLive = liveScores[OUR_TEAM];
   const liveScoreboard = buildScoreboard(liveScores);
+  // 상단 stat 의 Attack/Defense 는 리더보드 me-row 와 같은 값을 읽는다(둘이 어긋나지 않도록).
+  const meRow = liveScoreboard.find((r) => r.me);
 
   const consoleData: ConsoleData = useMemo(() => {
     const strikeLog = extraStrikes.length
@@ -185,11 +187,11 @@ export default function App() {
       strikeLog,
       registers: liveRegisters ?? undefined,
       footLine: liveFootLine ?? facility.footLine,
-      atkScore: ourLive ? ourLive.attack : chainScore,
-      defScore: ourLive ? ourLive.defense : 40,
+      atkScore: ourLive ? ourLive.attack : (meRow?.atk ?? chainScore),
+      defScore: ourLive ? ourLive.defense : (meRow?.def ?? 40),
       elapsed: liveClock ? fmtClock(liveClock.elapsed) : undefined,
     };
-  }, [facility, liveRegisters, liveFootLine, extraStrikes, done, chainScore, ourLive, liveScoreboard, liveClock]);
+  }, [facility, liveRegisters, liveFootLine, extraStrikes, done, chainScore, ourLive, meRow, liveScoreboard, liveClock]);
 
   const arenaData = useMemo(
     () => ({

@@ -72,7 +72,7 @@ export function ArenaView({ data, status, onSelectFacility }: { data: ArenaData;
         </div>
 
         <section className="ov timers" aria-label="라이브파이어 클럭">
-          <div className="ovh">⟡ LIVE FIRE CLOCK</div>
+          <div className="ovh"><span className="br">[</span> LIVE FIRE CLOCK <span className="br">]</span></div>
           <div className="tmr"><div className="k">Time Remaining</div><div className="v rem lf-mono">{data.timeRemaining}</div></div>
           <div className="tmr"><div className="k">Next Attack</div><div className="v nxt lf-mono">{data.nextAttack}</div></div>
           <div className="tmr pc">
@@ -85,7 +85,7 @@ export function ArenaView({ data, status, onSelectFacility }: { data: ArenaData;
         </section>
 
         <section className="ov lb2" aria-label="스코어보드">
-          <div className="ovh">⟡ SCOREBOARD · TOP 5</div>
+          <div className="ovh"><span className="br">[</span> SCOREBOARD · TOP 5 <span className="br">]</span></div>
           {data.scoreboard.map((r) => (
             <div key={r.rank} className={`lbr ${r.me ? "me" : ""}`}>
               <span className="rk">{String(r.rank).padStart(2, "0")}</span>
@@ -96,7 +96,7 @@ export function ArenaView({ data, status, onSelectFacility }: { data: ArenaData;
         </section>
 
         <section className="ov log" aria-label="Solve Log">
-          <div className="ovh">⟡ SOLVE LOG · 실시간</div>
+          <div className="ovh"><span className="br">[</span> SOLVE LOG · 실시간 <span className="br">]</span></div>
           <div className="logbody">
             {data.solveLog.map((e) => (
               <div key={e.id} className="lge">
