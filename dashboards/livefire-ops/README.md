@@ -89,3 +89,41 @@ BYPASS 하면 `ACTUAL` 이 redline 을 넘어 900 까지 치솟고 `DAMAGE` 가 
   `tests/unit/test_twin_telemetry.py` · `test_twin_safety_override.py` · `test_twin_sim_loop.py`
   — 마지막은 배경 물리 루프가 뱅크/파국 플래그를 실제로 구동함을 고정).
 - **그 외 섹터** — 아레나 노드로 표시, 콘솔은 확장 패턴(트윈 + `VITE_TWIN_<SECTOR>` 추가 시 라이브).
+
+## 라이브 타이머 (phase_clock 오케스트레이션)
+
+아레나의 **TIME REMAINING·NEXT ATTACK** 과 시설 콘솔의 **T+ ENGAGE** 는 정적 카운트다운이 아니라,
+`event_collector` 의 `phase_clock` 토픽을 SSE 로 구독해 실시간으로 움직인다. 이 토픽에 프레임을
+1초 간격으로 미는 주체는 `scenario_engine` 의 `_phase_clock_loop` 이고, 루프는 **활성 시나리오가
+있을 때만** 발행한다. 시나리오를 활성화하는 경로는 `POST /scenario/activate`(instructor) 하나다.
+
+```bash
+# 1) event_collector(:8010) + scenario_engine(:8045) 기동
+PYTHONPATH="$REPO" RBAC_ALLOW_INSECURE_DEV=true \
+  python3 -m uvicorn services.event_collector.main:app --host 127.0.0.1 --port 8010 &
+PYTHONPATH="$REPO" RBAC_ALLOW_INSECURE_DEV=true EVENT_COLLECTOR_URL=http://127.0.0.1:8010 \
+  python3 -m uvicorn services.scenario_engine.api:app --host 127.0.0.1 --port 8045 &
+
+# 2) 시나리오 활성화 → phase_clock 이 1Hz 로 흐르기 시작
+curl -X POST http://127.0.0.1:8045/scenario/activate \
+  -H 'Authorization: Bearer dev' -H 'Content-Type: application/json' \
+  -d '{"scenario_id":"POWERPLANT-MODBUS-SABOTAGE-01","team_ids":["RED-01"]}'
+
+# 3) 콘솔을 collector URL 로 빌드 후 서브
+echo 'VITE_COLLECTOR_URL=http://127.0.0.1:8010' > .env.local   # .gitignore 아님 — 커밋 금지
+npm run build && npx vite preview --port 5177        # → http://localhost:5177/ (아레나)
+```
+
+활성화 직후 아레나 상태 badge 가 `LIVE` 로 바뀌고 TIME REMAINING(예: 30분 한계면 29:5x…)·NEXT ATTACK
+(현재 stage 잔여)이 매초 감소한다. `POST /scenario/deactivate` 로 틱이 멈춘다.
+
+- **라이브**: TIME REMAINING(`remaining_sec`) · NEXT ATTACK(`stage_remaining_sec`) · T+ ENGAGE(`elapsed_sec`).
+- **정적(정직)**: PATCH COUNT 는 phase_clock 필드가 아니라 패치/복구 이벤트 집계값이므로 이 타이머
+  배선에 포함되지 않는다(정적 표기). `current_stage` 는 발행되지만 현재 콘솔은 stage '잔여시간'만 쓰고
+  stage 식별자는 렌더하지 않는다.
+- 회귀: `tests/unit/test_phase_clock_push.py`(루프 발행) + `test_phase_clock_activation.py`(활성화→틱
+  linkage: activate 가 시드를 심어 루프가 발행, deactivate 가 멈춤) + `test_scenario_authoring.py`(투영).
+
+> **S2S 전제**: `/internal/publish`·`/scenario/activate` 는 instructor 역할을 요구한다. 운영에선
+> `scenario_engine` 이 `service_headers()` 로 유효한 S2S 토큰을 실어야 하며, 로컬 데모는
+> `RBAC_ALLOW_INSECURE_DEV=true` 로 우회한다. 토큰이 없으면 발행이 조용히 실패(에러 삼킴)해 타이머가 멈춘다.
