@@ -57,10 +57,35 @@ npm run build && npx vite preview --port 5177
 한계를 넘고 `CONTAMINATION` 이 누적, `CATASTROPHIC_FAILURE`(급수 오염 파국)에 도달한다 —
 콘솔 게이지·푸터 티커가 이를 라이브로 반영.
 
+### 예: 병원 섹터 라이브(E2E 검증됨)
+
+```bash
+# 1) 병원 트윈 기동 (MODBUS_PORT 는 502 특권포트 회피용 고포트)
+PYTHONPATH="$REPO" RBAC_ALLOW_INSECURE_DEV=true MODBUS_PORT=8508 \
+  python3 -m uvicorn services.hospital_ot.main:app --host 127.0.0.1 --port 8208
+
+# 2) 콘솔을 트윈 URL 로 빌드 후 서브
+echo 'VITE_TWIN_HOSPITAL=http://127.0.0.1:8208' > .env.local   # .gitignore 아님 — 커밋 금지
+npm run build && npx vite preview --port 5177
+# → http://localhost:5177/?v=facility&sector=hospital
+```
+
+콘솔 킬체인(HIS 환자정보 SQLi → PACS 영상 IDOR → **주입펌프 과투여(RATE 900)** → **SIS 무력화**)을
+실행하면 병원 트윈이 실제로 구동된다: SIS 가 ARMED 인 동안은 주입펌프 명령(900mL/h)이 `INFUSION_RATE`
+에 반영돼도 `ACTUAL` 은 redline(200mL/h)에서 캡되고 손상 0 이다. `/api/safety/override` 로 SIS 를
+BYPASS 하면 `ACTUAL` 이 redline 을 넘어 900 까지 치솟고 `DAMAGE` 가 누적, `CATASTROPHIC_FAILURE`
+(약물 과투여 환자안전 파국)에 도달한다 — 콘솔 게이지·`05 IMPACT`·푸터 티커가 라이브로 반영.
+
+> **라이브 게이지 전제**: 게이지가 '움직이는' 것은 트윈의 배경 물리 루프(`attach_modbus_ics._sim_loop`)
+> 때문이다. 이 루프는 `MODBUS_ENABLED`(기본 `1`)일 때만 스케줄된다. 유닛 테스트처럼 `MODBUS_ENABLED=0`
+> 으로 띄우면 502 리스너뿐 아니라 물리 루프도 꺼져 `ACTUAL`/`DAMAGE` 가 정지한다(명령 `cmd` 만 반영).
+
 ## 섹터 라이브 커버리지
 
 - **발전소(power)** — 전용 트윈, 완전 라이브(냉각수/온도 포함). 기함 수직 슬라이스.
 - **상수도(water)·병원(hospital)** — 통일 `/api/telemetry` 규약, 킬체인 전 단계 라이브 액션.
+  둘 다 콘솔 EXECUTE STRIKE 구동으로 ARMED 캡 → SIS BYPASS → 물리 파국까지 **E2E 검증됨**.
   엔드포인트는 실제 트윈 라우트와 일치(회귀: `src/sector-live.test.tsx` +
-  `tests/unit/test_twin_telemetry.py` · `test_twin_safety_override.py`).
+  `tests/unit/test_twin_telemetry.py` · `test_twin_safety_override.py` · `test_twin_sim_loop.py`
+  — 마지막은 배경 물리 루프가 뱅크/파국 플래그를 실제로 구동함을 고정).
 - **그 외 섹터** — 아레나 노드로 표시, 콘솔은 확장 패턴(트윈 + `VITE_TWIN_<SECTOR>` 추가 시 라이브).
