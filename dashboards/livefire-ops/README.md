@@ -127,3 +127,43 @@ npm run build && npx vite preview --port 5177        # → http://localhost:5177
 > **S2S 전제**: `/internal/publish`·`/scenario/activate` 는 instructor 역할을 요구한다. 운영에선
 > `scenario_engine` 이 `service_headers()` 로 유효한 S2S 토큰을 실어야 하며, 로컬 데모는
 > `RBAC_ALLOW_INSECURE_DEV=true` 로 우회한다. 토큰이 없으면 발행이 조용히 실패(에러 삼킴)해 타이머가 멈춘다.
+
+## 라이브 채점 / 스코어보드 / SolveLog (scores 토픽)
+
+아레나·콘솔의 **스코어보드·점수·Solve Log** 도 정적 데모가 아니라, 실제 공격이 점수를 만든다.
+경로: 콘솔 EXECUTE STRIKE → 트윈 공격 엔드포인트가 이벤트 발행 → `event_collector POST /events` →
+`event_collector` 가 `scoring_engine POST /score/ingest` 로 포워딩 → `RED_POINTS`(initial_access 20·
+lateral_movement 30·objective 100 …)로 가점 → **awarded 면** `event_collector` 가 `scores` 토픽을
+`/stream` 으로 발행 → 콘솔이 팀별로 누적(red→attack·blue→defense)해 스코어보드·Solve Log 를 갱신.
+
+```bash
+# 1) event_collector(8010) + scoring_engine(8020) + 발전소 트윈(8002) 기동
+PYTHONPATH="$REPO" RBAC_ALLOW_INSECURE_DEV=true SCORING_ENGINE_URL=http://127.0.0.1:8020 \
+  python3 -m uvicorn services.event_collector.main:app --host 127.0.0.1 --port 8010 &
+PYTHONPATH="$REPO" RBAC_ALLOW_INSECURE_DEV=true DATA_DIR="$TMP/scoredb" \
+  python3 -m uvicorn services.scoring_engine.main:app --host 127.0.0.1 --port 8020 &
+PYTHONPATH="$REPO" RBAC_ALLOW_INSECURE_DEV=true MODBUS_PORT=8502 EVENT_COLLECTOR_URL=http://127.0.0.1:8010 \
+  python3 -m uvicorn services.power_plant.main:app --host 127.0.0.1 --port 8002 &
+
+# 2) 콘솔을 collector + 발전소 트윈 URL 로 빌드 후 서브
+printf 'VITE_COLLECTOR_URL=http://127.0.0.1:8010\nVITE_POWER_TWIN_URL=http://127.0.0.1:8002\n' > .env.local
+npm run build && npx vite preview --port 5177   # → http://localhost:5177/?v=facility&sector=power
+```
+
+발전소 콘솔에서 킬체인(HMI 기본계정 → PLC 터빈 RPM → 냉각수 차단 → SIS 무력화)을 EXECUTE STRIKE 로
+실행하면 `scoring_engine /scores` 의 `teams.default.red` 가 **20 → 50 → (멱등) → 150** 으로 오르고,
+콘솔 스코어보드가 정적 5행에서 **RED·TEAM-01 150/0 단일 라이브 행**으로, Solve Log 가 `objective +100`·
+`lateral_movement +30`·`initial_access +20` 라이브 어워드로 바뀐다(상단 ATTACK 150·DEFENSE 0).
+
+- **라이브**: 스코어보드(`scores` 누적 → atk/def) · Solve Log(awards) · Strike Log(`events` 토픽 원시 이벤트).
+- **정직한 동작**: 채점에 '시나리오 활성' 게이트가 없다(매칭되는 이벤트는 항상 채점). milestone 당
+  **멱등**(같은 vuln/phase 재공격은 재가점 없음 — 위 2번째 PLC 쓰기가 점수 변화 없음으로 실증). 라이브
+  스코어보드는 **실제 어워드가 있는 팀만** 행으로 표시(단독 플레이 시 1행).
+- 회귀: `tests/unit/test_scores_publish.py`(awarded ⇒ `scores` 발행 + 프런트 계약 payload shape 고정,
+  awarded=False/5xx/전송예외 시 미발행) + `test_scoring_engine.py`(가점 분기·멱등·랭킹) +
+  `test_event_loss_visibility.py`(포워드 무손실 DLQ).
+
+> **무손실 주의**: 트윈 `emit_event` 는 best-effort — `event_collector` 미도달 시 공격은 트윈에서
+> '성공'해도 **점수가 안 생긴다**(드롭 카운터만 증가). `scoring_engine` 다운 시 포워드는 DLQ 로 가고
+> 드레인 루프가 복구 시 재전달한다. `scoring_engine/scores.db` 는 영속 볼륨이라 스테일 DB 가 이전 점수를
+> 끌고 온다 — 새 런은 `DATA_DIR` 격리나 `POST /admin/reset`(instructor)로 초기화.
