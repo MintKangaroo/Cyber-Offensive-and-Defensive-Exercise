@@ -167,3 +167,33 @@ npm run build && npx vite preview --port 5177   # → http://localhost:5177/?v=f
 > '성공'해도 **점수가 안 생긴다**(드롭 카운터만 증가). `scoring_engine` 다운 시 포워드는 DLQ 로 가고
 > 드레인 루프가 복구 시 재전달한다. `scoring_engine/scores.db` 는 영속 볼륨이라 스테일 DB 가 이전 점수를
 > 끌고 온다 — 새 런은 `DATA_DIR` 격리나 `POST /admin/reset`(instructor)로 초기화.
+
+### 방어(Blue) 측 — DEFENSE 열 라이브(E2E 검증됨)
+
+같은 `scores` 파이프라인이 방어도 올린다: `actor="blue"` 프레임은 콘솔에서 **DEFENSE 열**과 Solve Log
+**방어** 측으로 누적된다(`BLUE_POINTS`: patch_verified 50·detection_success 20(+dwell)·block_success 30·
+asset_recovered 50). 공격과 동일 스택(collector+scoring+발전소 트윈)으로 두 실제 방어 생산자를 구동해 실증:
+
+```bash
+# (위 라이브 채점 스택이 떠 있는 상태에서)
+# ① 패치 검증 → blue_patch_verified(+50): 실제 safe_probe 생산자
+PYTHONPATH="$REPO" EVENT_COLLECTOR_URL=http://127.0.0.1:8010 RBAC_ALLOW_INSECURE_DEV=true python3 - <<'PY'
+from shared import safe_probe
+safe_probe.report_patch_verified("PP-002", "power_plant")   # +50 defense
+PY
+
+# ② 안전계통 재무장 → asset_recovered(+50): red 로 자산 손상 후 SIS 재무장 → 배경 물리루프가
+#    damage 를 0 으로 회복(heal_rate)하면 트윈이 asset_recovered 발행
+curl -X POST http://127.0.0.1:8002/api/safety/override -d '{"override":true}'      # red: SIS BYPASS(손상 시작)
+# ...damage 가 0<d<100 일 때...
+curl -X POST http://127.0.0.1:8002/api/safety/override -d '{"override":false}'     # blue: 재무장 → heal → asset_recovered +50
+```
+
+콘솔: 상단 **DEFENSE 0 → 150**, 리더보드 `RED·TEAM-01 150/150`, Solve Log 에 `방어 … patch_verified +50`·
+`asset_recovered +50`(시안 방어 태그)가 `공격` 항목과 듀얼리티로 구분, 레지스터 `SAFETY_INTERLOCK ON·ARMED`·
+`DAMAGE 0%`(복구). `/scores` → `{red:150, blue:150}`.
+
+- **라이브 검증됨**: patch_verified(safe_probe) · asset_recovered(트윈 heal) → DEFENSE 열·방어 Solve Log.
+- **동일 파이프라인**: detection_success(SIEM 탐지)·block_success 는 같은 `scores` 분기·콘솔 경로를 타며
+  생산자만 다르다(탐지는 SIEM access 로그 매칭이 필요해 이 번들엔 미포함 — scoring 분기는
+  `test_scoring_engine.py` 가 전 branch 로 가드). 콘솔 red/blue 라우팅은 `src/live-scoring.test.tsx` 가 고정.
