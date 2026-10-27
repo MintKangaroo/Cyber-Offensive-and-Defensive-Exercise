@@ -88,7 +88,20 @@ BYPASS 하면 `ACTUAL` 이 redline 을 넘어 900 까지 치솟고 `DAMAGE` 가 
   엔드포인트는 실제 트윈 라우트와 일치(회귀: `src/sector-live.test.tsx` +
   `tests/unit/test_twin_telemetry.py` · `test_twin_safety_override.py` · `test_twin_sim_loop.py`
   — 마지막은 배경 물리 루프가 뱅크/파국 플래그를 실제로 구동함을 고정).
-- **그 외 섹터** — 아레나 노드로 표시, 콘솔은 확장 패턴(트윈 + `VITE_TWIN_<SECTOR>` 추가 시 라이브).
+- **확장 섹터 6종 — 정유(refinery)·스마트팩토리(factory)·LNG(lng)·철도(railway)·공항(airport)·
+  데이터센터(finance=datacenter_bms)** — `attach_modbus_ics` 통일 트윈으로 **텔레메트리 표시 라이브
+  연결 가능**(E2E 검증됨). 6개 트윈을 각각 띄워 `/api/telemetry` 가 통일 규약(cmd_name = COLUMN_PRESSURE·
+  ROBOT_SPEED·TANK_PRESSURE·TRAIN_SPEED·FUEL_PRESSURE·RACK_TEMP)을 내는 것을 실측했고, 섹터에
+  `VITE_TWIN_<SECTOR>`(예: `VITE_TWIN_AIRPORT=http://…:8206`)를 주입하면 콘솔이 그 트윈의 실제 레지스터를
+  라이브 렌더한다(제어 레지스터 테이블 + SAFETY_INTERLOCK coil0).
+  - 회귀: 트윈 쪽 계약은 `tests/unit/test_twin_telemetry.py` 가 7개 통일 트윈 전부로 전수 고정(과거
+    'hospital 대표' 지름길 제거), 콘솔 소비 쪽은 `src/sector-telemetry.test.ts` 가
+    `registersFromSectorTelemetry`/`fetchSectorTelemetry`(cmd=SET·over-redline=O-LIMIT·damage=red·SIS
+    토글·발전소 전용 스키마 reject)로 고정.
+  - **정직한 한계**: 이들 섹터의 콘솔 **EXECUTE STRIKE 라이브 배선은 아직 없다** — generic facility
+    설정의 attackChain 은 서사-전용(`step.action` 없음)이라 strike 는 데모로 떨어진다(물리 cmd 구동은
+    Modbus/실프로토콜 쓰기 경로이며 full-config 섹터와 달리 콘솔 액션에 미연결). 라이브는 **텔레메트리
+    표시** 범위. `nuclear`·`telecom`·`satellite` 는 통일 트윈 미존재(또는 비호환) — 아레나 노드 표시만.
 
 ## 라이브 타이머 (phase_clock 오케스트레이션)
 
