@@ -206,11 +206,32 @@ curl -X POST http://127.0.0.1:8002/api/safety/override -d '{"override":false}'  
 `asset_recovered +50`(시안 방어 태그)가 `공격` 항목과 듀얼리티로 구분, 레지스터 `SAFETY_INTERLOCK ON·ARMED`·
 `DAMAGE 0%`(복구). `/scores` → `{red:150, blue:150}`.
 
-- **라이브 검증됨**: patch_verified(safe_probe) · asset_recovered(트윈 heal) · detection_success(SIEM 매칭,
-  아래 참조) → DEFENSE 열·방어 Solve Log.
-- **동일 파이프라인**: block_success 는 같은 `scores` 분기·콘솔 경로를 타며 생산자만 다르다(Modbus 코일0
-  재무장 — 이 번들엔 미포함, scoring 분기는 `test_scoring_engine.py` 가 전 branch 로 가드). 콘솔
-  red/blue 라우팅은 `src/live-scoring.test.tsx` 가 고정.
+- **라이브 검증됨**: patch_verified(safe_probe) · asset_recovered(트윈 heal) · block_success(SIS 재무장,
+  아래 참조) · detection_success(SIEM 매칭, 아래 참조) → DEFENSE 열·방어 Solve Log. 콘솔 red/blue
+  라우팅은 `src/live-scoring.test.tsx` 가 고정.
+
+### 차단 성공 — block_success 라이브(SIS 코일0 재무장, E2E 검증됨)
+
+block_success(+30)는 `asset_recovered`(손상이 0 으로 회복될 때, +50)와 다르다: 공격으로 **위험에 빠진**
+공정(과속·손상 진행)을 Blue 가 **아직 파국 전에** 안전계통(SIS) 코일을 되살려(coil0→ON) 막은 **그 순간**
+발행된다. 발전소 트윈에선 HTTP `/api/safety/override` 가 아니라 **실 Modbus 코일 쓰기(FC5)만**
+`_on_modbus_write` 를 거쳐 이 분기를 탄다(그래서 "차단"은 실제 제어 프로토콜 행위).
+
+```bash
+# 번들: event_collector(8010) + scoring_engine(8020) + power_plant 트윈(8002, MODBUS_ENABLED=1 MODBUS_PORT=15020)
+# red: FC6 TURBINE_RPM<-5600(>redline 4500) + FC5 coil0<-OFF(SIS BYPASS) → actual 이 redline 초과·damage 누적
+# blue: 위험 중(0<damage<100, 미파국) FC5 coil0<-ON(재무장) → 그 순간 blue_block_success
+# (원시 Modbus 클라이언트로 FC6/FC5 프레임 전송 — 플랫폼 자체 Modbus 서버, pymodbus 불필요)
+# → /stream scores 프레임: {actor:"blue", category:"block_success", points:30}
+# → 이후 배경 물리루프가 damage 를 heal→0 하면 asset_recovered(+50)도 연이어 발행(이중 크레딧 정상)
+# → /scores: {"default":{"red":30, "blue":80}}   (blue 80 = block_success 30 + asset_recovered 50)
+```
+
+실측(라이브): red 로 actual 5000(>4500)·damage 4 까지 몰고 그 상태에서 FC5 재무장 → `scores` 프레임
+`{actor:"blue", category:"block_success", points:30}`, 재무장 직후 actual 이 redline(4500)으로 캡되고
+damage 가 heal 되어 `asset_recovered +50` 까지 연이어. 미가드 갭이었던 **발행 경계**(위험 중 + 미파국 +
+코일 ON 에서만 발행; 위험 아님/파국 후/코일 OFF 엔 금지)는 `tests/unit/test_twin_block_success.py` 가
+실 트윈 `_on_modbus_write` + 원시 FC5 와이어 프레임(`handle_pdu`)으로 고정한다.
 
 ### 탐지(SIEM) 라이브 — detection_success 자동 발행(E2E 검증됨)
 
