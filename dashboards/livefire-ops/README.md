@@ -98,10 +98,21 @@ BYPASS 하면 `ACTUAL` 이 redline 을 넘어 900 까지 치솟고 `DAMAGE` 가 
     'hospital 대표' 지름길 제거), 콘솔 소비 쪽은 `src/sector-telemetry.test.ts` 가
     `registersFromSectorTelemetry`/`fetchSectorTelemetry`(cmd=SET·over-redline=O-LIMIT·damage=red·SIS
     토글·발전소 전용 스키마 reject)로 고정.
-  - **정직한 한계**: 이들 섹터의 콘솔 **EXECUTE STRIKE 라이브 배선은 아직 없다** — generic facility
-    설정의 attackChain 은 서사-전용(`step.action` 없음)이라 strike 는 데모로 떨어진다(물리 cmd 구동은
-    Modbus/실프로토콜 쓰기 경로이며 full-config 섹터와 달리 콘솔 액션에 미연결). 라이브는 **텔레메트리
-    표시** 범위. `nuclear`·`telecom`·`satellite` 는 통일 트윈 미존재(또는 비호환) — 아레나 노드 표시만.
+  - **EXECUTE STRIKE 라이브 배선(E2E 검증됨)**: 5개 확장 섹터(lng·railway·airport·finance=datacenter·
+    factory)의 킬체인에 실제 트윈 HTTP 라우트를 `step.action` 으로 배선했다. `VITE_TWIN_<SECTOR>` 가
+    주어지면 콘솔 EXECUTE STRIKE 가 그 라우트로 실제 도달한다(`{live:true}`):
+    - **objective → `POST /api/safety/override {override:true}`**(모든 통일 트윈) → 실측 결과 트윈
+      `/api/telemetry` 의 `interlock` 이 `true→false`(SIS BYPASS)로 뒤집힘 → 콘솔 `SAFETY_INTERLOCK`
+      행이 `OFF·BYPASS·red` 로 라이브 전환.
+    - **lateral → datacenter `POST /api/bacnet/write-property`**(실 BACnet WriteProperty 프레임)·
+      **factory `POST /api/mqtt/command`**(실 MQTT Sparkplug DCMD) → 실 프로토콜 프레임 생성 +
+      red 이벤트 + SIEM 로그(=채점·탐지 크레딧).
+    - 회귀: `src/execute-strike.test.ts` 가 실제 `executeStep` + 실제 `FACILITIES` 로 각 섹터의
+      method/path/body 도달과 `{live:true}` 를, 트윈 없는 섹터·URL 미주입 섹터의 무호출 서사를 고정.
+  - **정직한 한계**: 이 라우트들로 라이브가 되는 건 **SIS BYPASS(인터록 플립)와 실 프로토콜 프레임**까지다.
+    ACTUAL 게이지의 redline 초과·DAMAGE 누적(물리 cmd 구동)은 Modbus/실프로토콜 쓰기 경로라 브라우저가
+    직접 못 친다(full-config 섹터 power/hospital/water 만 HTTP cmd 라우트로 게이지 파국까지 라이브).
+    `nuclear`·`telecom`·`satellite` 는 통일 트윈 미존재(또는 비호환)라 라이브 배선 없음 — 아레나 노드 표시만.
 
 ## 라이브 타이머 (phase_clock 오케스트레이션)
 

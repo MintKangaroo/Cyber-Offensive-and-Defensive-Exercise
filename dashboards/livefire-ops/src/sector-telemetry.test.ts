@@ -9,7 +9,7 @@ import {
 // 섹터 트윈 라이브 "연결"(텔레메트리 표시) 소비 쪽 회귀.
 //  콘솔이 발전소 외 섹터(정유/공항/데이터센터/LNG/철도/스마트팩토리)를 라이브로 연결하는 길은
 //  /api/telemetry(통일 규약)를 폴링 → fetchSectorTelemetry 로 파싱 → registersFromSectorTelemetry/
-//  sectorFootLine 으로 렌더다(EXECUTE STRIKE 라이브 배선은 full-config 섹터 전용 — sector-live.test.tsx).
+//  sectorFootLine 으로 렌더다(확장 섹터의 EXECUTE STRIKE 라이브 배선은 execute-strike.test.ts 가 가드).
 //  트윈 쪽 계약은 tests/unit/test_twin_telemetry.py 가 섹터별로 고정한다. 여기서 닫는 갭은 그 payload 를
 //  콘솔이 올바른 레지스터 행(cmd=SET, over-redline=O-LIMIT, damage=red, SIS 토글)으로 그려내는지다.
 
