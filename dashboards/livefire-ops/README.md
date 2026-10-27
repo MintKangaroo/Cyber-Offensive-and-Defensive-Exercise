@@ -193,7 +193,33 @@ curl -X POST http://127.0.0.1:8002/api/safety/override -d '{"override":false}'  
 `asset_recovered +50`(시안 방어 태그)가 `공격` 항목과 듀얼리티로 구분, 레지스터 `SAFETY_INTERLOCK ON·ARMED`·
 `DAMAGE 0%`(복구). `/scores` → `{red:150, blue:150}`.
 
-- **라이브 검증됨**: patch_verified(safe_probe) · asset_recovered(트윈 heal) → DEFENSE 열·방어 Solve Log.
-- **동일 파이프라인**: detection_success(SIEM 탐지)·block_success 는 같은 `scores` 분기·콘솔 경로를 타며
-  생산자만 다르다(탐지는 SIEM access 로그 매칭이 필요해 이 번들엔 미포함 — scoring 분기는
-  `test_scoring_engine.py` 가 전 branch 로 가드). 콘솔 red/blue 라우팅은 `src/live-scoring.test.tsx` 가 고정.
+- **라이브 검증됨**: patch_verified(safe_probe) · asset_recovered(트윈 heal) · detection_success(SIEM 매칭,
+  아래 참조) → DEFENSE 열·방어 Solve Log.
+- **동일 파이프라인**: block_success 는 같은 `scores` 분기·콘솔 경로를 타며 생산자만 다르다(Modbus 코일0
+  재무장 — 이 번들엔 미포함, scoring 분기는 `test_scoring_engine.py` 가 전 branch 로 가드). 콘솔
+  red/blue 라우팅은 `src/live-scoring.test.tsx` 가 고정.
+
+### 탐지(SIEM) 라이브 — detection_success 자동 발행(E2E 검증됨)
+
+detection_success 는 사람이 발행하는 게 아니라 **SIEM 이 공격을 규칙 매칭하면 자동으로** 뜬다. 경로:
+red 공격 → 트윈이 `/var/log/siem/{asset}/{asset}_access.log` 에 `vuln_id` 포함 JSON 한 줄 기록 →
+SIEM file_tailer 가 집어 `parse_twin_log_line` → `detection_engine.evaluate` 규칙 매칭 →
+`_push_detection_to_livefire` 가 `blue_detection_success` 를 event_collector 로 POST → scoring
+`detection_success` +20(+dwell) → `scores` 토픽 → 콘솔 DEFENSE 열.
+
+```bash
+# 번들: event_collector(8010) + scoring_engine(8020) + power_plant 트윈(8002) + siem(8040)
+#  트윈 SIEM_LOG_DIR=$LOGDIR/power_plant · SIEM SIEM_LOG_DIR=$LOGDIR (섹터 격리: SIEM 은 {asset}/ 하위를 tail)
+#  SIEM: PUSH_TO_LIVEFIRE=true · EVENT_COLLECTOR_URL=http://127.0.0.1:8010 · RBAC_ALLOW_INSECURE_DEV=true
+# red 공격 1회 = PP-001(미인증 PLC 쓰기) → TWIN-PLC-WRITE-001 규칙 매칭
+curl -X POST http://127.0.0.1:8002/api/plc/write -d '{"register":"TURBINE_RPM","value":5200}'
+# → SIEM /alerts: TWIN-PLC-WRITE-001 matched {'vuln_id':'PP-001'} (severity 4, T0836)
+# → /stream scores 프레임: {actor:"blue", category:"detection_success", points:20}
+# → /scores: {"default":{"red":30, "blue":20}}  (red 공격 +30 과 blue 탐지 +20 듀얼리티)
+```
+
+콘솔: `actor="blue"` 프레임이므로 위 patch/recover 와 **동일한** DEFENSE 열·방어 Solve Log 경로를 탄다
+(`category="detection_success"` → `detection_success · +20`). 미가드 갭이었던 **SIEM 매칭→발행** 경계
+(`_push_detection_to_livefire` 의 payload: event_type/actor/target_asset/vuln_id/matched_event_id/metadata)는
+`tests/unit/test_siem_detection_push.py` 가 실 파서+실 규칙엔진 체인으로 고정한다. 콘솔 쪽 라우팅은
+`src/live-scoring.test.tsx` 가 이미 고정(blue→DEFENSE).
