@@ -187,6 +187,25 @@ npm run build && npx vite preview --port 5177   # → http://localhost:5177/?v=f
   awarded=False/5xx/전송예외 시 미발행) + `test_scoring_engine.py`(가점 분기·멱등·랭킹) +
   `test_event_loss_visibility.py`(포워드 무손실 DLQ).
 
+### 다팀(멀티 team_id) 스코어보드 라이브(E2E 검증됨)
+
+대회 모드는 여러 팀이 동시에 득점한다. 전 체인이 `team_id` 를 보존함을 실 서비스로 실증
+(collector 8010 + scoring 8020, 2팀 이벤트 POST):
+
+```bash
+# 우리팀(default): red lateral(+30) + blue patch(+50) = 80   |  라이벌(TEAM-02): red objective(+100) = 100
+# → scoring /scores:        {"TEAM-02":{red:100,blue:0}, "default":{red:30,blue:50}}
+# → scoring /scores/ranking: [ {rank:1, TEAM-02, 100}, {rank:2, default, 80} ]  (라이벌이 우리를 앞섬)
+# → /stream scores 프레임이 팀별 team_id 분리: {team_id:"default",…} · {team_id:"TEAM-02",…}
+```
+
+콘솔은 이 프레임을 `team_id` 별로 누적한다(App onEvent → `liveScores[team]`). 아레나 **SCOREBOARD** 는
+각 팀을 별 행으로 총점 내림차순 랭크(라이벌 01·100, 우리 02·80)하고 **우리 행만 `me` 하이라이트**하며,
+시설 상단 **ATTACK/DEFENSE stat 은 항상 우리 팀(me) 점수(30/50)로 고정** — 라이벌이 총점 1위여도 상단
+stat 이 그 점수에 납치되지 않는다(`meRow`/`ourLive` 기준). 미가드 갭이었던 이 **멀티팀 누적·랭킹·me 고정**
+은 `src/multi-team-scoreboard.test.tsx` 가 실제 App 렌더로 고정(순수 `buildScoreboard` 정렬은
+`src/scoreboard.test.tsx`, 단일팀 red/blue 라우팅은 `src/live-scoring.test.tsx`).
+
 > **무손실 주의**: 트윈 `emit_event` 는 best-effort — `event_collector` 미도달 시 공격은 트윈에서
 > '성공'해도 **점수가 안 생긴다**(드롭 카운터만 증가). `scoring_engine` 다운 시 포워드는 DLQ 로 가고
 > 드레인 루프가 복구 시 재전달한다. `scoring_engine/scores.db` 는 영속 볼륨이라 스테일 DB 가 이전 점수를
