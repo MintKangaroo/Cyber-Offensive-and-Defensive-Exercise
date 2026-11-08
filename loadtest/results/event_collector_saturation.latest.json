@@ -7,60 +7,60 @@
   "stages": [
     {
       "rate": 100,
-      "p95_ms": 1.7,
+      "p95_ms": 2,
       "err_rate": 0,
       "reqs": 4000,
       "slo_ok": true
     },
     {
       "rate": 150,
-      "p95_ms": 3.9,
+      "p95_ms": 2,
       "err_rate": 0,
-      "reqs": 5999,
+      "reqs": 6000,
       "slo_ok": true
     },
     {
       "rate": 200,
-      "p95_ms": 2.8,
+      "p95_ms": 2,
       "err_rate": 0,
-      "reqs": 7991,
+      "reqs": 8000,
       "slo_ok": true
     },
     {
       "rate": 300,
-      "p95_ms": 134.5,
+      "p95_ms": 5.2,
       "err_rate": 0,
-      "reqs": 11983,
+      "reqs": 12000,
       "slo_ok": true
     },
     {
       "rate": 450,
-      "p95_ms": 908.4,
+      "p95_ms": 595.9,
       "err_rate": 0,
-      "reqs": 15332,
+      "reqs": 17253,
       "slo_ok": false
     },
     {
       "rate": 600,
-      "p95_ms": 1209.5,
+      "p95_ms": 722.4,
       "err_rate": 0,
-      "reqs": 19979,
+      "reqs": 22384,
       "slo_ok": false
     },
     {
       "rate": 800,
-      "p95_ms": 796.4,
+      "p95_ms": 1081.6,
       "err_rate": 0,
-      "reqs": 28482,
+      "reqs": 27679,
       "slo_ok": false
     },
     {
       "rate": 1000,
-      "p95_ms": 1239.1,
+      "p95_ms": 769.8,
       "err_rate": 0,
-      "reqs": 25809,
+      "reqs": 36041,
       "slo_ok": false
     }
   ],
-  "generated_at": "2026-11-01T21:05:04.757Z"
+  "generated_at": "2026-11-08T21:05:21.718Z"
 }
