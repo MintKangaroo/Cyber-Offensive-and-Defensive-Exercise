@@ -195,6 +195,22 @@ class _ModbusIcsTwin:
         발전소의 _sync_bank_from_registers 와 같은 역할: HTTP 공격이 실제 물리에 도달하게 한다."""
         self.bank.holding[self.cfg.cmd_reg] = int(value)
 
+    def command_write(self, value: float) -> dict:
+        """HTTP 공격 — 물리 명령 레지스터(cmd_reg)에 공격 setpoint 를 **실 Modbus FC6 쓰기와 동일 경로**
+        (`_on_write`)로 반영한다: 미인가 쓰기 이벤트·SIEM access 로그·즉시 안전평가가 발화하고(Blue 탐지
+        듀얼리티), 연속 물리 루프가 이 cmd 를 읽어 ACTUAL 게이지를 끌어올린다. SIS 가 이미 해제돼 있으면
+        redline 초과분이 손상으로 누적돼 catastrophic_failure 까지 간다(SIS 가 걸려 있으면 redline 트립
+        만·손상 없음 — 파국은 SIS 선-우회를 요구한다). 발전소 full-config 트윈의 `/api/plc/write` 가 하던
+        '브라우저에서 물리 cmd 구동'을 비발전소/확장 트윈(attach_modbus_ics)에 연다."""
+        v = int(value)
+        self.apply_command(v)
+        self._on_write("register", self.cfg.cmd_reg, [v])
+        c = self.cfg
+        return {"asset": c.asset, "cmd": v, "cmd_name": c.reg_names.get(c.cmd_reg, f"HR{c.cmd_reg}"),
+                "actual": int(self.bank.holding[c.actual_reg]), "redline": c.proc.redline_rpm,
+                "interlock": bool(self.bank.coils[c.interlock_coil]),
+                "sis_bypassed": not bool(self.bank.coils[c.interlock_coil])}
+
     def set_interlock(self, engaged: bool) -> None:
         """HTTP 공격 핸들러가 안전 인터록(SIS)을 켜고 끈다 → 과속/과투입 보호 해제."""
         self.bank.coils[self.cfg.interlock_coil] = bool(engaged)
@@ -215,6 +231,11 @@ class _SafetyOverrideReq(BaseModel):
     override: bool = True
 
 
+class _CommandWriteReq(BaseModel):
+    """물리 명령 레지스터 공격 바디 — value 를 cmd_reg 에 반영(실 Modbus FC6 쓰기와 동일 경로)."""
+    value: float
+
+
 def attach_modbus_ics(app, cfg: ModbusIcsConfig) -> _ModbusIcsTwin:
     """FastAPI 앱에 실 Modbus ICS 배선을 붙인다. 반환된 트윈 객체로 bank/state 접근 가능."""
     twin = _ModbusIcsTwin(cfg)
@@ -231,5 +252,11 @@ def attach_modbus_ics(app, cfg: ModbusIcsConfig) -> _ModbusIcsTwin:
     def _safety_override(req: _SafetyOverrideReq):
         # 발전소 /api/safety/override 와 동일: override=True → SIS 해제(인터록 OFF) → 파국 경로 개방.
         return twin.safety_override(req.override)
+
+    @app.post("/api/command")
+    def _command(req: _CommandWriteReq):
+        # 발전소 /api/plc/write 대응: 공격 setpoint 를 물리 명령 레지스터로 밀어 ACTUAL 게이지를 구동한다.
+        # 실 FC6 쓰기와 동일 경로(이벤트·SIEM·안전평가 발화). 파국(DAMAGE 누적)은 SIS 선-우회를 요구한다.
+        return twin.command_write(req.value)
 
     return twin

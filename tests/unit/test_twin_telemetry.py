@@ -47,7 +47,8 @@ CASES = [
 ]
 
 # 콘솔이 /api/telemetry 로 라이브 연결 가능한 통일 트윈 전부(섹터키 → 트윈). 스키마/ cmd_name 계약 고정.
-# 확장 6종은 cmd 를 Modbus/실프로토콜 쓰기로 구동(HTTP apply_command 경로 없음)하므로 스키마만 검증한다.
+# 확장 6종의 HTTP cmd 구동(POST /api/command → ACTUAL 게이지 파국)은 test_twin_command_route.py 가
+# 가드한다. 여기(UNIFORM_CASES)는 /api/telemetry 스키마/cmd_name 계약만 전수 검증한다.
 UNIFORM_CASES = [
     ("hospital", hospital, "INFUSION_RATE"),
     ("water", water, "CHLORINE_PPM"),
