@@ -287,3 +287,26 @@ curl -X POST http://127.0.0.1:8002/api/plc/write -d '{"register":"TURBINE_RPM","
 (`_push_detection_to_livefire` 의 payload: event_type/actor/target_asset/vuln_id/matched_event_id/metadata)는
 `tests/unit/test_siem_detection_push.py` 가 실 파서+실 규칙엔진 체인으로 고정한다. 콘솔 쪽 라우팅은
 `src/live-scoring.test.tsx` 가 이미 고정(blue→DEFENSE).
+
+#### dwell-time 보너스 — 빠른 탐지일수록 높은 점수(E2E 검증됨)
+
+`detection_success` 는 base 20 에 **빠른 탐지 보너스**가 더해진다(`20 - floor(dwell/30)`, [0,20] 클램프,
+30초마다 1점 감소). 보너스 경로는 두 서비스에 걸쳐 있다 — ① `event_collector._build_forward_payload`
+가 탐지 이벤트의 `matched_event_id` 로 원 공격 이벤트 timestamp 를 조회해 `metadata._matched_timestamp`
+로 enrichment(대응 공격을 못 찾으면 `_unmatched` 플래그만), ② `scoring_engine._dwell_bonus` 가 그
+timestamp 와 탐지 timestamp 의 차로 보너스를 계산해 base 20 에 더한다. #147 라이브는 base 20(dwell 0)
+만 봤다.
+
+2026-11-09 라이브 E2E(collector:8010 + scoring:8020, 소스 무변경):
+
+```
+R1 red_attack_started(ts=10000) → D1 blue_detection_success(matched=R1, ts=10005, dwell 5s)  → 40 (20+20)
+R2 red_attack_started(ts=20000) → D2 blue_detection_success(matched=R2, ts=20100, dwell 100s) → 37 (20+17, decay)
+                                   D3 blue_detection_success(matched=GHOST, 미매칭)             → 20 (20+0)
+# → /scores: {"default":{"red":40,"blue":97}}   (blue 97 = 40+37+20, per-detection dwell 로만 설명됨)
+# → /scores/history 어워드 points = 40 / 37 / 20
+```
+
+미가드였던 두 경계 — collector enrichment(matched 조회→`_matched_timestamp`/`_unmatched`)와 scoring
+decay(`20 - floor(dwell/30)` → `detection_success = 20+bonus`) — 는 `tests/unit/test_dwell_bonus.py`
+가 고정한다(순수 decay 경계 + score_ingest 40/37/20 + collector payload enrichment).
