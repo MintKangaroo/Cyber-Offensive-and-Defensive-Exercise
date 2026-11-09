@@ -141,10 +141,14 @@ npm run build && npx vite preview --port 5177        # → http://localhost:5177
 활성화 직후 아레나 상태 badge 가 `LIVE` 로 바뀌고 TIME REMAINING(예: 30분 한계면 29:5x…)·NEXT ATTACK
 (현재 stage 잔여)이 매초 감소한다. `POST /scenario/deactivate` 로 틱이 멈춘다.
 
-- **라이브**: TIME REMAINING(`remaining_sec`) · NEXT ATTACK(`stage_remaining_sec`) · T+ ENGAGE(`elapsed_sec`).
-- **정적(정직)**: PATCH COUNT 는 phase_clock 필드가 아니라 패치/복구 이벤트 집계값이므로 이 타이머
-  배선에 포함되지 않는다(정적 표기). `current_stage` 는 발행되지만 현재 콘솔은 stage '잔여시간'만 쓰고
-  stage 식별자는 렌더하지 않는다.
+- **라이브(타이머)**: TIME REMAINING(`remaining_sec`) · NEXT ATTACK(`stage_remaining_sec`) · T+ ENGAGE(`elapsed_sec`).
+- **라이브(활동량)**: PATCH COUNT · 공격 · 방어 는 phase_clock 이 아니라 **`scores` 토픽 어워드 집계**다.
+  App 이 scores 프레임을 카테고리로 센다 — 공격=red 어워드 수, 방어=blue 어워드 수, PATCH COUNT=
+  `patch_verified` 어워드 수(전 팀·전 섹터 현황). 라이브 어워드가 하나라도 집계되면 정적 폴백(07/12/7)을
+  대체한다(2026-11-09 배선, E2E 검증됨 — `src/arena-live-counts.test.tsx`: 폴백→라이브 전환·정적값 미잔존·
+  patch 아닌 방어 어워드는 PATCH COUNT 불변). scores 토픽 자체의 라이브 발행은 아래 '라이브 채점' 참조.
+- **정적(정직)**: `current_stage` 는 발행되지만 현재 콘솔은 stage '잔여시간'만 쓰고 stage 식별자는
+  렌더하지 않는다.
 - 회귀: `tests/unit/test_phase_clock_push.py`(루프 발행) + `test_phase_clock_activation.py`(활성화→틱
   linkage: activate 가 시드를 심어 루프가 발행, deactivate 가 멈춤) + `test_scenario_authoring.py`(투영).
 

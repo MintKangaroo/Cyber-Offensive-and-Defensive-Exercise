@@ -80,6 +80,9 @@ export default function App() {
   const [liveScores, setLiveScores] = useState<TeamTally>({}); // event_collector scores 토픽 누적
   const [liveSolve, setLiveSolve] = useState<SolveEntry[]>([]); // 라이브 Solve Log
   const [liveClock, setLiveClock] = useState<{ remaining: number; elapsed: number; stageRemaining: number; overtime: boolean } | null>(null); // phase_clock 토픽
+  // 아레나 "LIVE FIRE CLOCK" 패널 활동량 — scores 어워드를 카테고리로 센다(전 팀·전 섹터 현황):
+  // atk=공격 어워드 수, def=방어 어워드 수, patch=patch_verified 수. 라이브 어워드가 오기 전엔 정적 폴백.
+  const [liveCounts, setLiveCounts] = useState({ atk: 0, def: 0, patch: 0 });
   const everLive = useRef(false);
 
   // 시설 전환 시 작전 진행(실행 단계·라이브 로그·라이브 게이지) 초기화 — 각 시설은 독립 작전.
@@ -138,6 +141,12 @@ export default function App() {
           { id: `sc-${Date.now()}-${prev.length}`, side, team: TEAM_DISPLAY[team] ?? team, text: `${e.category ?? "award"} · +${pts}`, points: pts },
           ...prev,
         ].slice(0, 8));
+        // 아레나 활동량 stat: 공격/방어 어워드 수, patch_verified 수(라이브 패치 카운트).
+        setLiveCounts((c) => ({
+          atk: c.atk + (isRed ? 1 : 0),
+          def: c.def + (isRed ? 0 : 1),
+          patch: c.patch + (e.category === "patch_verified" ? 1 : 0),
+        }));
       }
       // phase_clock 토픽: scenario_engine 투영 타임라인 → 타이머 3종 라이브.
       if (e.topic === "phase_clock" && typeof e.remaining_sec === "number") {
@@ -193,17 +202,20 @@ export default function App() {
     };
   }, [facility, liveRegisters, liveFootLine, extraStrikes, done, chainScore, ourLive, meRow, liveScoreboard, liveClock]);
 
-  const arenaData = useMemo(
-    () => ({
+  const arenaData = useMemo(() => {
+    const scored = liveCounts.atk + liveCounts.def > 0; // 라이브 어워드가 하나라도 집계됐나
+    return {
       ...DEFAULT_ARENA,
       scoreboard: liveScoreboard,
       solveLog: liveSolve.length ? liveSolve : DEFAULT_ARENA.solveLog,
       timeRemaining: liveClock ? fmtClock(liveClock.remaining) : DEFAULT_ARENA.timeRemaining,
       nextAttack: liveClock ? fmtClock(liveClock.stageRemaining) : DEFAULT_ARENA.nextAttack,
       activeLine: liveFootLine ? `RED·TEAM-01 → 발전소 안전계통 · ${liveFootLine}` : DEFAULT_ARENA.activeLine,
-    }),
-    [liveFootLine, liveScoreboard, liveSolve, liveClock],
-  );
+      patchCount: scored ? liveCounts.patch : DEFAULT_ARENA.patchCount,
+      atkCount: scored ? liveCounts.atk : DEFAULT_ARENA.atkCount,
+      defCount: scored ? liveCounts.def : DEFAULT_ARENA.defCount,
+    };
+  }, [liveFootLine, liveScoreboard, liveSolve, liveClock, liveCounts]);
 
   const onSelectFacility = useCallback((s: FacilityConfig["id"]) => { setSector(s); setView("facility"); }, []);
 
