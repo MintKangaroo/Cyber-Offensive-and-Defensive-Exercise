@@ -5,14 +5,16 @@ import type { AttackStep } from "./types";
 
 // 확장 섹터(lng/railway/airport/finance/factory) EXECUTE STRIKE 라이브 배선 회귀.
 //  과거엔 generic() 시설의 attackChain 단계에 step.action 이 없어 EXECUTE STRIKE 가 서사 전용
-//  ({live:false})이었다. 이제 각 섹터의 실제 트윈 HTTP 라우트를 action 으로 배선했다:
-//    - 모든 통일 트윈: objective → POST /api/safety/override {override:true} (SIS BYPASS)
-//    - datacenter_bms: lateral → POST /api/bacnet/write-property (실 BACnet WriteProperty)
-//    - smart_factory : lateral → POST /api/mqtt/command        (실 MQTT Sparkplug DCMD)
-//  이 라우트들은 실 트윈에서 2026-10-27 라이브로 도달 확인(override→interlock false, 도메인
-//  라우트→실 프레임). 여기서 닫는 갭은 "data.ts 배선 → 실제 executeStep 이 그 트윈 라우트로
-//  정확한 method/path/body 로 도달({live:true})" 하는지, 그리고 "트윈 없는 섹터(nuclear/telecom/
-//  satellite)·URL 미주입 섹터는 호출 없이 서사({live:false})" 로 남는지다(허위 라이브 방지).
+//  ({live:false})이었고, #150 에서 SIS BYPASS·합성 프레임까지만 배선됐다(ACTUAL 게이지 미구동).
+//  이제 full-config 트윈과 동일한 2단 킬체인으로 **실 물리 파국**까지 연다:
+//    - lateral_movement → POST /api/command {value}  (물리 cmd 레지스터 overdrive, redline 초과)
+//    - objective        → POST /api/safety/override {override:true} (SIS BYPASS → 손상 누적·파국)
+//    - finance/factory 의 privilege_escalation → 실 BACnet WriteProperty / MQTT Sparkplug(합성 프레임)
+//  attach_modbus_ics 의 /api/command 는 airport_ot 실 트윈에서 2026-11-09 라이브로 파국 확인
+//  (SIS 걸림=트립만, SIS 우회 후 cmd 90→actual 90>redline 50·damage 100·failed). 백엔드 계약은
+//  tests/unit/test_twin_command_route.py 가 가드. 여기서 닫는 갭은 "data.ts 배선 → executeStep 이 그
+//  트윈 라우트로 정확한 method/path/body 로 도달({live:true})", 그리고 "트윈 없는 섹터(nuclear/telecom/
+//  satellite)·URL 미주입 섹터는 호출 없이 서사({live:false})" 다(허위 라이브 방지).
 //  실제 executeStep + 실제 FACILITIES 카탈로그를 그대로 써서 배선 자체를 고정한다.
 
 const BASE = "http://twin.local:1";
@@ -34,13 +36,21 @@ afterEach(() => {
 describe("확장 섹터 EXECUTE STRIKE 라이브 배선", () => {
   // (섹터, 단계, 기대 method, 기대 path, 기대 body)
   const WIRED: [string, AttackStep["phase"], string, string, Record<string, unknown>][] = [
+    // objective: SIS BYPASS (전 섹터)
     ["lng", "objective", "POST", "/api/safety/override", { override: true }],
     ["railway", "objective", "POST", "/api/safety/override", { override: true }],
     ["airport", "objective", "POST", "/api/safety/override", { override: true }],
     ["finance", "objective", "POST", "/api/safety/override", { override: true }],
     ["factory", "objective", "POST", "/api/safety/override", { override: true }],
-    ["finance", "lateral_movement", "POST", "/api/bacnet/write-property", { setpoint_c: 45 }],
-    ["factory", "lateral_movement", "POST", "/api/mqtt/command", { value: 300 }],
+    // lateral_movement: 물리 cmd overdrive(/api/command, redline 초과값) — 전 섹터
+    ["lng", "lateral_movement", "POST", "/api/command", { value: 260 }],
+    ["railway", "lateral_movement", "POST", "/api/command", { value: 160 }],
+    ["airport", "lateral_movement", "POST", "/api/command", { value: 90 }],
+    ["finance", "lateral_movement", "POST", "/api/command", { value: 48 }],
+    ["factory", "lateral_movement", "POST", "/api/command", { value: 160 }],
+    // privilege_escalation: 실 프로토콜 합성 프레임(finance/factory)
+    ["finance", "privilege_escalation", "POST", "/api/bacnet/write-property", { setpoint_c: 45 }],
+    ["factory", "privilege_escalation", "POST", "/api/mqtt/command", { value: 300 }],
   ];
 
   it.each(WIRED)("%s/%s → 실 트윈 라우트로 라이브 도달", async (sector, phase, method, path, body) => {
@@ -58,10 +68,15 @@ describe("확장 섹터 EXECUTE STRIKE 라이브 배선", () => {
     expect(JSON.parse(init.body)).toEqual(body);
   });
 
-  it("objective 는 5개 확장 섹터 전부 SIS BYPASS 로 배선돼 있다", () => {
+  it("2단 킬체인: 5개 확장 섹터 전부 lateral=물리 cmd overdrive(/api/command) · objective=SIS BYPASS", () => {
     for (const sector of ["lng", "railway", "airport", "finance", "factory"]) {
+      // lateral_movement 가 물리 cmd 를 redline 초과로 밀고(파국은 SIS 걸려 있는 동안 트립만),
+      const lm = step(sector, "lateral_movement");
+      expect(lm.action?.path, `${sector} lateral`).toBe("/api/command");
+      expect(typeof (lm.action?.body as { value?: unknown })?.value, `${sector} overdrive value`).toBe("number");
+      // objective 가 SIS 를 무력화해 비로소 손상이 누적된다(순서: chain 이 lateral→objective).
       const obj = step(sector, "objective");
-      expect(obj.action?.path, sector).toBe("/api/safety/override");
+      expect(obj.action?.path, `${sector} objective`).toBe("/api/safety/override");
     }
   });
 
