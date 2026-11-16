@@ -24,6 +24,23 @@
 - **상세·다음 세션 프롬프트**: [`docs/NEXTGEN_IMMERSIVE_REDTEAM.md`](docs/NEXTGEN_IMMERSIVE_REDTEAM.md) ·
   [`HANDOFF.md §4`](HANDOFF.md)
 
+### 현황 — 라이브파이어 작전 콘솔 SHIPPED · 라이브축 전부 E2E 검증됨 (2026-11)
+
+2단 CCE 라이브파이어 콘솔(①방사형 현황 아레나 + ②시설별 작전 콘솔)이
+[`dashboards/livefire-ops`](dashboards/livefire-ops/README.md) 로 배포됐고, **콘솔의 모든 라이브
+데이터 축을 실제 구동 서비스로 E2E 실증**했다(각 축마다 회귀 테스트로 고정). 자세한 재현 명령·실측
+근거는 [콘솔 README](dashboards/livefire-ops/README.md) 참조.
+
+- **물리 트윈 게이지**: 발전소·수도·병원 풀 스트라이크(SIS BYPASS → ACTUAL redline 초과 → DAMAGE
+  누적 → CATASTROPHIC_FAILURE) + 6개 확장 트윈 통일 텔레메트리. **확장 5섹터(LNG·철도·공항·
+  데이터센터·스마트팩토리)도 `POST /api/command` 신설로 브라우저발 ACTUAL 게이지 파국까지 라이브**
+  (2단 킬체인: lateral=cmd overdrive → objective=SIS BYPASS, 파국은 SIS 선-우회 요구).
+- **타이머 3종**: `phase_clock` 1Hz 오케스트레이션(시나리오 활성화 → 실시간 틱).
+- **채점·스코어보드·Solve Log**: Red 전 경로 + Blue 전 경로(patch_verified · detection_success
+  **+dwell 보너스** · block_success · asset_recovered), **다팀(멀티 team_id) 스코어보드·랭킹**.
+- **아레나 활동량 stat**: LIVE FIRE CLOCK 패널의 Patch Count·공격·방어도 `scores` 어워드 집계로
+  라이브(정적 가짜값 제거).
+
 ## Cyber Range Command 업그레이드 (2026-09)
 
 기존 공방·CTF·ICS 훈련 서비스를 유지하면서 **React Control Tower와 공통 디자인 시스템**을
