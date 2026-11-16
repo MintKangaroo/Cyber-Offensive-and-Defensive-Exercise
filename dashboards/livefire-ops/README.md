@@ -104,15 +104,23 @@ BYPASS 하면 `ACTUAL` 이 redline 을 넘어 900 까지 치솟고 `DAMAGE` 가 
     - **objective → `POST /api/safety/override {override:true}`**(모든 통일 트윈) → 실측 결과 트윈
       `/api/telemetry` 의 `interlock` 이 `true→false`(SIS BYPASS)로 뒤집힘 → 콘솔 `SAFETY_INTERLOCK`
       행이 `OFF·BYPASS·red` 로 라이브 전환.
-    - **lateral → datacenter `POST /api/bacnet/write-property`**(실 BACnet WriteProperty 프레임)·
-      **factory `POST /api/mqtt/command`**(실 MQTT Sparkplug DCMD) → 실 프로토콜 프레임 생성 +
-      red 이벤트 + SIEM 로그(=채점·탐지 크레딧).
+    - **lateral → `POST /api/command {value}`**(5개 확장 섹터 전부) → 공격 setpoint 를 **물리 cmd
+      레지스터**(각 트윈 redline 초과값: lng 260/railway 160/airport 90/datacenter 48/factory 160)로
+      밀어 `ACTUAL` 게이지를 구동한다. 실 Modbus FC6 쓰기와 동일 경로라 red 이벤트 + SIEM 로그도 발화.
+    - **privilege_escalation → datacenter `POST /api/bacnet/write-property`**·**factory `POST
+      /api/mqtt/command`** → 실 BACnet/MQTT Sparkplug 합성 프레임(프로토콜 피벗 서사).
     - 회귀: `src/execute-strike.test.ts` 가 실제 `executeStep` + 실제 `FACILITIES` 로 각 섹터의
       method/path/body 도달과 `{live:true}` 를, 트윈 없는 섹터·URL 미주입 섹터의 무호출 서사를 고정.
-  - **정직한 한계**: 이 라우트들로 라이브가 되는 건 **SIS BYPASS(인터록 플립)와 실 프로토콜 프레임**까지다.
-    ACTUAL 게이지의 redline 초과·DAMAGE 누적(물리 cmd 구동)은 Modbus/실프로토콜 쓰기 경로라 브라우저가
-    직접 못 친다(full-config 섹터 power/hospital/water 만 HTTP cmd 라우트로 게이지 파국까지 라이브).
-    `nuclear`·`telecom`·`satellite` 는 통일 트윈 미존재(또는 비호환)라 라이브 배선 없음 — 아레나 노드 표시만.
+  - **ACTUAL 게이지 파국까지 라이브(E2E 검증됨)**: #150 의 한계(ACTUAL 게이지는 full-config 전용) 해소.
+    `attach_modbus_ics` 가 `POST /api/command` 를 공통 노출해 비발전소/확장 트윈도 브라우저에서 물리 cmd
+    구동이 된다. 킬체인은 full-config 와 동일한 2단: **lateral(cmd overdrive, redline 초과) → objective
+    (SIS BYPASS)** 순서. SIS 가 걸려 있는 동안엔 redline 에서 트립만 되고(손상 0), objective 가 SIS 를
+    무력화해야 비로소 초과분이 `DAMAGE` 로 누적돼 `CATASTROPHIC_FAILURE` 에 도달한다(물리가 SIS 선-우회를
+    강제). 2026-11-09 라이브 실측(airport_ot): SIS 걸림+cmd 90 → `ACTUAL` 50 트립·damage 0; SIS 우회 후
+    → `ACTUAL` 90(>redline 50)·`DAMAGE` 100·`failed`. 백엔드 계약은 `tests/unit/test_twin_command_route.py`
+    가 (라우트→cmd 구동·미인가 쓰기 이벤트·2단 요구) 고정.
+  - **정직한 한계**: `nuclear`·`telecom`·`satellite` 는 통일 트윈 미존재(또는 비호환)라 라이브 배선 없음
+    — 아레나 노드 표시만.
 
 ## 라이브 타이머 (phase_clock 오케스트레이션)
 

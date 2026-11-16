@@ -19,6 +19,12 @@ import type {
 const SIS_OVERRIDE: AttackStep["action"] = {
   method: "POST", path: "/api/safety/override", body: { override: true },
 };
+// 확장 트윈 공통 물리 명령 라우트(shared/ics/twin_modbus attach_modbus_ics). 공격 setpoint 를 cmd
+// 레지스터로 밀어 ACTUAL 게이지를 구동한다 → redline 초과. 파국(DAMAGE 누적)은 SIS 선-우회를 요구하므로
+// full-config 패턴과 동일하게 lm=OVERDRIVE(위험 setpoint) → obj=SIS_OVERRIDE(안전 무력화) 순서로 건다.
+const OVERDRIVE = (value: number): AttackStep["action"] => ({
+  method: "POST", path: "/api/command", body: { value },
+});
 type ChainActions = Partial<Record<"ia" | "pe" | "lm" | "obj", AttackStep["action"]>>;
 
 // shared/event_schema.py RED_POINTS
@@ -330,26 +336,31 @@ const OTHERS: FacilityConfig[] = [
     [{ name: "Modbus", state: "compromised" }, { name: "F&G", state: "up" }],
     { label: "ESD trigger/bypass", detail: "LNG-001 · objective" },
     [{ name: "BOG_PRESSURE", addr: "BAR", value: "surge", state: "HIGH", tone: "red" }, { name: "TANK_LEVEL", addr: "%", value: "98", state: "HIGH", tone: "amber" }],
-    { obj: SIS_OVERRIDE }),   // lng_terminal: /api/safety/override → SIS BYPASS(인터록 OFF) 라이브
+    // lng_terminal(redline 200): lm=TANK_PRESSURE 260 overdrive → obj=SIS BYPASS → 과압 파국 라이브
+    { lm: OVERDRIVE(260), obj: SIS_OVERRIDE }),
   generic("railway", "철도 신호", "RAILWAY SIGNALING", "신호 / ATS / 연동장치", "railway", "신호 현시 위변조 → 충돌 위험",
     { name: "INTERLOCKING", sub: "연동장치", vulns: ["RWY-002"] },
     [{ name: "ATS", state: "compromised" }, { name: "CTC", state: "up" }],
     { label: "signal aspect override", detail: "RWY-001 · objective" },
     [{ name: "SIGNAL_S12", addr: "S12", value: "GREEN", state: "FORCED", tone: "red" }, { name: "ROUTE_R7", addr: "R7", value: "locked", state: "—", tone: "neutral" }],
-    { obj: SIS_OVERRIDE }),   // railway_signaling: /api/safety/override → SIS BYPASS 라이브
+    // railway_signaling(redline 120): lm=TRAIN_SPEED 160 overdrive → obj=SIS BYPASS → 과속 파국 라이브
+    { lm: OVERDRIVE(160), obj: SIS_OVERRIDE }),
   generic("airport", "공항 OT", "AIRPORT OT", "BHS / 활주로등 / 연료", "airport", "활주로등 제어 탈취",
     { name: "RUNWAY LIGHTING", sub: "15L", vulns: ["AIR-001"] },
     [{ name: "BHS", state: "compromised" }, { name: "ATC Net", state: "up" }],
     { label: "runway lighting control", detail: "AIR-001" },
     [{ name: "RWY_15L_LIGHT", addr: "15L", value: "OFF", state: "FORCED", tone: "red" }, { name: "FUEL_VALVE", addr: "FV-3", value: "open", state: "—", tone: "amber" }],
-    { obj: SIS_OVERRIDE }),   // airport_ot: /api/safety/override → SIS BYPASS 라이브
+    // airport_ot(redline 50): lm=FUEL_PRESSURE 90 overdrive → obj=SIS BYPASS → 과압 파국 라이브(E2E 실증)
+    { lm: OVERDRIVE(90), obj: SIS_OVERRIDE }),
   generic("finance", "금융", "DATA CENTER BMS", "UPS / CRAC / 발전기", "finance", "CRAC 조작 → 과열 다운",
     { name: "CRAC-3", sub: "정밀공조", vulns: ["DCX-001"] },
     [{ name: "BMS", state: "compromised" }, { name: "DCIM", state: "up" }],
     { label: "CRAC setpoint tamper", detail: "DCX-001" },
     [{ name: "CRAC_SETPOINT", addr: "°C", value: "32 ▲", state: "OVERHEAT", tone: "red" }, { name: "UPS", addr: "%", value: "ok", state: "OK", tone: "blue" }],
-    // datacenter_bms: lateral=실 BACnet WriteProperty(과열 설정치) · obj=SIS BYPASS
-    { lm: { method: "POST", path: "/api/bacnet/write-property", body: { setpoint_c: 45 } }, obj: SIS_OVERRIDE }),
+    // datacenter_bms(redline 35): pe=실 BACnet WriteProperty(합성 프레임) · lm=RACK_TEMP 48 overdrive(실 cmd)
+    //  · obj=SIS BYPASS → 과열 파국 라이브
+    { pe: { method: "POST", path: "/api/bacnet/write-property", body: { setpoint_c: 45 } },
+      lm: OVERDRIVE(48), obj: SIS_OVERRIDE }),
   generic("telecom", "통신", "TELCO 5G CORE", "5G 코어 / 전송", "telecom", "코어망 서비스 거부",
     { name: "5G CORE", sub: "AMF/SMF", vulns: ["TEL-CORE"] },
     [{ name: "N2/N3", state: "compromised" }, { name: "OAM", state: "up" }],
@@ -365,8 +376,10 @@ const OTHERS: FacilityConfig[] = [
     [{ name: "Profinet", state: "compromised" }, { name: "MES", state: "up" }],
     { label: "robot E-stop override", detail: "FAC-002" },
     [{ name: "ROBOT_SPEED", addr: "R1", value: "max", state: "UNSAFE", tone: "red" }, { name: "ESTOP", addr: "—", value: "OFF", state: "BYPASS", tone: "red" }],
-    // smart_factory: lateral=실 MQTT Sparkplug DCMD(로봇 과속 명령) · obj=SIS BYPASS
-    { lm: { method: "POST", path: "/api/mqtt/command", body: { value: 300 } }, obj: SIS_OVERRIDE }),
+    // smart_factory(redline 100): pe=실 MQTT Sparkplug DCMD(합성 프레임) · lm=ROBOT_SPEED 160 overdrive(실 cmd)
+    //  · obj=SIS BYPASS → 로봇 과속 파국 라이브
+    { pe: { method: "POST", path: "/api/mqtt/command", body: { value: 300 } },
+      lm: OVERDRIVE(160), obj: SIS_OVERRIDE }),
 ];
 
 export const FACILITIES: Record<string, FacilityConfig> = Object.fromEntries(
